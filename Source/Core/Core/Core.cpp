@@ -73,6 +73,8 @@
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
+#include "Core/IPCServer.h"
+
 #ifdef USE_MEMORYWATCHER
 #include "Core/MemoryWatcher.h"
 #endif
@@ -247,6 +249,10 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
   // Start the emu thread
   s_state.store(State::Starting);
   s_emu_thread = std::thread(EmuThread, std::ref(system), std::move(boot), prepared_wsi);
+
+  // Start IPC server
+  IPC::Start();
+
   return true;
 }
 

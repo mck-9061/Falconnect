@@ -424,6 +424,8 @@ void GameFile::WiiBannerCommit()
 
 bool GameFile::ReadPNGBanner(const std::string& path)
 {
+  return false;
+
   File::IOFile file(path, "rb");
   if (!file)
     return false;

@@ -589,6 +589,8 @@ add_library(core
   WiiRoot.h
   WiiUtils.cpp
   WiiUtils.h
+        Falconnect/FalconnectManager.cpp
+        Falconnect/FalconnectManager.h
 )
 
 if(_M_X86_64)

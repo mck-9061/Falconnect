@@ -9,8 +9,7 @@
 
 class FalconnectManager {
 public:
-    static void StartThread();
-    static Core::CPUThreadGuard* guard;
+    static void TestCheckMem(const Core::CPUThreadGuard& guard);
 };
 
 

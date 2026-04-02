@@ -163,6 +163,12 @@ void OnFrameEnd(Core::System& system)
     s_memory_watcher->Step(guard);
   }
 #endif
+
+  // Update Falconnect
+  ASSERT(IsCPUThread());
+  const CPUThreadGuard guard(system);
+
+  FalconnectManager::TestCheckMem(guard);
 }
 
 // Display messages and return values
@@ -254,8 +260,6 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
 
   // Start IPC server
   // IPC::Start();
-
-  FalconnectManager::StartThread();
 
   return true;
 }

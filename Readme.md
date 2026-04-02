@@ -1,6 +1,11 @@
-# Falconnect Dolphin
+# Falconnect
 
-A fork of the Dolphin emulator for use with Falconnect, the F-Zero GX online multiplayer tool.
+A work-in-progress fork of the Dolphin emulator, exclusively for use with F-Zero GX, that adds online
+multiplayer functionality.
+
+## Status
+I am currently porting the [prototype code I made in Python](https://github.com/mck-9061/Falconnect-prototype) to C++, so it can run internally in Dolphin
+with no external tools and with multi-platform support.
 
 ## System Requirements
 
@@ -8,6 +13,7 @@ A fork of the Dolphin emulator for use with Falconnect, the F-Zero GX online mul
 
 * OS
     * Windows (10 1903 or higher).
+    * macOS (26.0 Tahoe or higher).
 * Processor
     * A CPU with SSE2 support.
     * A modern CPU (3 GHz and Dual Core, not older than 2008) is highly recommended.
@@ -15,143 +21,14 @@ A fork of the Dolphin emulator for use with Falconnect, the F-Zero GX online mul
     * A reasonably modern graphics card (Direct3D 11.1 / OpenGL 3.3).
     * A graphics card that supports Direct3D 11.1 / OpenGL 4.4 is recommended.
 
-Falconnect only supports Windows for the moment.
+Falconnect is being tested on Windows (x86) and macOS (Apple Silicon) - other operating systems
+and CPU architectures will likely work but haven't been tested.
 
-## Building for Windows
+Work in progress docs for the reverse engineering involved can be found at https://falconnect.net/.
 
-Use the solution file `Source/dolphin-emu.sln` to build Dolphin on Windows.
-Dolphin targets the latest MSVC shipped with Visual Studio or Build Tools.
-Other compilers might be able to build Dolphin on Windows but have not been
-tested and are not recommended to be used. Git and latest Windows SDK must be
-installed when building.
+## With thanks to
+- Ghidra, [Ghidra-GameCube-Loader](https://github.com/Cuyler36/Ghidra-GameCube-Loader), and Dolphin's debugging tools - reverse engineering and debugging
+- [fzerogx-docs](https://github.com/JoselleAstrid/fzerogx-docs) - amazing work documenting internal memory structures and addresses
+- [py-dolphin-memory-engine](https://github.com/randovania/py-dolphin-memory-engine) - fast interaction with Dolphin's internal memory
+- F-Zero Nexus Discord - loads of modding information and documentation
 
-Make sure to pull submodules before building:
-```sh
-git submodule update --init --recursive
-```
-
-The "Release" solution configuration includes performance optimizations for the best user experience but complicates debugging Dolphin.
-The "Debug" solution configuration is significantly slower, more verbose and less permissive but makes debugging Dolphin easier.
-
-## Command Line Usage
-
-```
-Usage: Dolphin.exe [options]... [FILE]...
-
-Options:
-  --version             show program's version number and exit
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path
-  -m MOVIE, --movie=MOVIE
-                        Play a movie file
-  -e <file>, --exec=<file>
-                        Load the specified file
-  -n <16-character ASCII title ID>, --nand_title=<16-character ASCII title ID>
-                        Launch a NAND title
-  -C <System>.<Section>.<Key>=<Value>, --config=<System>.<Section>.<Key>=<Value>
-                        Set a configuration option
-  -s <file>, --save_state=<file>
-                        Load the initial save state
-  -d, --debugger        Show the debugger pane and additional View menu options
-  -l, --logger          Open the logger
-  -b, --batch           Run Dolphin without the user interface (Requires
-                        --exec or --nand-title)
-  -c, --confirm         Set Confirm on Stop
-  -v VIDEO_BACKEND, --video_backend=VIDEO_BACKEND
-                        Specify a video backend
-  -a AUDIO_EMULATION, --audio_emulation=AUDIO_EMULATION
-                        Choose audio emulation from [HLE|LLE]
-```
-
-Available DSP emulation engines are HLE (High Level Emulation) and
-LLE (Low Level Emulation). HLE is faster but less accurate whereas
-LLE is slower but close to perfect. Note that LLE has two submodes (Interpreter and Recompiler)
-but they cannot be selected from the command line.
-
-Available video backends are "D3D" and "D3D12" (they are only available on Windows), "OGL", and "Vulkan".
-There's also "Null", which will not render anything, and
-"Software Renderer", which uses the CPU for rendering and
-is intended for debugging purposes only.
-
-## DolphinTool Usage
-```
-usage: dolphin-tool COMMAND -h
-
-commands supported: [convert, verify, header, extract]
-```
-
-```
-Usage: convert [options]... [FILE]...
-
-Options:
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path, required for temporary processing
-                        files.Will be automatically created if this option is
-                        not set.
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -o FILE, --output=FILE
-                        Path to the destination FILE.
-  -f FORMAT, --format=FORMAT
-                        Container format to use. Default is RVZ. [iso|gcz|wia|rvz]
-  -s, --scrub           Scrub junk data as part of conversion.
-  -b BLOCK_SIZE, --block_size=BLOCK_SIZE
-                        Block size for GCZ/WIA/RVZ formats, as an integer.
-                        Suggested value for RVZ: 131072 (128 KiB)
-  -c COMPRESSION, --compression=COMPRESSION
-                        Compression method to use when converting to WIA/RVZ.
-                        Suggested value for RVZ: zstd [none|zstd|bzip|lzma|lzma2]
-  -l COMPRESSION_LEVEL, --compression_level=COMPRESSION_LEVEL
-                        Level of compression for the selected method. Ignored
-                        if 'none'. Suggested value for zstd: 5
-```
-
-```
-Usage: verify [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -u USER, --user=USER  User folder path, required for temporary processing
-                        files.Will be automatically created if this option is
-                        not set.
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -a ALGORITHM, --algorithm=ALGORITHM
-                        Optional. Compute and print the digest using the
-                        selected algorithm, then exit. [crc32|md5|sha1|rchash]
-```
-
-```
-Usage: header [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -b, --block_size      Optional. Print the block size of GCZ/WIA/RVZ formats,
-then exit.
-  -c, --compression     Optional. Print the compression method of GCZ/WIA/RVZ
-                        formats, then exit.
-  -l, --compression_level
-                        Optional. Print the level of compression for WIA/RVZ
-                        formats, then exit.
-```
-
-```
-Usage: extract [options]...
-
-Options:
-  -h, --help            show this help message and exit
-  -i FILE, --input=FILE
-                        Path to disc image FILE.
-  -o FOLDER, --output=FOLDER
-                        Path to the destination FOLDER.
-  -p PARTITION, --partition=PARTITION
-                        Which specific partition you want to extract.
-  -s SINGLE, --single=SINGLE
-                        Which specific file/directory you want to extract.
-  -l, --list            List all files in volume/partition. Will print the
-                        directory/file specified with --single if defined.
-  -q, --quiet           Mute all messages except for errors.
-  -g, --gameonly        Only extracts the DATA partition.
-```

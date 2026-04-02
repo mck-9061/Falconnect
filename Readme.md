@@ -29,6 +29,5 @@ Work in progress docs for the reverse engineering involved can be found at https
 ## With thanks to
 - Ghidra, [Ghidra-GameCube-Loader](https://github.com/Cuyler36/Ghidra-GameCube-Loader), and Dolphin's debugging tools - reverse engineering and debugging
 - [fzerogx-docs](https://github.com/JoselleAstrid/fzerogx-docs) - amazing work documenting internal memory structures and addresses
-- [py-dolphin-memory-engine](https://github.com/randovania/py-dolphin-memory-engine) - fast interaction with Dolphin's internal memory
 - F-Zero Nexus Discord - loads of modding information and documentation
 

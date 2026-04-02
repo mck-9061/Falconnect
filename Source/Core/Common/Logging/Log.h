@@ -69,6 +69,7 @@ enum class LogType : int
   VIDEOINTERFACE,
   WII_IPC,
   WIIMOTE,
+  FALCONNECT,
 
   NUMBER_OF_LOGS  // Must be last
 };

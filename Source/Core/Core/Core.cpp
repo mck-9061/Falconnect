@@ -168,7 +168,9 @@ void OnFrameEnd(Core::System& system)
   ASSERT(IsCPUThread());
   const CPUThreadGuard guard(system);
 
-  FalconnectManager::TestCheckMem(guard);
+  if (FalconnectManager::instance != nullptr) {
+    FalconnectManager::instance->Update(guard);
+  }
 }
 
 // Display messages and return values
@@ -260,6 +262,9 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
 
   // Start IPC server
   // IPC::Start();
+
+  // Create Falconnect instance
+  FalconnectManager::instance = new FalconnectManager();
 
   return true;
 }

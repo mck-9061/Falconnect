@@ -1,9 +1,6 @@
-//
-// Created by Nathaniel Carter on 31/03/2026.
-//
-
 #ifndef DOLPHIN_EMU_FALCONNECTMANAGER_H
 #define DOLPHIN_EMU_FALCONNECTMANAGER_H
+#include "GXMemoryPatcher.h"
 #include "Core/Core.h"
 
 enum class GameState : int {
@@ -27,10 +24,7 @@ public:
     void Update(const Core::CPUThreadGuard& guard);
 
 private:
-    void LoadReferencePointer(const Core::CPUThreadGuard& guard);
-    u16 Read16(const Core::CPUThreadGuard& guard, u32 offset);
-
-    u32 referencePointer;
+    GXMemoryPatcher* patcher;
     GameState currentState;
 };
 

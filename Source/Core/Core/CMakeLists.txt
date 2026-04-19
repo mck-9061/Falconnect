@@ -591,6 +591,9 @@ add_library(core
   WiiUtils.h
         Falconnect/FalconnectManager.cpp
         Falconnect/FalconnectManager.h
+        Falconnect/PowerPCScripts.h
+        Falconnect/GXMemoryPatcher.cpp
+        Falconnect/GXMemoryPatcher.h
 )
 
 if(_M_X86_64)

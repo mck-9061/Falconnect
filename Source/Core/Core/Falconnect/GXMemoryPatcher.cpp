@@ -96,13 +96,13 @@ void GXMemoryPatcher::InitialiseText() const {
 }
 
 void GXMemoryPatcher::SetBoostLap() const {
-    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000);
-    interface.SetPatch(guard, referencePointer + 0x34b68, 0x60000000);
-    interface.SetPatch(guard, referencePointer + 0x33300, 0x60000000);
+    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000); // NOP check for practice mode on lap 2 boost announcement
+    interface.SetPatch(guard, referencePointer + 0x34b68, 0x60000000); // NOP announcement at start of practice mode
+    interface.SetPatch(guard, referencePointer + 0x33300, 0x60000000); // NOP practice mode check in boost
 
-    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c);
+    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c); // Nullify check for practice mode in energy bar render
 
-    interface.SetPatch(guard, referencePointer + 0x3330C, 0x2c000002);
-    interface.SetPatch(guard, referencePointer + 0xc91d8, 0x2c000003);
-    interface.SetPatch(guard, referencePointer + 0x32938, 0x281e0002);
+    interface.SetPatch(guard, referencePointer + 0x3330C, 0x2c000002); // Set lap check for boost
+    interface.SetPatch(guard, referencePointer + 0xc91d8, 0x2c000003); // Set lap check for energy bar render
+    interface.SetPatch(guard, referencePointer + 0x32938, 0x281e0002); // Set lap check for announcement
 }

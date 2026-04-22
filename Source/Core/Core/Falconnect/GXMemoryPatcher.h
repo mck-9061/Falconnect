@@ -17,6 +17,7 @@ public:
     void DisableAIControl();
     void DisableCountdown();
     void InitialiseText() const;
+    void SetBoostLap() const;
 
     u32 referencePointer{};
     bool isReady{};

@@ -94,3 +94,15 @@ void GXMemoryPatcher::InitialiseText() const {
     interface.SetPatch(guard, positionFloatsAddress, bitsX);
     interface.SetPatch(guard, positionFloatsAddress + 8, bitsY);
 }
+
+void GXMemoryPatcher::SetBoostLap() const {
+    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000);
+    interface.SetPatch(guard, referencePointer + 0x34b68, 0x60000000);
+    interface.SetPatch(guard, referencePointer + 0x33300, 0x60000000);
+
+    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c);
+
+    interface.SetPatch(guard, referencePointer + 0x3330C, 0x2c000002);
+    interface.SetPatch(guard, referencePointer + 0xc91d8, 0x2c000003);
+    interface.SetPatch(guard, referencePointer + 0x32938, 0x281e0002);
+}

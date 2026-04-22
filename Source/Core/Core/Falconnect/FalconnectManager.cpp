@@ -62,6 +62,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         // Set up waiting text
         patcher->InitialiseText();
+        patcher->SetBoostLap();
 
         currentState = GameState::READY_TO_LOAD;
         return;

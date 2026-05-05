@@ -34,7 +34,12 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
     // Patcher ready; wait for practice mode
 
-    if (const u16 mode = patcher->Read16(0x2453e0); mode != 3) {
+    const RacerMemoryBlock* block = patcher->memoryReader->ReadRacerData(0);
+    std::stringstream stream2;
+    stream2 << std::hex << block->speed;
+    INFO_LOG_FMT(FALCONNECT, "Current speed: {}", stream2.str());
+
+    if (const u16 mode = patcher->memoryReader->ReadGameMode(); mode != 3) {
         INFO_LOG_FMT(FALCONNECT, "Not in Practice mode!");
         currentState = GameState::NOT_IN_PRACTICE;
         return;
@@ -42,7 +47,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
     if (currentState == GameState::NOT_IN_PRACTICE || currentState == GameState::NOT_RUNNING) currentState = GameState::IN_PRACTICE;
 
-    if (const u16 state = patcher->Read16(0x2454e2); state != 7) {
+    if (!patcher->memoryReader->ReadSettingsSelectedFlag()) {
         INFO_LOG_FMT(FALCONNECT, "Waiting for all settings to be chosen...");
         currentState = GameState::IN_PRACTICE;
         return;

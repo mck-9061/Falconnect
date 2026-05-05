@@ -1,5 +1,6 @@
 #include "GXMemoryPatcher.h"
 
+#include "GXMemoryReader.h"
 #include "PowerPCScripts.h"
 #include "Common/CommonTypes.h"
 #include "Core/Core.h"
@@ -11,12 +12,14 @@ GXMemoryPatcher::GXMemoryPatcher(const Core::CPUThreadGuard& cpuGuard) :
 guard(cpuGuard),
 interface(Core::System::GetInstance().GetPowerPC().GetDebugInterface())
 {
+    memoryReader = new GXMemoryReader(guard);
     Initialise();
 }
 
 void GXMemoryPatcher::Initialise() {
     INFO_LOG_FMT(FALCONNECT, "Loading reference pointer...");
-    LoadReferencePointer();
+
+    referencePointer = memoryReader->ReadReferencePointer();
 
     if (referencePointer == 0 || referencePointer & 0x01000000) {
         INFO_LOG_FMT(FALCONNECT, "Reference pointer invalid or not yet defined!");
@@ -26,24 +29,6 @@ void GXMemoryPatcher::Initialise() {
 
     INFO_LOG_FMT(FALCONNECT, "Reference pointer located.");
     isReady = true;
-}
-
-void GXMemoryPatcher::LoadReferencePointer() {
-    constexpr u32 address = 0x800030c8;
-    referencePointer = interface.ReadMemory(guard, address);
-
-    std::stringstream stream;
-    stream << std::hex << referencePointer;
-    INFO_LOG_FMT(FALCONNECT, "Read: {}", stream.str());
-}
-
-u16 GXMemoryPatcher::Read16(const u32 offset) const {
-    const u32 address = referencePointer + offset;
-    const u32 mem = interface.ReadMemory(guard, address);
-
-    const u16 read = static_cast<u8>(mem >> 16);
-
-    return read;
 }
 
 void GXMemoryPatcher::DisableMenuControl() const {
@@ -63,10 +48,7 @@ void GXMemoryPatcher::InitialiseText() const {
     // Add text function to unused section of memory
     constexpr u32 functionBaseAddress = 0x80400000;
 
-    for (int offset = 0; offset < 66; offset++) {
-        const u32 address = functionBaseAddress + (offset * 4);
-        interface.SetPatch(guard, address, PowerPCScripts::CustomStringScript[offset]);
-    }
+    interface.SetPatch(guard, functionBaseAddress, PowerPCScripts::CustomStringScript);
 
     // Create entry point for text function
     const u32 entryPointAddress = referencePointer + 0xca44c;

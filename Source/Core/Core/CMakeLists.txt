@@ -594,6 +594,10 @@ add_library(core
         Falconnect/PowerPCScripts.h
         Falconnect/GXMemoryPatcher.cpp
         Falconnect/GXMemoryPatcher.h
+        Falconnect/GXMemoryReader.cpp
+        Falconnect/GXMemoryReader.h
+        Falconnect/RacerMemoryBlock.cpp
+        Falconnect/RacerMemoryBlock.h
 )
 
 if(_M_X86_64)

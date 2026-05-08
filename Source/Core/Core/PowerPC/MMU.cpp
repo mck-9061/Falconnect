@@ -302,12 +302,12 @@ T MMU::ReadFromHardware(u32 em_address)
     return bswap(value);
   }
 
-  PanicAlertFmt("Unable to resolve read address {:x} PC {:x}", em_address, m_ppc_state.pc);
-  if (m_system.IsPauseOnPanicMode())
-  {
-    m_system.GetCPU().Break();
-    m_ppc_state.Exceptions |= EXCEPTION_DSI | EXCEPTION_FAKE_MEMCHECK_HIT;
-  }
+  // PanicAlertFmt("Unable to resolve read address {:x} PC {:x}", em_address, m_ppc_state.pc);
+  // if (m_system.IsPauseOnPanicMode())
+  // {
+  //   m_system.GetCPU().Break();
+  //   m_ppc_state.Exceptions |= EXCEPTION_DSI | EXCEPTION_FAKE_MEMCHECK_HIT;
+  // }
   return 0;
 }
 

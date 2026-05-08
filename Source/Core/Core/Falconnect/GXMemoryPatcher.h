@@ -15,10 +15,14 @@ public:
 
     // Patch methods
     void DisableMenuControl() const;
-    void DisableAIControl();
-    void DisableCountdown();
+    void StartRaceFromPracticeOptions() const;
+    void DisableAIControl() const;
+    void DisableCountdown() const;
+    void StartCountdown() const;
     void InitialiseText() const;
-    void SetBoostLap() const;
+    void SetBoostLap(u8 lap) const;
+    void SetOpponentRacerId(u8 racerID) const;
+    void SetRenderedText(const std::string &text) const;
 
     u32 referencePointer{};
     bool isReady{};

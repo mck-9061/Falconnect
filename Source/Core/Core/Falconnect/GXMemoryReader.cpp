@@ -19,6 +19,15 @@ u32 GXMemoryReader::ReadReferencePointer() {
     return referencePointer;
 }
 
+u8 GXMemoryReader::Read8(const u32 offset) const {
+    const u32 address = referencePointer + offset;
+    const u32 mem = interface.ReadMemory(guard, address);
+
+    const u8 read = static_cast<u8>(mem >> 24);
+
+    return read;
+}
+
 u16 GXMemoryReader::Read16(const u32 offset) const {
     const u32 address = referencePointer + offset;
     const u32 mem = interface.ReadMemory(guard, address);
@@ -61,4 +70,9 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     INFO_LOG_FMT(FALCONNECT, "Current energy: {}", stream2.str());
 
     return block;
+}
+
+u8 GXMemoryReader::ReadSelectedRacerID() const {
+    const u8 id = Read8(0x2453ef);
+    return id;
 }

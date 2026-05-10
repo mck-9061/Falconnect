@@ -49,9 +49,6 @@ void ServerSocketManager::ServerThread() {
                 operationQueue.push(OperationType::SET_RACER_BLOCK);
                 operationArgumentsQueue.emplace(*block);
 
-                // Increment total exchanged frames
-                totalExchangedFrames++;
-
                 // Send frame to be sent to client
                 const std::vector<u8> dataToSend = frameToSend->GetSocketData();
                 char data[256];

@@ -26,6 +26,9 @@ public:
 private:
     GXMemoryPatcher* patcher;
     GameState currentState;
+
+    void log(const std::string& message);
+    std::string lastLogged;
 };
 
 

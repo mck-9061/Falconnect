@@ -14,7 +14,6 @@ u32 GXMemoryReader::ReadReferencePointer() {
 
     std::stringstream stream;
     stream << std::hex << referencePointer;
-    INFO_LOG_FMT(FALCONNECT, "Read: {}", stream.str());
 
     return referencePointer;
 }
@@ -52,7 +51,6 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
 
     std::stringstream stream;
     stream << std::hex << baseAddress;
-    INFO_LOG_FMT(FALCONNECT, "Base address: {}", stream.str());
 
     const u32 address = baseAddress + (racerNum * 0x620);
 
@@ -67,7 +65,6 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
 
     std::stringstream stream2;
     stream2 << std::hex << block->energy;
-    INFO_LOG_FMT(FALCONNECT, "Current energy: {}", stream2.str());
 
     return block;
 }

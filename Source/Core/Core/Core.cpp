@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 
 #include "Falconnect/FalconnectManager.h"
+#include "Falconnect/ServerSocketManager.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -260,11 +261,18 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
   s_state.store(State::Starting);
   s_emu_thread = std::thread(EmuThread, std::ref(system), std::move(boot), prepared_wsi);
 
-  // Start IPC server
-  // IPC::Start();
-
   // Create Falconnect instance
   FalconnectManager::instance = new FalconnectManager();
+
+  // Start server thread
+  ServerSocketManager socket_manager;
+  socket_manager.Start();
+
+  std::thread serverThread([&socket_manager] {
+    socket_manager.ServerThread();
+  });
+
+  INFO_LOG_FMT(FALCONNECT, "Server thread created and listening");
 
   return true;
 }

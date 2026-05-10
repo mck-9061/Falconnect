@@ -15,7 +15,6 @@ public:
 
     void ServerThread();
 
-    u16 totalExchangedFrames = 0;
     bool shouldRun = true;
 
     std::queue<OperationType> operationQueue;

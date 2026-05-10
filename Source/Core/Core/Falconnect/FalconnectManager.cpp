@@ -16,9 +16,16 @@ FalconnectManager::FalconnectManager() {
     instance = this;
 }
 
+void FalconnectManager::log(const std::string& message) {
+    if (message != lastLogged) {
+        lastLogged = message;
+        INFO_LOG_FMT(FALCONNECT, "{}", lastLogged);
+    }
+}
+
 void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
-        INFO_LOG_FMT(FALCONNECT, "Not running!");
+        log("Not running!");
         currentState = GameState::NOT_RUNNING;
         return;
     }
@@ -37,10 +44,9 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     const RacerMemoryBlock* block = patcher->memoryReader->ReadRacerData(0);
     std::stringstream stream2;
     stream2 << std::hex << block->speed;
-    INFO_LOG_FMT(FALCONNECT, "Current speed: {}", stream2.str());
 
     if (const u16 mode = patcher->memoryReader->ReadGameMode(); mode != 3) {
-        INFO_LOG_FMT(FALCONNECT, "Not in Practice mode!");
+        log("Not in Practice mode!");
         currentState = GameState::NOT_IN_PRACTICE;
         return;
     }
@@ -48,7 +54,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     if (currentState == GameState::NOT_IN_PRACTICE || currentState == GameState::NOT_RUNNING) currentState = GameState::IN_PRACTICE;
 
     if (!patcher->memoryReader->ReadSettingsSelectedFlag()) {
-        INFO_LOG_FMT(FALCONNECT, "Waiting for all settings to be chosen...");
+        log("Waiting for all settings to be chosen...");
         currentState = GameState::IN_PRACTICE;
         return;
     }
@@ -56,7 +62,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     if (currentState == GameState::IN_PRACTICE) currentState = GameState::SETTINGS_SELECTED;
 
     if (currentState == GameState::SETTINGS_SELECTED) {
-        INFO_LOG_FMT(FALCONNECT, "Setting up...");
+        log("Setting up...");
 
         // Disable menu control
         //patcher->DisableMenuControl();

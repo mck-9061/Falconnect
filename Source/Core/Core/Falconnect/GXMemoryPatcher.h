@@ -23,6 +23,7 @@ public:
     void SetBoostLap(u8 lap) const;
     void SetOpponentRacerId(u8 racerID) const;
     void SetRenderedText(const std::string &text) const;
+    void SetDefaultRaceSettings() const;
 
     u32 referencePointer{};
     bool isReady{};
@@ -31,6 +32,8 @@ public:
 private:
     const Core::CPUThreadGuard& guard;
     PPCDebugInterface& interface;
+
+    void SetSingleByte(u32 address, u8 byte) const;
 };
 
 

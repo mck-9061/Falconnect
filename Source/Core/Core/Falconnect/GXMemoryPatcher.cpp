@@ -161,3 +161,19 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
         interface.SetPatch(guard, address, rep[offset]);
     }
 }
+
+void GXMemoryPatcher::SetDefaultRaceSettings() const {
+    SetSingleByte(referencePointer + 0x24550d, 0x1d); // 29 CPU
+    SetSingleByte(referencePointer + 0x245517, 0x00); // No restore
+    SetSingleByte(referencePointer + 0x24551b, 0x04); // 4 laps
+    SetSingleByte(referencePointer + 0x2453e9, 0x03); // Master
+    SetSingleByte(referencePointer + 0x2453eb, 0x03); // Master
+}
+
+void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
+    const u32 mem = interface.ReadMemory(guard, address);
+
+    const u32 read = ((mem << 8) >> 8) | (static_cast<u32>(byte) << 24); // 10 cpus
+
+    interface.SetPatch(guard, address, read);
+}

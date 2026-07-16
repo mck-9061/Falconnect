@@ -76,6 +76,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->InitialiseText();
         patcher->SetBoostLap(2);
 
+        patcher->SetDefaultRaceSettings();
+
         currentState = GameState::READY_TO_LOAD;
         return;
     }

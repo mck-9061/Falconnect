@@ -71,12 +71,6 @@
   <ItemGroup>
     <Text Include="$(BuildInfoTemplate)" />
   </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Core\IPCServer.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Core\IPCServer.h" />
-  </ItemGroup>
   <UsingTask TaskName="GetProductVersion" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
     <ParameterGroup>
       <Path ParameterType="System.String" Required="true" />

@@ -67,6 +67,8 @@
 #include "Core/State.h"
 #include "Core/System.h"
 #include "Core/WiiUtils.h"
+#include "Core/Falconnect/FalconnectManager.h"
+#include "Core/Falconnect/ServerSocketManager.h"
 
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/NANDImporter.h"
@@ -545,6 +547,11 @@ void MainWindow::ConnectMenuBar()
   connect(m_menu_bar, &MenuBar::StateSaveUndo, this, &MainWindow::StateSaveUndo);
   connect(m_menu_bar, &MenuBar::StateSaveOldest, this, &MainWindow::StateSaveOldest);
   connect(m_menu_bar, &MenuBar::SetStateSlot, this, &MainWindow::SetStateSlot);
+
+  // Falconnect
+  connect(m_menu_bar, &MenuBar::RunServer, this, &MainWindow::StartServer);
+  connect(m_menu_bar, &MenuBar::ConnectToServer, this, &MainWindow::ConnectToServer);
+  connect(m_menu_bar, &MenuBar::StartGame, this, &MainWindow::StartFalconnectGame);
 
   // Options
   connect(m_menu_bar, &MenuBar::Configure, this, &MainWindow::ShowSettingsWindow);
@@ -1592,6 +1599,27 @@ void MainWindow::DecrementSelectedStateSlot()
   if (state_slot < 1)
     state_slot = State::NUM_STATES;
   m_menu_bar->SetStateSlot(state_slot);
+}
+
+// Falconnect
+void MainWindow::StartServer() {
+  ServerSocketManager::instance = new ServerSocketManager();
+  ServerSocketManager::instance->Start();
+
+  std::thread serverThread([] {
+    ServerSocketManager::instance->ServerThread();
+  });
+
+  INFO_LOG_FMT(FALCONNECT, "Server thread created and listening");
+}
+
+void MainWindow::StartFalconnectGame() {
+  INFO_LOG_FMT(FALCONNECT, "Starting match...");
+  FalconnectManager::instance->shouldStart = true;
+}
+
+void MainWindow::ConnectToServer() {
+
 }
 
 void MainWindow::PerformOnlineUpdate(const std::string& region)

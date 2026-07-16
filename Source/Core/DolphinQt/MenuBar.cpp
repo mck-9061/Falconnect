@@ -93,6 +93,7 @@ MenuBar::MenuBar(QWidget* parent) : QMenuBar(parent)
   AddJITMenu();
   AddSymbolsMenu();
   AddHelpMenu();
+  AddFalconnectMenu();
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
           [=, this](Core::State state) { OnEmulationStateChanged(state); });
@@ -404,6 +405,16 @@ void MenuBar::AddEmulationMenu()
 
   for (QMenu* menu : {m_state_load_menu, m_state_save_menu, m_state_slot_menu})
     connect(menu, &QMenu::aboutToShow, this, &MenuBar::UpdateStateSlotMenu);
+}
+
+// Falconnect stuff
+
+void MenuBar::AddFalconnectMenu()
+{
+  QMenu* emu_menu = addMenu(tr("&Falconnect"));
+  m_run_server = emu_menu->addAction(tr("&Run Server"), this, &MenuBar::RunServer);
+  m_connect_to_server = emu_menu->addAction(tr("&Connect to Server"), this, &MenuBar::ConnectToServer);
+  m_start_game = emu_menu->addAction(tr("&Start Game"), this, &MenuBar::StartGame);
 }
 
 void MenuBar::AddStateLoadMenu(QMenu* emu_menu)

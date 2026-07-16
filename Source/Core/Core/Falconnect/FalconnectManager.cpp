@@ -14,6 +14,7 @@ FalconnectManager::FalconnectManager() {
     patcher = nullptr;
     currentState = GameState::NOT_RUNNING;
     instance = this;
+    shouldStart = false;
 }
 
 void FalconnectManager::log(const std::string& message) {
@@ -65,7 +66,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         log("Setting up...");
 
         // Disable menu control
-        //patcher->DisableMenuControl();
+        patcher->DisableMenuControl();
 
         // Disable AI control
 
@@ -80,5 +81,12 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     }
 
     // Initial setup done, wait for the race to start
+    if (shouldStart) {
+        shouldStart = false;
+        currentState = GameState::RACE_LOADED;
 
+        patcher->SetRenderedText("Falconnect | Sorry to keep you waiting :)");
+
+        patcher->StartRaceFromPracticeOptions();
+    }
 }

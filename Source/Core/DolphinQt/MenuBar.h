@@ -137,6 +137,11 @@ signals:
 
   void ConfigureOSD();
 
+  // Falconnect
+  void RunServer();
+  void ConnectToServer();
+  void StartGame();
+
 private:
   void OnEmulationStateChanged(Core::State state);
   void OnConfigChanged();
@@ -160,6 +165,8 @@ private:
   void AddMovieMenu();
   void AddJITMenu();
   void AddSymbolsMenu();
+
+  void AddFalconnectMenu();
 
   void UpdateStateSlotMenu();
 
@@ -278,6 +285,11 @@ private:
   QAction* m_show_jit;
   QAction* m_show_assembler;
   QMenu* m_cols_menu;
+
+  // Falconnect
+  QAction* m_run_server;
+  QAction* m_connect_to_server;
+  QAction* m_start_game;
 
   // JIT
   QMenu* m_jit;

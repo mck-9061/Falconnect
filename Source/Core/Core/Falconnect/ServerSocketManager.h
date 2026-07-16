@@ -10,6 +10,8 @@
 
 class ServerSocketManager {
 public:
+    static ServerSocketManager* instance;
+
     void Start();
     void SendFrame(const RacerMemoryBlock* frame);
 

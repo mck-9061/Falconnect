@@ -4,8 +4,11 @@
 #include <sys/socket.h>
 
 #include "expr.h"
+#include "FalconnectManager.h"
 #include "PacketType.h"
 #include "Common/Logging/Log.h"
+
+ServerSocketManager* ServerSocketManager::instance = nullptr;
 
 void ServerSocketManager::Start() {
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -41,6 +44,14 @@ void ServerSocketManager::ServerThread() {
         recv(clientSocket, buffer, sizeof(buffer), 0);
 
         switch (static_cast<PacketType>(buffer[0])) {
+            case PacketType::RACER_ID: {
+                FalconnectManager::instance->racerIDs[0] = static_cast<unsigned char>(buffer[1]);
+            }
+
+            case PacketType::START_RACE: {
+                FalconnectManager::instance->shouldStart = true;
+            }
+
             case PacketType::DATA_FULL: {
                 // Set last read frame
                 const std::vector<u8> vect(buffer + 1, buffer + sizeof(buffer));

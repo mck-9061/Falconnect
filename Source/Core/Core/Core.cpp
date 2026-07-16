@@ -76,7 +76,6 @@
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
-#include "Core/IPCServer.h"
 
 #ifdef USE_MEMORYWATCHER
 #include "Core/MemoryWatcher.h"
@@ -263,16 +262,6 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
 
   // Create Falconnect instance
   FalconnectManager::instance = new FalconnectManager();
-
-  // Start server thread
-  ServerSocketManager socket_manager;
-  socket_manager.Start();
-
-  std::thread serverThread([&socket_manager] {
-    socket_manager.ServerThread();
-  });
-
-  INFO_LOG_FMT(FALCONNECT, "Server thread created and listening");
 
   return true;
 }

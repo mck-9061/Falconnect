@@ -126,6 +126,11 @@ private:
   void DecrementSelectedStateSlot();
   void BootWiiSystemMenu();
 
+  // Falconnect
+  void StartServer();
+  void ConnectToServer();
+  void StartFalconnectGame();
+
   void PerformOnlineUpdate(const std::string& region);
 
   void SetFullScreenResolution(bool fullscreen);

@@ -107,17 +107,33 @@ void FalconnectSocketManager::SocketThread() {
 
             case PacketType::START_RACE: {
                 FalconnectManager::instance->shouldStart = true;
+
+                // Send first frame
+                while (frameToSend == nullptr)
+                {
+                }
+
+                INFO_LOG_FMT(FALCONNECT, "Sending...");
+                const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+                char data[256];
+                data[0] = static_cast<char>(PacketType::DATA_FULL);
+
+                std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
+
+                send(remoteSocket, data, sizeof(data), 0);
                 break;
             }
 
             case PacketType::DATA_FULL: {
                 // Set last read frame
+                INFO_LOG_FMT(FALCONNECT, "Receiving...");
                 const std::vector<u8> vect(buffer + 1, buffer + sizeof(buffer));
 
                 RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(vect);
                 operationQueue.push(OperationType::SET_RACER_BLOCK);
                 operationArgumentsQueue.emplace(*block);
 
+                INFO_LOG_FMT(FALCONNECT, "Sending...");
                 // Send frame to be sent to remote
                 const std::vector<u8> dataToSend = frameToSend->GetSocketData();
                 char data[256];

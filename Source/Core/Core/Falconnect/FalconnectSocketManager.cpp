@@ -98,10 +98,13 @@ void FalconnectSocketManager::SocketThread() {
                     send(remoteSocket, data, sizeof(data), 0);
                     FalconnectManager::instance->shouldStart = true;
                 }
+
+                break;
             }
 
             case PacketType::START_RACE: {
                 FalconnectManager::instance->shouldStart = true;
+                break;
             }
 
             case PacketType::DATA_FULL: {

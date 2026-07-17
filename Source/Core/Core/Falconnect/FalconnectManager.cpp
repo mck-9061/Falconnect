@@ -111,7 +111,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         //        std::variant<unsigned char, RacerMemoryBlock, std::string> racerBlock = FalconnectSocketManager::instance->operationArgumentsQueue.front();
         //        FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-        //        
+        //        break;
         //    }
 
         //    default:

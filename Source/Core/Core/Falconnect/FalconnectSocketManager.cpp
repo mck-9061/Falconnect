@@ -24,7 +24,7 @@ void FalconnectSocketManager::Start() {
         sockaddr_in localAddress{};
         localAddress.sin_family = AF_INET;
         localAddress.sin_port = htons(8000);
-        inet_pton(AF_INET, "127.0.0.1", &localAddress.sin_addr);
+        localAddress.sin_addr.s_addr = INADDR_ANY;
 
         // Bind socket
         const int a = bind(localSocket, reinterpret_cast<struct sockaddr *>(&localAddress),
@@ -36,10 +36,13 @@ void FalconnectSocketManager::Start() {
 
         INFO_LOG_FMT(FALCONNECT, "Listening...");
 
+        struct sockaddr_in remoteAddress{};
+        socklen_t remoteLength;
+        remoteLength = sizeof remoteAddress;
+
         // Accept client
-        do {
-            remoteSocket = accept(localSocket, nullptr, nullptr);
-        } while (remoteSocket < 0);
+        remoteSocket = accept(localSocket, reinterpret_cast<struct sockaddr *>(&remoteAddress), &remoteLength);
+        // new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
 
         INFO_LOG_FMT(FALCONNECT, "Connection established!");
         return;
@@ -50,7 +53,7 @@ void FalconnectSocketManager::Start() {
 
     sockaddr_in remoteAddress{};
     remoteAddress.sin_family = AF_INET;
-    remoteAddress.sin_port = htons(8080);
+    remoteAddress.sin_port = htons(8000);
     inet_pton(AF_INET, "192.168.4.98", &remoteAddress.sin_addr); // Remote IP address
 
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
@@ -69,7 +72,7 @@ void FalconnectSocketManager::SocketThread() {
         // Start communication
         char data[256];
         data[0] = static_cast<char>(PacketType::RACER_ID);
-        data[1] = FalconnectManager::instance->patcher->memoryReader->ReadSelectedRacerID();
+        data[1] = FalconnectManager::instance->racerIDs[0];
 
         send(remoteSocket, data, sizeof(data), 0);
     }
@@ -81,7 +84,7 @@ void FalconnectSocketManager::SocketThread() {
 
         switch (static_cast<PacketType>(buffer[0])) {
             case PacketType::RACER_ID: {
-                FalconnectManager::instance->racerIDs[1] = static_cast<unsigned char>(buffer[1]);
+                FalconnectManager::instance->racerIDs[1] = buffer[1];
 
                 if (!isHost) {
                     // Send back our own racer ID

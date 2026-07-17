@@ -15,6 +15,8 @@ public:
 
     std::thread socketThread[1];
 
+    bool lockFrameToSend = false;
+
     void SocketThread();
     void SendFrame(const RacerMemoryBlock* frame);
 

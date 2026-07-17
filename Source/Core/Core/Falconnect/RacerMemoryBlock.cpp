@@ -50,6 +50,7 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
     block->inputs[2] = data[125];
 
     block->sideAttack = data[388];
+
     return block;
 }
 

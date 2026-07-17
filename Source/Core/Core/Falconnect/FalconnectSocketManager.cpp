@@ -62,7 +62,12 @@ void FalconnectSocketManager::Start() {
 }
 
 void FalconnectSocketManager::SendFrame(const RacerMemoryBlock* frame) {
+  while (lockFrameToSend)
+  {
+  }
+  lockFrameToSend = true;
     frameToSend = frame;
+  lockFrameToSend = false;
 }
 
 void FalconnectSocketManager::SocketThread() {
@@ -113,8 +118,17 @@ void FalconnectSocketManager::SocketThread() {
                 {
                 }
 
+                while (lockFrameToSend)
+                {
+                }
+
+                lockFrameToSend = true;
+
                 INFO_LOG_FMT(FALCONNECT, "Sending...");
                 const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+
+                lockFrameToSend = false;
+
                 char data[256];
                 data[0] = static_cast<char>(PacketType::DATA_FULL);
 
@@ -134,8 +148,18 @@ void FalconnectSocketManager::SocketThread() {
                 operationArgumentsQueue.emplace(*block);
 
                 INFO_LOG_FMT(FALCONNECT, "Sending...");
+
                 // Send frame to be sent to remote
+                while (lockFrameToSend)
+                {
+                }
+
+                lockFrameToSend = true;
+
                 const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+
+                lockFrameToSend = false;
+
                 char data[256];
                 data[0] = static_cast<char>(PacketType::DATA_FULL);
 

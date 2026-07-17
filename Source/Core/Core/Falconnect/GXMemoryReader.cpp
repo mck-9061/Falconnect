@@ -69,6 +69,26 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     return block;
 }
 
+std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
+{
+  const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+
+  std::stringstream stream;
+  stream << std::hex << baseAddress;
+
+  const u32 address = baseAddress + (racerNum * 0x620);
+
+  std::vector<u32> dolphinMemory;
+
+  for (int offset = 0; offset <= 0x620; offset += 0x4)
+  {
+    u32 read = interface.ReadMemory(guard, address + offset);
+    dolphinMemory.push_back(read);
+  }
+
+  return dolphinMemory;
+}
+
 char GXMemoryReader::ReadSelectedRacerID() const {
     const char id = static_cast<char>(Read8(0x2453ef));
     return id;

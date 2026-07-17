@@ -186,7 +186,54 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     return out;
 }
 
-std::vector<u8> RacerMemoryBlock::GetDolphinPatchData(std::vector<u32> currentData) {
-  std::vector<u8> v;
-  return v;
+std::vector<u32> RacerMemoryBlock::GetDolphinPatchData(std::vector<u32> currentData) {
+  currentData[0] = state;
+
+  currentData[31] = centerPosition[0];
+  currentData[32] = centerPosition[1];
+  currentData[33] = centerPosition[2];
+
+  currentData[34] = lastCenterPosition[0];  // also: 0x1e0:0x1ec, 0x4c8:0x4d4
+  currentData[35] = lastCenterPosition[1];
+  currentData[36] = lastCenterPosition[2];
+
+  currentData[37] = velocityWorld[0];
+  currentData[38] = velocityWorld[1];
+  currentData[39] = velocityWorld[2];
+
+  currentData[46] = velocityMachine[0];  // Z component also stored at 0xd4:0xd8
+  currentData[47] = velocityMachine[1];
+  currentData[48] = velocityMachine[2];
+
+  currentData[59] = orientationWorld[0];  // also: 0x11c:0x128, 0x14c:0x158
+  currentData[60] = orientationWorld[1];
+  currentData[61] = orientationWorld[2];
+
+  currentData[63] = upVector[0];  // also: 0x12c:0x138, 0x15c:0x168
+  currentData[64] = upVector[1];
+  currentData[65] = upVector[2];
+
+  currentData[67] = orientationGravity[0];  // also: 0x13c:0x148, 0x16c:0x178
+  currentData[68] = orientationGravity[1];
+  currentData[69] = orientationGravity[2];
+
+  currentData[95] = speed;
+  currentData[96] = arialTilt;
+  currentData[97] = energy;
+
+  currentData[111] = trackOrientation[0];
+  currentData[112] = trackOrientation[1];
+  currentData[113] = trackOrientation[2];
+
+  currentData[117] = bottomPosition[0];
+  currentData[118] = bottomPosition[1];
+  currentData[119] = bottomPosition[2];
+
+  currentData[123] = inputs[0];  // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
+  currentData[124] = inputs[1];
+  currentData[125] = inputs[2];
+
+  currentData[388] = sideAttack;
+
+   return currentData;
 }

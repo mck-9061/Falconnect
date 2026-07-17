@@ -19,6 +19,7 @@ public:
     [[nodiscard]] char ReadSelectedRacerID() const;
 
     RacerMemoryBlock *ReadRacerData(u8 racerNum) const;
+    std::vector<u32> ReadRawRacerData(u8 racerNum) const;
 
     u32 referencePointer{};
 

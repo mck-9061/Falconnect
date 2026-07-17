@@ -179,7 +179,7 @@ void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
 }
 
 void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const {
-  const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+  const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
 
   interface.SetPatch(guard, baseAddress, patchData.state);
 

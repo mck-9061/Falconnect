@@ -112,11 +112,9 @@ void FalconnectSocketManager::SocketThread() {
 
             case PacketType::START_RACE: {
                 FalconnectManager::instance->shouldStart = true;
+                lockFrameToSend = true;
 
                 // Send first frame
-                while (frameToSend == nullptr)
-                {
-                }
 
                 while (lockFrameToSend)
                 {

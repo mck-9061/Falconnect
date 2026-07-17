@@ -63,9 +63,6 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
 
     RacerMemoryBlock* block = RacerMemoryBlock::CreateFromDolphinData(dolphinMemory);
 
-    std::stringstream stream2;
-    stream2 << std::hex << block->energy;
-
     return block;
 }
 

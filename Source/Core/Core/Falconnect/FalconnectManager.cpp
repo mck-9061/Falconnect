@@ -43,10 +43,6 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
     // Patcher ready; wait for practice mode
 
-    const RacerMemoryBlock* block = patcher->memoryReader->ReadRacerData(0);
-    std::stringstream stream2;
-    stream2 << std::hex << block->speed;
-
     if (const u16 mode = patcher->memoryReader->ReadGameMode(); mode != 3) {
         log("Not in Practice mode!");
         currentState = GameState::NOT_IN_PRACTICE;
@@ -70,6 +66,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->DisableMenuControl();
 
         // Disable AI control
+        patcher->DisableAIControl();
 
         // Disable countdown
 

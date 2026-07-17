@@ -1,6 +1,7 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #include <queue>
+#include <thread>
 #include <variant>
 
 #include "OperationType.h"
@@ -8,25 +9,28 @@
 #include "Common/CommonTypes.h"
 
 
-class ServerSocketManager {
+class FalconnectSocketManager {
 public:
-    static ServerSocketManager* instance;
+    static FalconnectSocketManager* instance;
 
-    void Start();
+    std::thread socketThread[1];
+
+    void SocketThread();
     void SendFrame(const RacerMemoryBlock* frame);
 
-    void ServerThread();
-
     bool shouldRun = true;
+    bool isHost = false;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
 
 private:
+    void Start();
+
     const RacerMemoryBlock* frameToSend = nullptr;
 
-    int serverSocket = 0;
-    int clientSocket = 0;
+    int localSocket = 0;
+    int remoteSocket = 0;
     bool hasStarted = false;
 };
 

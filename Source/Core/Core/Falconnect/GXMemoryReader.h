@@ -16,7 +16,7 @@ public:
 
     [[nodiscard]] u16 ReadGameMode() const;
     [[nodiscard]] bool ReadSettingsSelectedFlag() const;
-    u8 ReadSelectedRacerID() const;
+    [[nodiscard]] char ReadSelectedRacerID() const;
 
     RacerMemoryBlock *ReadRacerData(u8 racerNum) const;
 

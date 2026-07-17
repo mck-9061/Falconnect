@@ -68,7 +68,7 @@
 #include "Core/System.h"
 #include "Core/WiiUtils.h"
 #include "Core/Falconnect/FalconnectManager.h"
-#include "Core/Falconnect/ServerSocketManager.h"
+#include "Core/Falconnect/FalconnectSocketManager.h"
 
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/NANDImporter.h"
@@ -1603,14 +1603,14 @@ void MainWindow::DecrementSelectedStateSlot()
 
 // Falconnect
 void MainWindow::StartServer() {
-  ServerSocketManager::instance = new ServerSocketManager();
-  ServerSocketManager::instance->Start();
+  FalconnectSocketManager::instance = new FalconnectSocketManager();
+  FalconnectSocketManager::instance->isHost = true;
 
-  std::thread serverThread([] {
-    ServerSocketManager::instance->ServerThread();
-  });
+  std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
 
-  INFO_LOG_FMT(FALCONNECT, "Server thread created and listening");
+  socketThread.detach();
+
+  INFO_LOG_FMT(FALCONNECT, "Host socket thread created and listening");
 }
 
 void MainWindow::StartFalconnectGame() {
@@ -1619,7 +1619,13 @@ void MainWindow::StartFalconnectGame() {
 }
 
 void MainWindow::ConnectToServer() {
+  FalconnectSocketManager::instance = new FalconnectSocketManager();
 
+  std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
+
+  socketThread.detach();
+
+  INFO_LOG_FMT(FALCONNECT, "Socket thread created and listening");
 }
 
 void MainWindow::PerformOnlineUpdate(const std::string& region)

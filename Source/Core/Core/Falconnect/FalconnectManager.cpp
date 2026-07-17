@@ -3,6 +3,7 @@
 #include <iostream>
 #include <thread>
 
+#include "FalconnectSocketManager.h"
 #include "PowerPCScripts.h"
 #include "Core/System.h"
 #include "Core/HW/CPU.h"
@@ -89,6 +90,29 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         patcher->SetRenderedText("Falconnect | Sorry to keep you waiting :)");
 
+        // Set racer IDs
+        patcher->SetOpponentRacerId(racerIDs[0]);
+
         patcher->StartRaceFromPracticeOptions();
+    }
+
+    if (currentState == GameState::RACE_LOADED) {
+        // Process operation queue and keep frame to send updated
+        FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
+
+        OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
+        FalconnectSocketManager::instance->operationQueue.pop();
+
+        switch (operation) {
+            case (OperationType::SET_RACER_BLOCK): {
+                std::variant<unsigned char, RacerMemoryBlock, std::string> racerBlock = FalconnectSocketManager::instance->operationArgumentsQueue.front();
+                FalconnectSocketManager::instance->operationArgumentsQueue.pop();
+
+                
+            }
+
+            default:
+                break;
+        }
     }
 }

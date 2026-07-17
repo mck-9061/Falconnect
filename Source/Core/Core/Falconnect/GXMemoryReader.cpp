@@ -69,7 +69,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     return block;
 }
 
-u8 GXMemoryReader::ReadSelectedRacerID() const {
-    const u8 id = Read8(0x2453ef);
+char GXMemoryReader::ReadSelectedRacerID() const {
+    const char id = static_cast<char>(Read8(0x2453ef));
     return id;
 }

@@ -23,13 +23,13 @@ public:
     static FalconnectManager* instance;
     void Update(const Core::CPUThreadGuard& guard);
 
+    GXMemoryPatcher* patcher;
+
     std::map<int, int> racerIDs;
     GameState currentState;
     bool shouldStart;
 
 private:
-    GXMemoryPatcher* patcher;
-
     void log(const std::string& message);
     std::string lastLogged;
 };

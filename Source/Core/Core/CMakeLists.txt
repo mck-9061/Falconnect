@@ -598,8 +598,8 @@ add_library(core
         Falconnect/GXMemoryReader.h
         Falconnect/RacerMemoryBlock.cpp
         Falconnect/RacerMemoryBlock.h
-        Falconnect/ServerSocketManager.cpp
-        Falconnect/ServerSocketManager.h
+        Falconnect/FalconnectSocketManager.cpp
+        Falconnect/FalconnectSocketManager.h
         Falconnect/PacketType.h
         Falconnect/OperationType.h
 )

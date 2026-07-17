@@ -12,8 +12,6 @@ public:
 
     std::vector<u8> GetSocketData() const;
 
-    std::vector<u32> GetDolphinPatchData(std::vector<u32> currentData);
-
     u32 state;
     u32 centerPosition[3];
     u32 lastCenterPosition[3];

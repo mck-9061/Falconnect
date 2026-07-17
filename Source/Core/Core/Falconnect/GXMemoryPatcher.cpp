@@ -178,21 +178,55 @@ void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
     interface.SetPatch(guard, address, read);
 }
 
-void GXMemoryPatcher::SetRacerData(u8 racerNum, std::vector<u32> patchData)
+void GXMemoryPatcher::SetRacerData(u8 racerNum, RacerMemoryBlock patchData)
 {
   u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
 
-  // convert to u8 vector
-  std::vector<uint8_t> out;
-  out.reserve(patchData.size() * 4);
+  interface.SetPatch(guard, baseAddress, patchData.state);
 
-  for (const uint32_t v : patchData)
-  {
-    out.push_back((v >> 24) & 0xFF);
-    out.push_back((v >> 16) & 0xFF);
-    out.push_back((v >> 8) & 0xFF);
-    out.push_back(v & 0xFF);
-  }
+  interface.SetPatch(guard, baseAddress + (31 * 4), patchData.centerPosition[0]);
+  interface.SetPatch(guard, baseAddress + (32 * 4), patchData.centerPosition[1]);
+  interface.SetPatch(guard, baseAddress + (33 * 4), patchData.centerPosition[2]);
 
-  interface.SetPatch(guard, baseAddress + (racerNum * 0x620), out);
+  interface.SetPatch(guard, baseAddress + (34 * 4), patchData.lastCenterPosition[0]);
+  interface.SetPatch(guard, baseAddress + (35 * 4), patchData.lastCenterPosition[1]);
+  interface.SetPatch(guard, baseAddress + (36 * 4), patchData.lastCenterPosition[2]);
+
+  interface.SetPatch(guard, baseAddress + (37 * 4), patchData.velocityWorld[0]);
+  interface.SetPatch(guard, baseAddress + (38 * 4), patchData.velocityWorld[1]);
+  interface.SetPatch(guard, baseAddress + (39 * 4), patchData.velocityWorld[2]);
+
+  interface.SetPatch(guard, baseAddress + (46 * 4), patchData.velocityMachine[0]);
+  interface.SetPatch(guard, baseAddress + (47 * 4), patchData.velocityMachine[1]);
+  interface.SetPatch(guard, baseAddress + (48 * 4), patchData.velocityMachine[2]);
+
+  interface.SetPatch(guard, baseAddress + (59 * 4), patchData.orientationWorld[0]);
+  interface.SetPatch(guard, baseAddress + (60 * 4), patchData.orientationWorld[1]);
+  interface.SetPatch(guard, baseAddress + (61 * 4), patchData.orientationWorld[2]);
+
+  interface.SetPatch(guard, baseAddress + (63 * 4), patchData.upVector[0]);
+  interface.SetPatch(guard, baseAddress + (64 * 4), patchData.upVector[1]);
+  interface.SetPatch(guard, baseAddress + (65 * 4), patchData.upVector[2]);
+
+  interface.SetPatch(guard, baseAddress + (67 * 4), patchData.orientationGravity[0]);
+  interface.SetPatch(guard, baseAddress + (68 * 4), patchData.orientationGravity[1]);
+  interface.SetPatch(guard, baseAddress + (69 * 4), patchData.orientationGravity[2]);
+
+  interface.SetPatch(guard, baseAddress + (95 * 4), patchData.speed);
+  interface.SetPatch(guard, baseAddress + (96 * 4), patchData.arialTilt);
+  interface.SetPatch(guard, baseAddress + (97 * 4), patchData.energy);
+
+  interface.SetPatch(guard, baseAddress + (111 * 4), patchData.trackOrientation[0]);
+  interface.SetPatch(guard, baseAddress + (112 * 4), patchData.trackOrientation[1]);
+  interface.SetPatch(guard, baseAddress + (113 * 4), patchData.trackOrientation[2]);
+
+  interface.SetPatch(guard, baseAddress + (117 * 4), patchData.bottomPosition[0]);
+  interface.SetPatch(guard, baseAddress + (118 * 4), patchData.bottomPosition[1]);
+  interface.SetPatch(guard, baseAddress + (119 * 4), patchData.bottomPosition[2]);
+
+  interface.SetPatch(guard, baseAddress + (123 * 4), patchData.inputs[0]);
+  interface.SetPatch(guard, baseAddress + (124 * 4), patchData.inputs[1]);
+  interface.SetPatch(guard, baseAddress + (125 * 4), patchData.inputs[2]);
+
+  interface.SetPatch(guard, baseAddress + (388 * 4), patchData.sideAttack);
 }

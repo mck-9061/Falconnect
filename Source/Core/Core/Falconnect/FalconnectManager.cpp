@@ -112,7 +112,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         if (queueLength != 0)
         {
-          patcher->SetRenderedText("Falconnect | Queue length: " + queueLength);
+          patcher->SetRenderedText("Falconnect | Queue length: " + std::to_string(queueLength));
 
           OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
           FalconnectSocketManager::instance->operationQueue.pop();
@@ -125,10 +125,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
                 FalconnectSocketManager::instance->operationArgumentsQueue.front());
             FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-            std::vector<u32> patchData =
-                racerBlock.GetDolphinPatchData(patcher->memoryReader->ReadRawRacerData(1));
-
-            patcher->SetRacerData(1, patchData);
+            patcher->SetRacerData(1, racerBlock);
 
             break;
           }

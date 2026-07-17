@@ -16,12 +16,12 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 
-#include "Falconnect/FalconnectManager.h"
-#include "Falconnect/FalconnectSocketManager.h"
-
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+#include "Core/Falconnect/FalconnectManager.h"
+#include "Core/Falconnect/FalconnectSocketManager.h"
 
 #include "AudioCommon/AudioCommon.h"
 

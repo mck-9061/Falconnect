@@ -1,10 +1,16 @@
 #include "FalconnectSocketManager.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <wS2tcpip.h>
+#include <windows.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
 #include "expr.h"
+#endif
+
 #include "FalconnectManager.h"
 #include "PacketType.h"
 #include "Common/Logging/Log.h"
@@ -75,13 +81,13 @@ void FalconnectSocketManager::SocketThread() {
 
         switch (static_cast<PacketType>(buffer[0])) {
             case PacketType::RACER_ID: {
-                FalconnectManager::instance->racerIDs[0] = static_cast<unsigned char>(buffer[1]);
+                FalconnectManager::instance->racerIDs[1] = static_cast<unsigned char>(buffer[1]);
 
                 if (!isHost) {
                     // Send back our own racer ID
                     char data[256];
                     data[0] = static_cast<char>(PacketType::RACER_ID);
-                    data[1] = FalconnectManager::instance->patcher->memoryReader->ReadSelectedRacerID();
+                    data[1] = FalconnectManager::instance->racerIDs[0];
 
                     send(remoteSocket, data, sizeof(data), 0);
                 } else {

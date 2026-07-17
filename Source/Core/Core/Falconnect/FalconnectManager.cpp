@@ -79,6 +79,9 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         patcher->SetDefaultRaceSettings();
 
+        // Get our racer ID
+        racerIDs[0] = patcher->memoryReader->ReadSelectedRacerID();
+
         currentState = GameState::READY_TO_LOAD;
         return;
     }
@@ -91,28 +94,28 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->SetRenderedText("Falconnect | Sorry to keep you waiting :)");
 
         // Set racer IDs
-        patcher->SetOpponentRacerId(racerIDs[0]);
+        patcher->SetOpponentRacerId(racerIDs[1]);
 
         patcher->StartRaceFromPracticeOptions();
     }
 
     if (currentState == GameState::RACE_LOADED) {
         // Process operation queue and keep frame to send updated
-        FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
+        //FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
 
-        OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
-        FalconnectSocketManager::instance->operationQueue.pop();
+        //OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
+        //FalconnectSocketManager::instance->operationQueue.pop();
 
-        switch (operation) {
-            case (OperationType::SET_RACER_BLOCK): {
-                std::variant<unsigned char, RacerMemoryBlock, std::string> racerBlock = FalconnectSocketManager::instance->operationArgumentsQueue.front();
-                FalconnectSocketManager::instance->operationArgumentsQueue.pop();
+        //switch (operation) {
+        //    case (OperationType::SET_RACER_BLOCK): {
+        //        std::variant<unsigned char, RacerMemoryBlock, std::string> racerBlock = FalconnectSocketManager::instance->operationArgumentsQueue.front();
+        //        FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-                
-            }
+        //        
+        //    }
 
-            default:
-                break;
-        }
+        //    default:
+        //        break;
+        //}
     }
 }

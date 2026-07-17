@@ -187,5 +187,6 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
 }
 
 std::vector<u8> RacerMemoryBlock::GetDolphinPatchData(std::vector<u32> currentData) {
-
+  std::vector<u8> v;
+  return v;
 }

@@ -71,6 +71,23 @@
   <ItemGroup>
     <Text Include="$(BuildInfoTemplate)" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Core\Falconnect\FalconnectManager.cpp" />
+    <ClCompile Include="Core\Falconnect\FalconnectSocketManager.cpp" />
+    <ClCompile Include="Core\Falconnect\GXMemoryPatcher.cpp" />
+    <ClCompile Include="Core\Falconnect\GXMemoryReader.cpp" />
+    <ClCompile Include="Core\Falconnect\RacerMemoryBlock.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\Falconnect\FalconnectManager.h" />
+    <ClInclude Include="Core\Falconnect\FalconnectSocketManager.h" />
+    <ClInclude Include="Core\Falconnect\GXMemoryPatcher.h" />
+    <ClInclude Include="Core\Falconnect\GXMemoryReader.h" />
+    <ClInclude Include="Core\Falconnect\OperationType.h" />
+    <ClInclude Include="Core\Falconnect\PacketType.h" />
+    <ClInclude Include="Core\Falconnect\PowerPCScripts.h" />
+    <ClInclude Include="Core\Falconnect\RacerMemoryBlock.h" />
+  </ItemGroup>
   <UsingTask TaskName="GetProductVersion" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
     <ParameterGroup>
       <Path ParameterType="System.String" Required="true" />

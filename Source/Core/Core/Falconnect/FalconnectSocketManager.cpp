@@ -68,6 +68,7 @@ void FalconnectSocketManager::SendFrame(const RacerMemoryBlock* frame) {
   lockFrameToSend = true;
     frameToSend = frame;
   lockFrameToSend = false;
+    doneFirst = true;
 }
 
 void FalconnectSocketManager::SocketThread() {
@@ -112,9 +113,12 @@ void FalconnectSocketManager::SocketThread() {
 
             case PacketType::START_RACE: {
                 FalconnectManager::instance->shouldStart = true;
-                lockFrameToSend = true;
 
                 // Send first frame
+                while (!doneFirst)
+                {
+
+                }
 
                 while (lockFrameToSend)
                 {
@@ -148,7 +152,7 @@ void FalconnectSocketManager::SocketThread() {
                 INFO_LOG_FMT(FALCONNECT, "Sending...");
 
                 // Send frame to be sent to remote
-                while (lockFrameToSend)
+                while (lockFrameToSend && !doneFirst)
                 {
                 }
 

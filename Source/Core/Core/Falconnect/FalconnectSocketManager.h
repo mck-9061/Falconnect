@@ -34,6 +34,7 @@ private:
     int localSocket = 0;
     int remoteSocket = 0;
     bool hasStarted = false;
+    bool doneFirst = false;
 };
 
 

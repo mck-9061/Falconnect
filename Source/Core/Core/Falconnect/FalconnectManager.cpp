@@ -103,24 +103,30 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         // Process operation queue and keep frame to send updated
         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
 
-        OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
-        FalconnectSocketManager::instance->operationQueue.pop();
+        if (FalconnectSocketManager::instance->operationQueue.size() != 0)
+        {
+          OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
+          FalconnectSocketManager::instance->operationQueue.pop();
 
-        switch (operation) {
-            case (OperationType::SET_RACER_BLOCK): {
-                RacerMemoryBlock racerBlock = get<RacerMemoryBlock>(FalconnectSocketManager::instance->operationArgumentsQueue.front());
-                FalconnectSocketManager::instance->operationArgumentsQueue.pop();
+          switch (operation)
+          {
+          case (OperationType::SET_RACER_BLOCK):
+          {
+            RacerMemoryBlock racerBlock = get<RacerMemoryBlock>(
+                FalconnectSocketManager::instance->operationArgumentsQueue.front());
+            FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-                std::vector<u32> patchData =
-                    racerBlock.GetDolphinPatchData(patcher->memoryReader->ReadRawRacerData(1));
+            std::vector<u32> patchData =
+                racerBlock.GetDolphinPatchData(patcher->memoryReader->ReadRawRacerData(1));
 
-                patcher->SetRacerData(1, patchData);
+            patcher->SetRacerData(1, patchData);
 
-                break;
-            }
+            break;
+          }
 
-            default:
-                break;
+          default:
+            break;
+          }
         }
     }
 }

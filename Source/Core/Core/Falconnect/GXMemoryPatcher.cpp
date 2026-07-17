@@ -180,10 +180,12 @@ void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
 
 void GXMemoryPatcher::SetRacerData(u8 racerNum, std::vector<u32> patchData)
 {
-  for (int i = 0; i < sizeof(patchData); i++)
+  u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+
+  for (u64 i = 0; i < patchData.size(); i++)
   {
     u32 data = patchData[i];
-    u32 address = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620) + (i * 4);
+    u32 address = baseAddress + (racerNum * 0x620) + (i * 4);
 
     interface.SetPatch(guard, address, data);
   }

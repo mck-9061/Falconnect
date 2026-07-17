@@ -115,7 +115,10 @@ void FalconnectSocketManager::SocketThread() {
             }
 
             case PacketType::START_RACE: {
-                FalconnectManager::instance->shouldStart = true;
+
+                {
+                  FalconnectManager::instance->shouldStart = true;
+                }
 
                 std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -173,6 +176,8 @@ void FalconnectSocketManager::SocketThread() {
                 std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
 
                 send(remoteSocket, data, sizeof(data), 0);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(32));
 
                 break;
             }

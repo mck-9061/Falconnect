@@ -117,10 +117,9 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
           OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
           FalconnectSocketManager::instance->operationQueue.pop();
 
-          try
+
+          switch (operation)
           {
-            switch (operation)
-            {
             case (OperationType::SET_RACER_BLOCK):
             {
               RacerMemoryBlock racerBlock = get<RacerMemoryBlock>(
@@ -134,12 +133,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
             default:
               break;
-            }
           }
-          catch (int errorCode)
-          {
-            // probably fine lmao
-          }
+       
         }
     }
 }

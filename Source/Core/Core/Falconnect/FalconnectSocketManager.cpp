@@ -57,7 +57,7 @@ void FalconnectSocketManager::Start() {
     sockaddr_in remoteAddress{};
     remoteAddress.sin_family = AF_INET;
     remoteAddress.sin_port = htons(8000);
-    inet_pton(AF_INET, "192.168.4.103", &remoteAddress.sin_addr); // Remote IP address
+    inet_pton(AF_INET, "192.168.0.3", &remoteAddress.sin_addr); // Remote IP address
 
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
     connect(remoteSocket, reinterpret_cast<struct sockaddr *>(&remoteAddress), sizeof(remoteAddress));
@@ -177,7 +177,7 @@ void FalconnectSocketManager::SocketThread() {
 
                 send(remoteSocket, data, sizeof(data), 0);
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(32));
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
 
                 break;
             }

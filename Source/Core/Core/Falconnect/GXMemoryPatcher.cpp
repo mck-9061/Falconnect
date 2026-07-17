@@ -183,7 +183,7 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, std::vector<u32> patchData)
   for (int i = 0; i < sizeof(patchData); i++)
   {
     u32 data = patchData[i];
-    u32 address = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+    u32 address = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620) + (i * 4);
 
     interface.SetPatch(guard, address, data);
   }

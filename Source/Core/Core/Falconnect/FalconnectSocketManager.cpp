@@ -11,6 +11,9 @@
 #include "expr.h"
 #endif
 
+#include <chrono>
+#include <thread>
+
 #include "FalconnectManager.h"
 #include "PacketType.h"
 #include "Common/Logging/Log.h"
@@ -113,6 +116,8 @@ void FalconnectSocketManager::SocketThread() {
 
             case PacketType::START_RACE: {
                 FalconnectManager::instance->shouldStart = true;
+
+                std::this_thread::sleep_for(std::chrono::seconds(5));
 
                 // Send first frame
                 while (!doneFirst)

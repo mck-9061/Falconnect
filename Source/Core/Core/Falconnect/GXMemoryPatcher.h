@@ -24,7 +24,7 @@ public:
     void SetOpponentRacerId(u8 racerID) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
-    void SetRacerData(u8 racerNum, RacerMemoryBlock patchData);
+    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const;
 
     u32 referencePointer{};
     bool isReady{};

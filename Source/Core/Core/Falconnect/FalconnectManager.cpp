@@ -163,8 +163,14 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         // Check if we've exited the race to the menu
         if (!patcher->memoryReader->ReadIsInRace()) {
-            FalconnectSocketManager::instance->exited = true;
-            currentState = GameState::IN_PRACTICE;
+            readCounter++;
+
+            if (readCounter > 3) {
+                FalconnectSocketManager::instance->exited = true;
+                currentState = GameState::IN_PRACTICE;
+            }
+        } else {
+            readCounter = 0;
         }
     }
 }

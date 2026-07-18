@@ -32,6 +32,8 @@ public:
 private:
     void log(const std::string& message);
     std::string lastLogged;
+
+    u8 readCounter = 0;
 };
 
 

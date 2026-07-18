@@ -57,7 +57,7 @@ void FalconnectSocketManager::Start() {
     sockaddr_in remoteAddress{};
     remoteAddress.sin_family = AF_INET;
     remoteAddress.sin_port = htons(8000);
-    inet_pton(AF_INET, "192.168.0.3", &remoteAddress.sin_addr); // Remote IP address
+    inet_pton(AF_INET, "localhost", &remoteAddress.sin_addr); // Remote IP address
 
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
     connect(remoteSocket, reinterpret_cast<struct sockaddr *>(&remoteAddress), sizeof(remoteAddress));

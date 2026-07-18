@@ -147,12 +147,14 @@ std::vector<uint32_t> stringToUint32Array(const std::string& str)
 
 void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
     // Blank previous text
+    INFO_LOG_FMT(FALCONNECT, "Blanking text");
     for (int offset = 0; offset < 100; offset++) {
         constexpr u32 textAddress = 0x80390000;
         const u32 address = textAddress + (offset * 4);
         interface.SetPatch(guard, address, 0x0);
     }
 
+    INFO_LOG_FMT(FALCONNECT, "Setting text");
     const std::vector<u32> rep = stringToUint32Array(text);
 
     for (u8 offset = 0; offset < rep.size(); offset++) {
@@ -180,6 +182,13 @@ void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
 
 void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const {
   const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+
+    INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
+
+    if (baseAddress < 0x80000000) {
+        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        return;
+    }
 
   interface.SetPatch(guard, baseAddress, patchData.state);
 

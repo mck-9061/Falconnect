@@ -22,6 +22,10 @@ public:
 
     bool shouldRun = true;
     bool isHost = false;
+    bool hasGridded = false;
+    bool start = false;
+
+    u8 ping = 0;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
@@ -35,6 +39,8 @@ private:
     int remoteSocket = 0;
     bool hasStarted = false;
     bool doneFirst = false;
+
+    u32 timeBeforePing = 0;
 };
 
 

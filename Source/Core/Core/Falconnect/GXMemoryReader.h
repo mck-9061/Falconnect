@@ -17,6 +17,7 @@ public:
     [[nodiscard]] u16 ReadGameMode() const;
     [[nodiscard]] bool ReadSettingsSelectedFlag() const;
     [[nodiscard]] char ReadSelectedRacerID() const;
+    [[nodiscard]] bool HasGridded();
 
     RacerMemoryBlock *ReadRacerData(u8 racerNum) const;
     std::vector<u32> ReadRawRacerData(u8 racerNum) const;
@@ -26,6 +27,9 @@ public:
 private:
     const Core::CPUThreadGuard& guard;
     PPCDebugInterface& interface;
+
+    u32 lastTime = 0;
+    u32 gridTimer = 0;
 };
 
 

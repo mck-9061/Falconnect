@@ -93,6 +93,7 @@ void FalconnectSocketManager::SocketThread() {
 
         switch (static_cast<PacketType>(buffer[0])) {
             case PacketType::RACER_ID: {
+                INFO_LOG_FMT(FALCONNECT, "RACER_ID");
                 FalconnectManager::instance->racerIDs[1] = buffer[1];
 
                 if (!isHost) {
@@ -115,6 +116,7 @@ void FalconnectSocketManager::SocketThread() {
             }
 
             case PacketType::START_RACE: {
+                INFO_LOG_FMT(FALCONNECT, "START_RACE");
 
                 {
                   FalconnectManager::instance->shouldStart = true;
@@ -122,20 +124,49 @@ void FalconnectSocketManager::SocketThread() {
 
                 std::this_thread::sleep_for(std::chrono::seconds(5));
 
-                // Send first frame
-                while (!doneFirst)
-                {
-
+                // Tell the host when we've gridded
+                while (!hasGridded) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
 
-                while (lockFrameToSend)
-                {
+                char data[256];
+                data[0] = static_cast<char>(PacketType::READY);
+
+                send(remoteSocket, data, sizeof(data), 0);
+
+                break;
+            }
+
+            case PacketType::READY: {
+                INFO_LOG_FMT(FALCONNECT, "READY");
+                // Wait for us to be gridded, then start the countdown
+                while (!hasGridded) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
 
+                char data[256];
+                data[0] = static_cast<char>(PacketType::COUNTDOWN);
+
+                send(remoteSocket, data, sizeof(data), 0);
+
+                start = true;
+
+                break;
+            }
+
+            case PacketType::COUNTDOWN: {
+                INFO_LOG_FMT(FALCONNECT, "COUNTDOWN");
+                start = true;
+                INFO_LOG_FMT(FALCONNECT, "sucessfully set a bool lmao");
+
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                // Send the first frame
                 lockFrameToSend = true;
 
-                INFO_LOG_FMT(FALCONNECT, "Sending...");
+                INFO_LOG_FMT(FALCONNECT, "Reading data");
                 const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+                INFO_LOG_FMT(FALCONNECT, "Data read");
 
                 lockFrameToSend = false;
 
@@ -145,11 +176,16 @@ void FalconnectSocketManager::SocketThread() {
                 std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
 
                 send(remoteSocket, data, sizeof(data), 0);
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+
                 break;
             }
 
             case PacketType::DATA_FULL: {
+                INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
                 // Set last read frame
+                if (timeBeforePing != 0) ping = time(nullptr) - timeBeforePing;
                 INFO_LOG_FMT(FALCONNECT, "Receiving...");
                 const std::vector<u8> vect(buffer + 1, buffer + sizeof(buffer));
 
@@ -160,9 +196,7 @@ void FalconnectSocketManager::SocketThread() {
                 INFO_LOG_FMT(FALCONNECT, "Sending...");
 
                 // Send frame to be sent to remote
-                while (lockFrameToSend && !doneFirst)
-                {
-                }
+                timeBeforePing = time(nullptr);
 
                 lockFrameToSend = true;
 

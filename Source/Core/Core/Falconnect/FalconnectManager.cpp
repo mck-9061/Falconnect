@@ -45,7 +45,11 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
     // Patcher ready; wait for practice mode
 
-    if (currentState != GameState::RACE_LOADED) {
+    if (!(
+            currentState == GameState::RACE_LOADED ||
+            currentState == GameState::RACE_GRIDDED ||
+            currentState == GameState::RACING
+            )) {
       if (const u16 mode = patcher->memoryReader->ReadGameMode(); mode != 3)
       {
         log("Not in Practice mode!");
@@ -77,6 +81,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->DisableAIControl();
 
         // Disable countdown
+        patcher->DisableCountdown();
 
         // Set up waiting text
         patcher->InitialiseText();
@@ -96,7 +101,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         shouldStart = false;
         currentState = GameState::RACE_LOADED;
 
-        patcher->SetRenderedText("Falconnect | Sorry to keep you waiting :)");
+        patcher->SetRenderedText("Falconnect | Synchronising...");
+
 
         // Set racer IDs
         patcher->SetOpponentRacerId(racerIDs[1]);
@@ -104,17 +110,36 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->StartRaceFromPracticeOptions();
     }
 
+    // Wait for the machine to grid, then let the socket manager know we've gridded
     if (currentState == GameState::RACE_LOADED) {
+        if (patcher->memoryReader->HasGridded()) {
+            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
+            currentState = GameState::RACE_GRIDDED;
+            FalconnectSocketManager::instance->hasGridded = true;
+        }
+    }
+
+    // Wait for the signal to start
+    if (currentState == GameState::RACE_GRIDDED) {
+        if (FalconnectSocketManager::instance->start) {
+            INFO_LOG_FMT(FALCONNECT, "Starting");
+            patcher->StartCountdown();
+            INFO_LOG_FMT(FALCONNECT, "Countdown started");
+            currentState = GameState::RACING;
+        }
+    }
+
+    if (currentState == GameState::RACING) {
+        INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Process operation queue and keep frame to send updated
         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
+        INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
-        u32 queueLength = (u32)FalconnectSocketManager::instance->operationQueue.size();
-
-        if (queueLength != 0)
+        if (const u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size()); queueLength != 0)
         {
-          patcher->SetRenderedText("Falconnect | Queue length: " + std::to_string(queueLength));
+          patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(FalconnectSocketManager::instance->ping) + "ms");
 
-          OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
+          const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
           FalconnectSocketManager::instance->operationQueue.pop();
 
 
@@ -122,7 +147,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
           {
             case (OperationType::SET_RACER_BLOCK):
             {
-              RacerMemoryBlock racerBlock = get<RacerMemoryBlock>(
+              const auto racerBlock = get<RacerMemoryBlock>(
                   FalconnectSocketManager::instance->operationArgumentsQueue.front());
               FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 

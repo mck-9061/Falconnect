@@ -90,3 +90,21 @@ char GXMemoryReader::ReadSelectedRacerID() const {
     const char id = static_cast<char>(Read8(0x2453ef));
     return id;
 }
+
+bool GXMemoryReader::HasGridded() {
+    if (lastTime == 0) lastTime = time(nullptr);
+
+    if (std::vector<u32> data = ReadRawRacerData(0); data[0] & 0x0000FF00) {
+        gridTimer += (time(nullptr) - lastTime);
+        INFO_LOG_FMT(FALCONNECT, "{}", gridTimer);
+    }
+
+    if (gridTimer > 3) {
+        lastTime = 0;
+        gridTimer = 0;
+        return true;
+    }
+
+    lastTime = time(nullptr);
+    return false;
+}

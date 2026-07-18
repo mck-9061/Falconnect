@@ -4,8 +4,8 @@ A work-in-progress fork of the Dolphin emulator, exclusively for use with F-Zero
 multiplayer functionality.
 
 ## Status
-I am currently porting the [prototype code I made in Python](https://github.com/mck-9061/Falconnect-prototype) to C++, so it can run internally in Dolphin
-with no external tools and with multi-platform support.
+Basic core 2-player multiplayer is working. After I've finished testing and done some UI and logic flow work to make
+it usable, I'll release an alpha build.
 
 ## System Requirements
 
@@ -21,7 +21,7 @@ with no external tools and with multi-platform support.
     * A reasonably modern graphics card (Direct3D 11.1 / OpenGL 3.3).
     * A graphics card that supports Direct3D 11.1 / OpenGL 4.4 is recommended.
 
-Falconnect is being tested on Windows (x86) and macOS (Apple Silicon) - other operating systems
+Falconnect is being tested on Windows 11 (x86) and macOS Golden Gate (Apple Silicon) - other operating systems
 and CPU architectures will likely work but haven't been tested.
 
 Work in progress docs for the reverse engineering involved can be found at https://falconnect.net/.

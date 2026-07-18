@@ -412,9 +412,8 @@ void MenuBar::AddEmulationMenu()
 void MenuBar::AddFalconnectMenu()
 {
   QMenu* emu_menu = addMenu(tr("&Falconnect"));
-  m_run_server = emu_menu->addAction(tr("&Run Server"), this, &MenuBar::RunServer);
-  m_connect_to_server = emu_menu->addAction(tr("&Connect to Server"), this, &MenuBar::ConnectToServer);
-  m_start_game = emu_menu->addAction(tr("&Start Game"), this, &MenuBar::StartGame);
+  m_run_server = emu_menu->addAction(tr("&Host room"), this, &MenuBar::RunServer);
+  m_connect_to_server = emu_menu->addAction(tr("&Connect to hosted room"), this, &MenuBar::ConnectToServer);
 }
 
 void MenuBar::AddStateLoadMenu(QMenu* emu_menu)

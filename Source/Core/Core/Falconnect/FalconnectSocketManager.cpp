@@ -94,6 +94,7 @@ void FalconnectSocketManager::SocketThread() {
         switch (static_cast<PacketType>(buffer[0])) {
             case PacketType::RACER_ID: {
                 INFO_LOG_FMT(FALCONNECT, "RACER_ID");
+                exited = false;
                 FalconnectManager::instance->racerIDs[1] = buffer[1];
 
                 if (!isHost) {
@@ -117,6 +118,7 @@ void FalconnectSocketManager::SocketThread() {
 
             case PacketType::START_RACE: {
                 INFO_LOG_FMT(FALCONNECT, "START_RACE");
+                exited = false;
 
                 {
                   FalconnectManager::instance->shouldStart = true;
@@ -193,27 +195,101 @@ void FalconnectSocketManager::SocketThread() {
                 operationQueue.push(OperationType::SET_RACER_BLOCK);
                 operationArgumentsQueue.emplace(*block);
 
-                INFO_LOG_FMT(FALCONNECT, "Sending...");
+                // If exited, stop sending frames
+                if (exited) {
+                    // Reset everything, instruct partner to do the same
+                    hasGridded = false;
+                    start = false;
+                    exited = false;
+                    canLoad = false;
 
-                // Send frame to be sent to remote
-                timeBeforePing = time(nullptr);
+                    char data[256];
+                    data[0] = static_cast<char>(PacketType::RESET);
 
-                lockFrameToSend = true;
+                    send(remoteSocket, data, sizeof(data), 0);
 
-                const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+                    // If we're the host, wait until we can load
+                    if (isHost) {
+                        // ReSharper disable once CppDFAEndlessLoop
+                        while (!canLoad) {
+                            INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
+                            std::this_thread::sleep_for(std::chrono::seconds(1));
+                        }
+                        INFO_LOG_FMT(FALCONNECT, "Waiting for partner...");
+                    } else {
+                        // Wait until we can load, then tell the host we're ready
+                        while (!canLoad) {
+                            INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
+                            std::this_thread::sleep_for(std::chrono::seconds(1));
+                        }
 
-                lockFrameToSend = false;
+                        char data[256];
+                        data[0] = static_cast<char>(PacketType::READY_TO_START);
 
-                char data[256];
-                data[0] = static_cast<char>(PacketType::DATA_FULL);
+                        send(remoteSocket, data, sizeof(data), 0);
+                    }
 
-                std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
+                } else {
+                    INFO_LOG_FMT(FALCONNECT, "Sending...");
 
-                send(remoteSocket, data, sizeof(data), 0);
+                    // Send frame to be sent to remote
+                    timeBeforePing = time(nullptr);
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                    lockFrameToSend = true;
+
+                    const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+
+                    lockFrameToSend = false;
+
+                    char data[256];
+                    data[0] = static_cast<char>(PacketType::DATA_FULL);
+
+                    std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
+
+                    send(remoteSocket, data, sizeof(data), 0);
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                }
 
                 break;
+            }
+
+            case PacketType::RESET: {
+                hasGridded = false;
+                start = false;
+                exited = false;
+                canLoad = false;
+
+                // If we're the host, wait until we can load
+                if (isHost) {
+                    // ReSharper disable once CppDFAEndlessLoop
+                    while (!canLoad) {
+                        INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                    INFO_LOG_FMT(FALCONNECT, "Waiting for partner...");
+                } else {
+                    // Wait until we can load, then tell the host we're ready
+                    while (!canLoad) {
+                        INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+
+                    char data[256];
+                    data[0] = static_cast<char>(PacketType::READY_TO_START);
+
+                    send(remoteSocket, data, sizeof(data), 0);
+                }
+
+                break;
+            }
+
+            case PacketType::READY_TO_START: {
+                char data[256];
+                data[0] = static_cast<char>(PacketType::RACER_ID);
+                data[1] = FalconnectManager::instance->racerIDs[0];
+
+                send(remoteSocket, data, sizeof(data), 0);
             }
 
             default:

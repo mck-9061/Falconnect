@@ -10,6 +10,8 @@ enum class PacketType : char {
     START_RACE,
     LOADED,
     COUNTDOWN,
+    RESET,
+    READY_TO_START,
 };
 
 #endif //DOLPHIN_EMU_PACKETTYPE_H

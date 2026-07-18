@@ -16,6 +16,7 @@ public:
 
     [[nodiscard]] u16 ReadGameMode() const;
     [[nodiscard]] bool ReadSettingsSelectedFlag() const;
+    [[nodiscard]] bool ReadIsInRace() const;
     [[nodiscard]] char ReadSelectedRacerID() const;
     [[nodiscard]] bool HasGridded();
 

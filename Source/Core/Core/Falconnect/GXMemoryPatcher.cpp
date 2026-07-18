@@ -167,7 +167,7 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
 void GXMemoryPatcher::SetDefaultRaceSettings() const {
     SetSingleByte(referencePointer + 0x24550d, 0x01); // 1 CPU
     SetSingleByte(referencePointer + 0x245517, 0x00); // No restore
-    SetSingleByte(referencePointer + 0x24551b, 0x04); // 4 laps
+    SetSingleByte(referencePointer + 0x24551b, 0x01); // 1 lap
     SetSingleByte(referencePointer + 0x2453e9, 0x03); // Master
     SetSingleByte(referencePointer + 0x2453eb, 0x03); // Master
 }

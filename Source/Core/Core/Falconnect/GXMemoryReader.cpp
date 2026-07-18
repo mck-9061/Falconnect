@@ -46,6 +46,11 @@ bool GXMemoryReader::ReadSettingsSelectedFlag() const {
     return state == 7;
 }
 
+bool GXMemoryReader::ReadIsInRace() const {
+    const u16 state = Read16(0x2454e2);
+    return state != 0;
+}
+
 RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
 

@@ -26,7 +26,7 @@ void FalconnectManager::log(const std::string& message) {
 }
 
 void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
- 
+
 
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
@@ -93,6 +93,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         racerIDs[0] = patcher->memoryReader->ReadSelectedRacerID();
 
         currentState = GameState::READY_TO_LOAD;
+        if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
         return;
     }
 
@@ -137,29 +138,33 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         if (const u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size()); queueLength != 0)
         {
-          patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(FalconnectSocketManager::instance->ping) + "ms");
+            patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(FalconnectSocketManager::instance->ping) + "ms");
 
-          const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
-          FalconnectSocketManager::instance->operationQueue.pop();
+            const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
+            FalconnectSocketManager::instance->operationQueue.pop();
 
-
-          switch (operation)
-          {
-            case (OperationType::SET_RACER_BLOCK):
+            switch (operation)
             {
-              const auto racerBlock = get<RacerMemoryBlock>(
-                  FalconnectSocketManager::instance->operationArgumentsQueue.front());
-              FalconnectSocketManager::instance->operationArgumentsQueue.pop();
+              case (OperationType::SET_RACER_BLOCK):
+              {
+                const auto racerBlock = get<RacerMemoryBlock>(
+                    FalconnectSocketManager::instance->operationArgumentsQueue.front());
+                FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-              patcher->SetRacerData(1, racerBlock);
+                patcher->SetRacerData(1, racerBlock);
 
-              break;
+                break;
+              }
+
+              default:
+                  break;
             }
+        }
 
-            default:
-              break;
-          }
-       
+        // Check if we've exited the race to the menu
+        if (!patcher->memoryReader->ReadIsInRace()) {
+            FalconnectSocketManager::instance->exited = true;
+            currentState = GameState::IN_PRACTICE;
         }
     }
 }

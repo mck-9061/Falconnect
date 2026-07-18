@@ -24,6 +24,8 @@ public:
     bool isHost = false;
     bool hasGridded = false;
     bool start = false;
+    bool exited = false;
+    bool canLoad = false;
 
     u8 ping = 0;
 

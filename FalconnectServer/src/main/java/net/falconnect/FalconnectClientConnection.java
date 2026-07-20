@@ -1,0 +1,54 @@
+package net.falconnect;
+
+import net.falconnect.messages.MessageHandlerThread;
+import net.falconnect.messages.toclient.ToClientMessage;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.Socket;
+
+public class FalconnectClientConnection {
+  private Socket socket;
+  public DataInputStream fromClientStream;
+  private final DataOutputStream toClientStream;
+  public ClientState state;
+
+  public byte playerNum;
+
+  public boolean hasUpdated = false;
+
+  private final MessageHandlerThread receiveMessageThread;
+
+  private byte[] lastReceivedData;
+
+  public FalconnectClientConnection(Socket socket) throws IOException {
+    this.socket = socket;
+    lastReceivedData = new byte[256];
+
+    fromClientStream = new DataInputStream(socket.getInputStream());
+    toClientStream = new DataOutputStream(socket.getOutputStream());
+
+    state = ClientState.IN_MENUS;
+
+    receiveMessageThread = new MessageHandlerThread(this);
+    receiveMessageThread.start();
+    System.out.println("Message receiver thread started");
+  }
+
+  public void SendPacket(byte[] packet) throws IOException {
+    toClientStream.write(packet);
+  }
+
+  public void SendMessage(ToClientMessage message) {
+    receiveMessageThread.messagesToSend.add(message);
+  }
+
+  public synchronized byte[] getLastReceivedData() {
+    return lastReceivedData;
+  }
+
+  public synchronized void setLastReceivedData(byte[] data) {
+    this.lastReceivedData = data;
+  }
+}

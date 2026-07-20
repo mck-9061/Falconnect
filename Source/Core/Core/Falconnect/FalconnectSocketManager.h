@@ -38,11 +38,12 @@ private:
     const RacerMemoryBlock* frameToSend = nullptr;
 
     int localSocket = 0;
-    int remoteSocket = 0;
+    int serverSocket = 0;
     bool hasStarted = false;
     bool doneFirst = false;
 
     u32 timeBeforePing = 0;
+    u8 playerNumber = 0;
 };
 
 

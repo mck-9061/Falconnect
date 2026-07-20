@@ -602,6 +602,7 @@ add_library(core
         Falconnect/FalconnectSocketManager.h
         Falconnect/PacketType.h
         Falconnect/OperationType.h
+        Falconnect/ClientState.h
 )
 
 if(_M_X86_64)

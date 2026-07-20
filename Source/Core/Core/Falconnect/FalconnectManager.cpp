@@ -136,9 +136,12 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
         INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
-        if (const u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size()); queueLength != 0)
+        u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size());
+
+        while (queueLength != 0)
         {
             patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(FalconnectSocketManager::instance->ping) + "ms");
+            //patcher->SetRenderedText("Falconnect | Queue size: " + std::to_string(queueLength) + "");
 
             const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
             FalconnectSocketManager::instance->operationQueue.pop();
@@ -147,11 +150,15 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
             {
               case (OperationType::SET_RACER_BLOCK):
               {
+                  const auto racerNum = get<u8>(
+                    FalconnectSocketManager::instance->operationArgumentsQueue.front());
+                  FalconnectSocketManager::instance->operationArgumentsQueue.pop();
+
                 const auto racerBlock = get<RacerMemoryBlock>(
                     FalconnectSocketManager::instance->operationArgumentsQueue.front());
                 FalconnectSocketManager::instance->operationArgumentsQueue.pop();
 
-                patcher->SetRacerData(1, racerBlock);
+                patcher->SetRacerData(racerNum, racerBlock);
 
                 break;
               }
@@ -159,6 +166,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
               default:
                   break;
             }
+
+            queueLength -= 1;
         }
 
         // Check if we've exited the race to the menu

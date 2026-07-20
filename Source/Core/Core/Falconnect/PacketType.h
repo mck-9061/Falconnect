@@ -2,16 +2,16 @@
 #define DOLPHIN_EMU_PACKETTYPE_H
 #include "Common/CommonTypes.h"
 
-enum class PacketType : char {
-    RACER_ID,
-    PING,
-    DATA_FULL,
-    READY,
+enum class FromServerPacketType : char {
+    CONNECTED,
+    FULL_DATA,
+    START,
     START_RACE,
-    LOADED,
-    COUNTDOWN,
-    RESET,
-    READY_TO_START,
+};
+
+enum class ToServerPacketType : char {
+    UPDATE_STATE,
+    FULL_DATA
 };
 
 #endif //DOLPHIN_EMU_PACKETTYPE_H

@@ -1,9 +1,12 @@
 plugins {
     id("java")
+    id("org.springframework.boot") version "4.1.0"
 }
 
 group = "net.falconnect"
 version = "1.0-SNAPSHOT"
+
+apply { plugin("io.spring.dependency-management") }
 
 repositories {
     mavenCentral()
@@ -18,3 +21,4 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+

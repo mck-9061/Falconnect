@@ -1,6 +1,7 @@
 package net.falconnect;
 
 import net.falconnect.messages.toclient.FullDataMessage;
+import net.falconnect.messages.toclient.RacerIdsMessage;
 import net.falconnect.messages.toclient.StatusMessage;
 
 import java.io.IOException;
@@ -83,6 +84,8 @@ public class FalconnectServer {
       if (allGridded) {
         gameState = GameState.RACING;
         for (FalconnectClientConnection client : getClients()) {
+          RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
+          racerIdsMessage.Send();
           StatusMessage message = new StatusMessage(client, ToClientPacketType.START_RACE);
           message.Send();
         }

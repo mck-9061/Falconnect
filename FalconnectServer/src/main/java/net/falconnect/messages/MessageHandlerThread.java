@@ -3,6 +3,7 @@ package net.falconnect.messages;
 import net.falconnect.FalconnectClientConnection;
 import net.falconnect.messages.fromclient.FromClientMessage;
 import net.falconnect.messages.fromclient.FullDataMessage;
+import net.falconnect.messages.fromclient.SettingsMessage;
 import net.falconnect.messages.fromclient.UpdateStateMessage;
 import net.falconnect.messages.toclient.ToClientMessage;
 
@@ -27,6 +28,7 @@ public class MessageHandlerThread extends Thread {
 
     messageTypes.put((byte) 0x0, UpdateStateMessage.class);
     messageTypes.put((byte) 0x1, FullDataMessage.class);
+    messageTypes.put((byte) 0x2, SettingsMessage.class);
   }
 
   public void run() {

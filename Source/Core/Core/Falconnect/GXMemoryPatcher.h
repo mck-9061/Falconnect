@@ -21,11 +21,11 @@ public:
     void StartCountdown() const;
     void InitialiseText() const;
     void SetBoostLap(u8 lap) const;
-    void SetOpponentRacerId(u8 racerID) const;
+    void SetOpponentRacerIds(const u8 racerIDs[]) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
     void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const;
-    void SetGrid(u8 positions[]) const;
+    void SetGrid() const;
 
     u32 referencePointer{};
     bool isReady{};

@@ -109,11 +109,41 @@ void GXMemoryPatcher::StartCountdown() const {
     interface.SetPatch(guard, countdownAddress, 0x40820150);
 }
 
-void GXMemoryPatcher::SetOpponentRacerId(const u8 racerID) const {
+void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
     const u32 idLoadAddress = referencePointer + 0x00034E40;
 
     // Replace instruction to load the correct racer ID to always load given ID
-    interface.SetPatch(guard, idLoadAddress, 0x3AA00000 + racerID);
+    //interface.SetPatch(guard, idLoadAddress, 0x3AA00000 + racerID);
+
+    // Load array into memory
+    for (int i = 0; i < 31; i++) {
+        const u32 address = 0x803d1a00 + i;
+        if (i == 0) {
+            interface.SetPatch(guard, address, 0); // index
+            continue;
+        }
+
+        interface.SetPatch(guard, address, static_cast<u32>(racerIDs[i - 1]) << 24);
+    }
+
+    // Create function to read IDs from array
+    constexpr u32 functionAddress = 0x803d1aa0;
+
+    interface.SetPatch(guard, functionAddress, 0x3dc0803d);
+    interface.SetPatch(guard, functionAddress + 4, 0x61cf1a00);
+    interface.SetPatch(guard, functionAddress + 8, 0x8a0f0000);
+    interface.SetPatch(guard, functionAddress + 12, 0x3a300001);
+    interface.SetPatch(guard, functionAddress + 16, 0x9a2f0000);
+    interface.SetPatch(guard, functionAddress + 20, 0x7eaf88ae);
+    interface.SetPatch(guard, functionAddress + 24, 0x39c00000);
+    interface.SetPatch(guard, functionAddress + 28, 0x61cf0000);
+    interface.SetPatch(guard, functionAddress + 32, 0x7dee7b78);
+    interface.SetPatch(guard, functionAddress + 36, 0x7df07b78);
+    interface.SetPatch(guard, functionAddress + 40, 0x7df17b78);
+    interface.SetPatch(guard, functionAddress + 44, 0x4e800020);
+
+    // Set jump instruction
+    interface.SetPatch(guard, idLoadAddress, 0x48000001 + (functionAddress - idLoadAddress));
 
     const u32 racer_check_address = idLoadAddress + 60;
 
@@ -240,7 +270,7 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchDat
   interface.SetPatch(guard, baseAddress + (388 * 4), patchData.sideAttack);
 }
 
-void GXMemoryPatcher::SetGrid(u8 positions[]) const {
+void GXMemoryPatcher::SetGrid() const {
     // Clear the function used to arrange the grid array, then put in our own order
     // I am SO fucking proud of finding that function it's unreal it runs like a million times a frame for no reason
 

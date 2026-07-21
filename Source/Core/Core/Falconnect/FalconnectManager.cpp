@@ -89,11 +89,10 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         patcher->SetDefaultRaceSettings();
 
-        u8 grid[30] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
-        patcher->SetGrid(grid);
+        patcher->SetGrid();
 
         // Get our racer ID
-        racerIDs[0] = patcher->memoryReader->ReadSelectedRacerID();
+        FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
 
         currentState = GameState::READY_TO_LOAD;
         if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
@@ -109,7 +108,9 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
 
         // Set racer IDs
-        patcher->SetOpponentRacerId(racerIDs[1]);
+        //patcher->SetOpponentRacerId(racerIDs[1]);
+        //u8 racerIds[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
+        patcher->SetOpponentRacerIds(racerIDs);
 
         patcher->StartRaceFromPracticeOptions();
     }
@@ -139,13 +140,16 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
         INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
+        u16 ping = FalconnectSocketManager::instance->ping - 32;
+        if (ping > 1000) ping = 1; // overflow
+        const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
+
+        patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " + std::to_string(packetRate) + "p/s");
+
         u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size());
 
         while (queueLength != 0)
         {
-            patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(FalconnectSocketManager::instance->ping) + "ms");
-            //patcher->SetRenderedText("Falconnect | Queue size: " + std::to_string(queueLength) + "");
-
             const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
             FalconnectSocketManager::instance->operationQueue.pop();
 

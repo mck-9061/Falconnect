@@ -27,8 +27,9 @@ public:
     bool exited = false;
     bool canLoad = false;
 
-    u8 ping = 0;
+    u16 ping = 0;
     u8 playerNumber = 0;
+    u8 racerId = 6;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;

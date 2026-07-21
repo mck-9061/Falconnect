@@ -15,6 +15,7 @@ public class FalconnectClientConnection {
   public ClientState state;
 
   public byte playerNum;
+  public byte racerId;
 
   public boolean hasUpdated = false;
 
@@ -30,6 +31,7 @@ public class FalconnectClientConnection {
     toClientStream = new DataOutputStream(socket.getOutputStream());
 
     state = ClientState.IN_MENUS;
+    racerId = 6;
 
     receiveMessageThread = new MessageHandlerThread(this);
     receiveMessageThread.start();

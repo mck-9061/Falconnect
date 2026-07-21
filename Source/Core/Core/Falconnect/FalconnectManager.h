@@ -25,7 +25,7 @@ public:
 
     GXMemoryPatcher* patcher;
 
-    std::map<int, char> racerIDs;
+    u8 racerIDs[256];
     GameState currentState;
     bool shouldStart;
 

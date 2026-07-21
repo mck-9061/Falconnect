@@ -7,11 +7,13 @@ enum class FromServerPacketType : char {
     FULL_DATA,
     START,
     START_RACE,
+    RACER_IDS
 };
 
 enum class ToServerPacketType : char {
     UPDATE_STATE,
-    FULL_DATA
+    FULL_DATA,
+    SETTINGS
 };
 
 #endif //DOLPHIN_EMU_PACKETTYPE_H

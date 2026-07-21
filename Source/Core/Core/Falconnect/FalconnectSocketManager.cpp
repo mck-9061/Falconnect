@@ -71,11 +71,18 @@ void FalconnectSocketManager::SocketThread() {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
 
+                // First send our selected racer ID, then say we're ready
                 char data[256];
-                data[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
-                data[1] = static_cast<char>(ClientState::READY);
+                data[0] = static_cast<char>(ToServerPacketType::SETTINGS);
+                data[1] = static_cast<char>(racerId);
 
                 send(serverSocket, data, sizeof(data), 0);
+
+                char data2[256];
+                data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
+                data2[1] = static_cast<char>(ClientState::READY);
+
+                send(serverSocket, data2, sizeof(data2), 0);
 
                 break;
             }
@@ -103,6 +110,23 @@ void FalconnectSocketManager::SocketThread() {
             //
             //     break;
             // }
+
+            case FromServerPacketType::RACER_IDS: {
+                // Construct array
+                for (u8 i = 0; i < 30; i++) {
+                    u8 usedIndex = i;
+                    if (i == 0) usedIndex = playerNumber - 1;
+                    if (i == playerNumber - 1) {
+                        INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+                        continue; // Skip our data
+                    }
+
+                    const char racerNum = buffer[i];
+                    FalconnectManager::instance->racerIDs[usedIndex - 1] = racerNum;
+                }
+
+                break;
+            }
 
             case FromServerPacketType::START: {
                 INFO_LOG_FMT(FALCONNECT, "START");
@@ -161,7 +185,7 @@ void FalconnectSocketManager::SocketThread() {
                 INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
                 INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
                 // Set last read frame
-                if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing - 32;
+                if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
                 INFO_LOG_FMT(FALCONNECT, "Receiving...");
 
                 for (u8 i = 0; i < 30; i++) {

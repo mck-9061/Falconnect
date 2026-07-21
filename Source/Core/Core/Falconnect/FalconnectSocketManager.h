@@ -28,6 +28,7 @@ public:
     bool canLoad = false;
 
     u8 ping = 0;
+    u8 playerNumber = 0;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
@@ -43,7 +44,6 @@ private:
     bool doneFirst = false;
 
     u32 timeBeforePing = 0;
-    u8 playerNumber = 0;
 };
 
 

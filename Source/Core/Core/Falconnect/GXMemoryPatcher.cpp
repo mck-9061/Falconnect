@@ -1,5 +1,6 @@
 #include "GXMemoryPatcher.h"
 
+#include "FalconnectSocketManager.h"
 #include "GXMemoryReader.h"
 #include "PowerPCScripts.h"
 #include "Common/CommonTypes.h"
@@ -273,10 +274,14 @@ void GXMemoryPatcher::SetGrid(u8 positions[]) const {
     const u32 address = referencePointer + 0x85bf8;
     const u32 offsetToFreeAddress = 0x80376a00 - address;
     const u32 jumpInstruction = 0x48000000 + offsetToFreeAddress + 1;
+    const u8 playerNum = FalconnectSocketManager::instance->playerNumber;
 
     for (int i = 0; i < 30; i++) {
-        const u16 numToInsert = positions[i];
-        const u32 loadInstruction = 0x39c00000 + numToInsert;
+        u8 playerNumToInsert = i;
+        if (i == 0) playerNumToInsert = playerNum - 1;
+        if (i == playerNum - 1) playerNumToInsert = 0;
+
+        const u32 loadInstruction = 0x39c00000 + playerNumToInsert;
         const u32 storeInstruction = 0xb1c30000 + (i * 2);
 
         interface.SetPatch(guard, 0x80376a00 + (i * 8), loadInstruction);

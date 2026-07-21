@@ -12,11 +12,14 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class MessageHandlerThread extends Thread {
   FalconnectClientConnection clientConnection;
 
-  public Queue<ToClientMessage> messagesToSend;
+  public BlockingQueue<ToClientMessage> messagesToSend;
 
   // Dictionary of message type bytes to from-client message classes
   HashMap<Byte, Class<? extends FromClientMessage>> messageTypes = new HashMap<>();
@@ -24,7 +27,7 @@ public class MessageHandlerThread extends Thread {
   public MessageHandlerThread(FalconnectClientConnection clientConnection) {
     this.clientConnection = clientConnection;
 
-    messagesToSend = new ArrayDeque<>();
+    messagesToSend = new LinkedBlockingQueue<>();
 
     messageTypes.put((byte) 0x0, UpdateStateMessage.class);
     messageTypes.put((byte) 0x1, FullDataMessage.class);
@@ -48,13 +51,13 @@ public class MessageHandlerThread extends Thread {
 
         // Check if there's any messages to send
         if (!messagesToSend.isEmpty()) {
-          ToClientMessage message = messagesToSend.remove();
+          ToClientMessage message = messagesToSend.take();
           message.SendDataFromThread();
           // System.out.println("Sent message");
         }
 
       } catch (IOException | InvocationTargetException | InstantiationException |
-               IllegalAccessException | NoSuchMethodException e) {
+               IllegalAccessException | NoSuchMethodException | InterruptedException e) {
         throw new RuntimeException(e);
       }
     }

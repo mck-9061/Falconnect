@@ -34,7 +34,7 @@ public class AcceptClientConnectionThread extends Thread {
           ConnectedMessage message = new ConnectedMessage(clientConnection);
           message.Send();
 
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
           throw new RuntimeException(e);
         }
 

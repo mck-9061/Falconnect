@@ -73,7 +73,7 @@ public class FalconnectServer {
     if (gameState == GameState.WAITING_FOR_GRID) {
       boolean allGridded = true;
       for (FalconnectClientConnection client : getClients()) {
-        System.out.printf("Client %s - %s", client.playerNum, client.state);
+        // System.out.printf("Client %s - %s", client.playerNum, client.state);
         if (client.state != ClientState.GRIDDED) {
           allGridded = false;
           break;

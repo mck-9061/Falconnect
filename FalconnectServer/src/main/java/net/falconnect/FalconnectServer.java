@@ -64,6 +64,8 @@ public class FalconnectServer {
         System.out.println("Starting!");
         gameState = GameState.WAITING_FOR_GRID;
         for (FalconnectClientConnection client : getClients()) {
+          RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
+          racerIdsMessage.Send();
           StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
           message.Send();
         }
@@ -84,8 +86,6 @@ public class FalconnectServer {
       if (allGridded) {
         gameState = GameState.RACING;
         for (FalconnectClientConnection client : getClients()) {
-          RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
-          racerIdsMessage.Send();
           StatusMessage message = new StatusMessage(client, ToClientPacketType.START_RACE);
           message.Send();
         }

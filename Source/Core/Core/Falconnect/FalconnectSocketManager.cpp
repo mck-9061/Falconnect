@@ -121,7 +121,7 @@ void FalconnectSocketManager::SocketThread() {
                         continue; // Skip our data
                     }
 
-                    const char racerNum = buffer[i];
+                    const char racerNum = buffer[i + 1];
                     FalconnectManager::instance->racerIDs[usedIndex - 1] = racerNum;
                 }
 

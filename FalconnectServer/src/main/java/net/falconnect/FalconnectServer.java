@@ -42,7 +42,7 @@ public class FalconnectServer {
     clients.add(client);
   }
 
-  public void MainLoop() throws IOException {
+  public void MainLoop() throws IOException, InterruptedException {
     // Wait for all players to be ready
     // System.out.println("???");
 
@@ -125,7 +125,7 @@ public class FalconnectServer {
     // System.out.println("Packet constructed");
   }
 
-  public void SendFullDataPacket() throws IOException {
+  public void SendFullDataPacket() throws IOException, InterruptedException {
     ConstructFullDataPacket();
 
     for (FalconnectClientConnection client : getClients()) {

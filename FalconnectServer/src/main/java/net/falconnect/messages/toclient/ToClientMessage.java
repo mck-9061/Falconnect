@@ -17,7 +17,7 @@ public abstract class ToClientMessage {
     destination.SendPacket(data);
   }
 
-  public void Send() {
+  public void Send() throws InterruptedException {
     destination.SendMessage(this);
   }
 }

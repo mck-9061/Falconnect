@@ -42,8 +42,8 @@ public class FalconnectClientConnection {
     toClientStream.write(packet);
   }
 
-  public void SendMessage(ToClientMessage message) {
-    receiveMessageThread.messagesToSend.add(message);
+  public void SendMessage(ToClientMessage message) throws InterruptedException {
+    receiveMessageThread.messagesToSend.put(message);
   }
 
   public synchronized byte[] getLastReceivedData() {

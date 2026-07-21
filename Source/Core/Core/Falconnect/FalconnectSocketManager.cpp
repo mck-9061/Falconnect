@@ -132,8 +132,6 @@ void FalconnectSocketManager::SocketThread() {
                 INFO_LOG_FMT(FALCONNECT, "START");
                 exited = false;
 
-                FalconnectManager::instance->racerIDs[1] = 6;
-
                 {
                   FalconnectManager::instance->shouldStart = true;
                 }

@@ -57,6 +57,12 @@ void FalconnectSocketManager::SocketThread() {
 
         switch (static_cast<FromServerPacketType>(buffer[0])) {
             case FromServerPacketType::CONNECTED: {
+              if (buffer[1] == 0)
+              {
+                INFO_LOG_FMT(FALCONNECT, "Dropping invalid packet!");
+                break;
+              }
+
                 playerNumber = buffer[1];
 
                 // Connected: Wait for us to be ready
@@ -153,6 +159,7 @@ void FalconnectSocketManager::SocketThread() {
 
             case FromServerPacketType::FULL_DATA: {
                 INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
+                INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
                 // Set last read frame
                 if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing - 32;
                 INFO_LOG_FMT(FALCONNECT, "Receiving...");
@@ -161,13 +168,16 @@ void FalconnectSocketManager::SocketThread() {
                     u8 usedIndex = i;
                     if (i == 0) usedIndex = playerNumber - 1;
                     if (i == playerNumber - 1) {
+                      INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
                         continue; // Skip our data
                     }
+
+                    INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
 
                     const std::vector<u8> racerData(buffer + 1 + (i * 255), buffer + 1 + ((i + 1) * 255));
 
                     if (racerData[0] == 0x00) {
-                        INFO_LOG_FMT(FALCONNECT, "Skipping racer {}: Invalid data", usedIndex);
+                        INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
                     } else {
                         RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
                         operationQueue.push(OperationType::SET_RACER_BLOCK);

@@ -25,6 +25,7 @@ public:
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
     void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const;
+    void SetGrid(u8 positions[]) const;
 
     u32 referencePointer{};
     bool isReady{};

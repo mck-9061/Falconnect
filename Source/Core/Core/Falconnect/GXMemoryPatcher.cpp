@@ -123,7 +123,10 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
             continue;
         }
 
-        interface.SetPatch(guard, address, static_cast<u32>(racerIDs[i - 1]) << 24);
+        u32 data = static_cast<u32>(racerIDs[i - 1]) << 24;
+        if (data == 0) data = 0x06000000;
+
+        interface.SetPatch(guard, address, data);
     }
 
     // Create function to read IDs from array

@@ -165,7 +165,7 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
 }
 
 void GXMemoryPatcher::SetDefaultRaceSettings() const {
-    SetSingleByte(referencePointer + 0x24550d, 0x02); // 2 CPU
+    SetSingleByte(referencePointer + 0x24550d, 0x04); // 4 CPU
     SetSingleByte(referencePointer + 0x245517, 0x01); // Allow restore
     SetSingleByte(referencePointer + 0x24551b, 0x04); // 4 laps
     SetSingleByte(referencePointer + 0x2453e9, 0x03); // Master
@@ -237,4 +237,54 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchDat
   interface.SetPatch(guard, baseAddress + (125 * 4), patchData.inputs[2]);
 
   interface.SetPatch(guard, baseAddress + (388 * 4), patchData.sideAttack);
+}
+
+void GXMemoryPatcher::SetGrid(u8 positions[]) const {
+    // Clear the function used to arrange the grid array, then put in our own order
+    // I am SO fucking proud of finding that function it's unreal it runs like a million times a frame for no reason
+
+    // preserving this cus it's funny even if it is wrong and overwrites a common function that yeah come to think of it why would there be a specific array permutation algorithm just for grid arranging when it could be a common function like yeah obviously dumbass UGHHHHHHHH
+
+    // Find the function in probably the hackiest code ever written but it's 1am
+    // const u32 callingFunctionAddress = referencePointer + 0x85bf8;
+    // const u32 callingInstruction = interface.ReadMemory(guard, callingFunctionAddress);
+    //
+    // u32 offset = (callingInstruction << 6) >> 6;
+    // offset = offset & 0b00000001111111111111111111111111;
+    // offset -= 0b00000010000000000000000000000001;
+    //
+    // u32 address = callingFunctionAddress + offset;
+    //
+    // const std::string s = std::format("{:x}", address);
+    // INFO_LOG_FMT(FALCONNECT, "{}", s);
+    //
+    // for (int i = 0; i < 30; i++) {
+    //     const u16 numToInsert = positions[i];
+    //     const u32 loadInstruction = 0x39c00000 + numToInsert;
+    //     const u32 storeInstruction = 0xb1c30000 + (i * 2);
+    //
+    //     interface.SetPatch(guard, address + (i * 8), loadInstruction);
+    //     interface.SetPatch(guard, address + (i * 8) + 4, storeInstruction);
+    // }
+    //
+    // interface.SetPatch(guard, address + (30 * 8), 0x39c00000); // Reset r14
+    // interface.SetPatch(guard, address + (30 * 8) + 4, 0x4e800020); // Return
+
+    const u32 address = referencePointer + 0x85bf8;
+    const u32 offsetToFreeAddress = 0x80376a00 - address;
+    const u32 jumpInstruction = 0x48000000 + offsetToFreeAddress + 1;
+
+    for (int i = 0; i < 30; i++) {
+        const u16 numToInsert = positions[i];
+        const u32 loadInstruction = 0x39c00000 + numToInsert;
+        const u32 storeInstruction = 0xb1c30000 + (i * 2);
+
+        interface.SetPatch(guard, 0x80376a00 + (i * 8), loadInstruction);
+        interface.SetPatch(guard, 0x80376a00 + (i * 8) + 4, storeInstruction);
+    }
+
+    interface.SetPatch(guard, 0x80376a00 + (30 * 8), 0x39c00000); // Reset r14
+    interface.SetPatch(guard, 0x80376a00 + (30 * 8) + 4, 0x4e800020); // Return
+
+    interface.SetPatch(guard, address, jumpInstruction);
 }

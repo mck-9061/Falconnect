@@ -109,7 +109,7 @@ public class FalconnectServer {
     packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
     int cursor = 1;
 
-    for (FalconnectClientConnection client : clients) {
+    for (FalconnectClientConnection client : getClients()) {
       byte[] lastClientData = client.getLastReceivedData();
       client.hasUpdated = false;
 

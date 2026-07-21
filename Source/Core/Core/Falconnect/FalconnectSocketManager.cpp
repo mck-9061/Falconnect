@@ -29,7 +29,8 @@ void FalconnectSocketManager::Start() {
     sockaddr_in serverAddress{};
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(8000);
-    inet_pton(AF_INET, "192.168.0.3", &serverAddress.sin_addr); // Remote IP address
+
+    inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
 
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
     connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
@@ -153,7 +154,7 @@ void FalconnectSocketManager::SocketThread() {
             case FromServerPacketType::FULL_DATA: {
                 INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
                 // Set last read frame
-                if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
+                if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing - 32;
                 INFO_LOG_FMT(FALCONNECT, "Receiving...");
 
                 for (u8 i = 0; i < 30; i++) {

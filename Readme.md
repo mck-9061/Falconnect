@@ -4,8 +4,24 @@ A work-in-progress fork of the Dolphin emulator, exclusively for use with F-Zero
 multiplayer functionality.
 
 ## Status
-Basic core 2-player multiplayer is working. After I've finished testing and done some UI and logic flow work to make
-it usable, I'll release an alpha build.
+Basic core multiplayer with up to 30 players is working. After I've finished testing and done some UI and logic flow work to make
+it usable, I'll open up alpha testing. No exact timeframe on this as I'm currently moving house.
+
+## Planned features
+- Full 30 player online multiplayer races
+- Many more race options than vanilla
+  - Unlocked lap count
+  - Choose lap on which boost power is granted
+  - Story mode tracks
+  - Restrict usable machines (e.g. only mid-tier machines, Space Angler only, randomised)
+  - Restrict machine settings (e.g. snaking only or max speed only)
+  - Choose stats (e.g. vanilla, Unleashed, GXtreme, custom)
+- Online Grands Prix
+
+## Ideas under consideration
+- Ranking system
+- Expanded offline practice mode
+- Custom track support
 
 ## System Requirements
 

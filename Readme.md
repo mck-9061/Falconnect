@@ -9,6 +9,7 @@ it usable, I'll open up alpha testing. No exact timeframe on this as I'm current
 
 ## Planned features
 - Full 30 player online multiplayer races
+- Human and CPU players in multiplayer
 - Many more race options than vanilla
   - Unlocked lap count
   - Choose lap on which boost power is granted

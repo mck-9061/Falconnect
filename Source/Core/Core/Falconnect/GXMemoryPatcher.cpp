@@ -17,6 +17,30 @@ GXMemoryPatcher::GXMemoryPatcher(const Core::CPUThreadGuard &cpuGuard) : guard(c
     Initialise();
 }
 
+std::vector<uint32_t> stringToUint32Array(const std::string& str)
+{
+    std::vector<uint32_t> result;
+
+    for (size_t i = 0; i < str.size(); i += 4)
+    {
+        uint32_t value = 0;
+
+        for (size_t j = 0; j < 4; ++j)
+        {
+            value <<= 8;
+
+            if (i + j < str.size())
+            {
+                value |= static_cast<unsigned char>(str[i + j]);
+            }
+        }
+
+        result.push_back(value);
+    }
+
+    return result;
+}
+
 void GXMemoryPatcher::Initialise() {
     INFO_LOG_FMT(FALCONNECT, "Loading reference pointer...");
 
@@ -32,11 +56,41 @@ void GXMemoryPatcher::Initialise() {
     isReady = true;
 }
 
-void GXMemoryPatcher::DisableMenuControl() const {
+void GXMemoryPatcher::DisableOptionsMenuControl() const {
     const u32 menuControlAddress = referencePointer + 0x3e28f0;
     interface.SetPatch(guard, menuControlAddress, 0x3c608060);
     interface.SetPatch(guard, menuControlAddress + 4, 0x60000000);
     interface.SetPatch(guard, menuControlAddress + 8, 0x88630000);
+}
+
+void GXMemoryPatcher::FullyDisableMenuControl() const {
+    const u32 address = referencePointer + 0x3e2604;
+    interface.SetPatch(guard, address, 0x60000000);
+}
+
+void GXMemoryPatcher::ReEnableMenuControl() const {
+    const u32 address = referencePointer + 0x3e2604;
+    interface.SetPatch(guard, address, 0x480056d1);
+}
+
+void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
+    const u32 pointerAddress = referencePointer + 0x406f8c;
+    const u32 textPosition = 0x805cf700;
+    std::vector<u32> ascii = stringToUint32Array(text);
+
+    // Blank any existing text
+    for (int offset = 0; offset < 100; offset++) {
+        const u32 address = textPosition + (offset * 4);
+        interface.SetPatch(guard, address, 0x0);
+    }
+
+    for (u8 offset = 0; offset < ascii.size(); offset++) {
+        const u32 address = textPosition + (offset * 4);
+        interface.SetPatch(guard, address, ascii[offset]);
+    }
+
+    // Replace pointer
+    interface.SetPatch(guard, pointerAddress, textPosition);
 }
 
 void GXMemoryPatcher::DisableAIControl() const {
@@ -155,30 +209,6 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
     interface.SetPatch(guard, racer_check_address + 8, 0x60000000);
 }
 
-std::vector<uint32_t> stringToUint32Array(const std::string& str)
-{
-    std::vector<uint32_t> result;
-
-    for (size_t i = 0; i < str.size(); i += 4)
-    {
-        uint32_t value = 0;
-
-        for (size_t j = 0; j < 4; ++j)
-        {
-            value <<= 8;
-
-            if (i + j < str.size())
-            {
-                value |= static_cast<unsigned char>(str[i + j]);
-            }
-        }
-
-        result.push_back(value);
-    }
-
-    return result;
-}
-
 void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
     // Blank previous text
     INFO_LOG_FMT(FALCONNECT, "Blanking text");
@@ -201,12 +231,16 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
 void GXMemoryPatcher::SetDefaultRaceSettings() const {
     SetSingleByte(referencePointer + 0x24550d, 0x04); // 4 CPU
     SetSingleByte(referencePointer + 0x245517, 0x01); // Allow restore
-    SetSingleByte(referencePointer + 0x24551b, 0x04); // 4 laps
+    SetSingleByte(referencePointer + 0x24551b, 0x03); // 3 laps
     SetSingleByte(referencePointer + 0x2453e9, 0x03); // Master
     SetSingleByte(referencePointer + 0x2453eb, 0x03); // Master
 }
 
-void GXMemoryPatcher::SetSingleByte(u32 address, u8 byte) const {
+void GXMemoryPatcher::SetCpuCount(const u8 cpuCount) const {
+    SetSingleByte(referencePointer + 0x24550d, cpuCount);
+}
+
+void GXMemoryPatcher::SetSingleByte(const u32 address, const u8 byte) const {
     const u32 mem = interface.ReadMemory(guard, address);
 
     const u32 read = ((mem << 8) >> 8) | (static_cast<u32>(byte) << 24); // 10 cpus
@@ -325,4 +359,17 @@ void GXMemoryPatcher::SetGrid() const {
     interface.SetPatch(guard, 0x80376a00 + (30 * 8) + 4, 0x4e800020); // Return
 
     interface.SetPatch(guard, address, jumpInstruction);
+}
+
+void GXMemoryPatcher::SetCourse(const u8 courseID) const {
+    const u32 address = referencePointer + 0x245471;
+    SetSingleByte(address, courseID);
+}
+
+void GXMemoryPatcher::ConstrainMenu() const {
+    const u32 address = referencePointer + 0x1bf144;
+
+    if (const u8 current = memoryReader->Read8(0x1bf144); current == 3 || current == 5) {
+        SetSingleByte(address, 6);
+    }
 }

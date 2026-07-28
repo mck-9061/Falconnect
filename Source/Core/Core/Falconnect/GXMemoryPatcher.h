@@ -14,7 +14,10 @@ public:
     void Initialise();
 
     // Patch methods
-    void DisableMenuControl() const;
+    void DisableOptionsMenuControl() const;
+    void FullyDisableMenuControl() const;
+    void ReEnableMenuControl() const;
+    void SetPracticeModeText(std::string text) const;
     void StartRaceFromPracticeOptions() const;
     void DisableAIControl() const;
     void DisableCountdown() const;
@@ -26,6 +29,9 @@ public:
     void SetDefaultRaceSettings() const;
     void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const;
     void SetGrid() const;
+    void SetCourse(u8 courseID) const;
+    void SetCpuCount(u8 cpuCount) const;
+    void ConstrainMenu() const;
 
     u32 referencePointer{};
     bool isReady{};

@@ -9,6 +9,8 @@ import java.net.Socket;
 
 public class AcceptClientConnectionThread extends Thread {
   FalconnectServer server;
+  public byte num = 1;
+  public volatile boolean wait = false;
 
   public AcceptClientConnectionThread(FalconnectServer server) {
     super();
@@ -16,7 +18,6 @@ public class AcceptClientConnectionThread extends Thread {
   }
 
   public void run() {
-    byte num = 1;
     while (true) {
       if (server.getClients().size() < 30) {
         System.out.println("Looking for clients...");
@@ -24,6 +25,13 @@ public class AcceptClientConnectionThread extends Thread {
         try {
           Socket clientSocket = server.socket.accept();
           FalconnectClientConnection clientConnection = new FalconnectClientConnection(clientSocket);
+
+          while (wait) {
+            Thread.onSpinWait();
+          }
+
+          wait = true;
+
           server.AddClient(clientConnection);
 
           clientConnection.playerNum = num;
@@ -33,6 +41,8 @@ public class AcceptClientConnectionThread extends Thread {
 
           ConnectedMessage message = new ConnectedMessage(clientConnection);
           message.Send();
+
+          wait = false;
 
         } catch (IOException | InterruptedException e) {
           throw new RuntimeException(e);

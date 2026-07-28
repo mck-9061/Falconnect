@@ -11,6 +11,7 @@ public class SettingsMessage extends FromClientMessage {
   @Override
   public void ProcessMessage() {
     origin.racerId = data[1];
+    origin.selectedCourse = data[2];
     System.out.println("Received racer ID: " + origin.racerId);
   }
 }

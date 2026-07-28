@@ -24,17 +24,31 @@ FalconnectSocketManager* FalconnectSocketManager::instance = nullptr;
 
 void FalconnectSocketManager::Start() {
     // Connect to the server
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-
-    sockaddr_in serverAddress{};
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8000);
-
-    inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
-
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
-    connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
-    INFO_LOG_FMT(FALCONNECT, "Connection established!");
+    int code = -1;
+
+    for (u8 attempt = 1; attempt <= 10; attempt++) {
+        INFO_LOG_FMT(FALCONNECT, "Attempt {}", attempt);
+        serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+        sockaddr_in serverAddress{};
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(8000);
+
+        inet_pton(AF_INET, "localhost", &serverAddress.sin_addr); // Remote IP address
+
+        code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        if (code != -1) break;
+    }
+    INFO_LOG_FMT(FALCONNECT, "Code: {}", code);
+
+    if (code < 0) {
+        isError = true;
+    } else {
+        hasConnected = true;
+    }
 }
 
 void FalconnectSocketManager::SendFrame(const RacerMemoryBlock* frame) {
@@ -50,7 +64,13 @@ void FalconnectSocketManager::SendFrame(const RacerMemoryBlock* frame) {
 void FalconnectSocketManager::SocketThread() {
     Start();
 
-    while (shouldRun) {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    while (shouldRun && !isError) {
+        if (shouldDisconnect) {
+            break;
+        }
+
         // Read data from server
         char buffer[7680] = { 0 };
         recv(serverSocket, buffer, sizeof(buffer), 0);
@@ -59,22 +79,32 @@ void FalconnectSocketManager::SocketThread() {
             case FromServerPacketType::CONNECTED: {
               if (buffer[1] == 0)
               {
-                INFO_LOG_FMT(FALCONNECT, "Dropping invalid packet!");
+                //INFO_LOG_FMT(FALCONNECT, "Dropping invalid packet!");
                 break;
               }
 
+                hasProperlyConnected = true;
                 playerNumber = buffer[1];
 
                 // Connected: Wait for us to be ready
                 while (!canLoad) {
                     INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
                     std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                    if (shouldDisconnect) {
+                        break;
+                    }
+                }
+
+                if (shouldDisconnect) {
+                    break;
                 }
 
                 // First send our selected racer ID, then say we're ready
                 char data[256];
                 data[0] = static_cast<char>(ToServerPacketType::SETTINGS);
                 data[1] = static_cast<char>(racerId);
+                data[2] = static_cast<char>(selectedCourse);
 
                 send(serverSocket, data, sizeof(data), 0);
 
@@ -111,6 +141,13 @@ void FalconnectSocketManager::SocketThread() {
             //     break;
             // }
 
+            case FromServerPacketType::COURSE: {
+                usedCourseId = buffer[1];
+                cpuCount = buffer[2];
+
+                break;
+            }
+
             case FromServerPacketType::RACER_IDS: {
                 // Construct array
                 for (u8 i = 0; i < 30; i++) {
@@ -141,6 +178,14 @@ void FalconnectSocketManager::SocketThread() {
                 // Tell the server when we've gridded
                 while (!hasGridded) {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                    if (shouldDisconnect) {
+                        break;
+                    }
+                }
+
+                if (shouldDisconnect) {
+                    break;
                 }
 
                 char data[256];
@@ -211,58 +256,40 @@ void FalconnectSocketManager::SocketThread() {
                 // std::this_thread::sleep_for(std::chrono::milliseconds(16));
 
                 // If exited, stop sending frames
-                // if (exited) {
-                //     // Reset everything, instruct partner to do the same
-                //     hasGridded = false;
-                //     start = false;
-                //     exited = false;
-                //     canLoad = false;
-                //
-                //     char data[256];
-                //     data[0] = static_cast<char>(FromServerPacketType::RESET);
-                //
-                //     send(serverSocket, data, sizeof(data), 0);
-                //
-                //     // If we're the host, wait until we can load
-                //     if (isHost) {
-                //         // ReSharper disable once CppDFAEndlessLoop
-                //         while (!canLoad) {
-                //             INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
-                //             std::this_thread::sleep_for(std::chrono::seconds(1));
-                //         }
-                //         INFO_LOG_FMT(FALCONNECT, "Waiting for partner...");
-                //     } else {
-                //         // Wait until we can load, then tell the host we're ready
-                //         while (!canLoad) {
-                //             INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
-                //             std::this_thread::sleep_for(std::chrono::seconds(1));
-                //         }
-                //
-                //         char data[256];
-                //         data[0] = static_cast<char>(FromServerPacketType::READY_TO_START);
-                //
-                //         send(serverSocket, data, sizeof(data), 0);
-                //     }
-                //
-                // } else {
+                if (exited) {
+                    // Reset everything, tell server
+                    hasGridded = false;
+                    start = false;
+                    exited = false;
+                    canLoad = false;
 
-                INFO_LOG_FMT(FALCONNECT, "Sending...");
+                    char data[256];
+                    data[0] = static_cast<char>(ToServerPacketType::RESET);
 
-                // Send frame to be sent to remote
-                timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    send(serverSocket, data, sizeof(data), 0);
 
-                lockFrameToSend = true;
+                    break;
+                }
 
-                const std::vector<u8> dataToSend = frameToSend->GetSocketData();
+                if (frameToSend != nullptr) {
+                    INFO_LOG_FMT(FALCONNECT, "Sending...");
 
-                lockFrameToSend = false;
+                    // Send frame to be sent to remote
+                    timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-                char data[256];
-                data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
+                    lockFrameToSend = true;
 
-                std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
+                    const std::vector<u8> dataToSend = frameToSend->GetSocketData();
 
-                send(serverSocket, data, sizeof(data), 0);
+                    lockFrameToSend = false;
+
+                    char data[256];
+                    data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
+
+                    std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
+
+                    send(serverSocket, data, sizeof(data), 0);
+                }
 
                 // std::this_thread::sleep_for(std::chrono::milliseconds(25));
                 // }
@@ -304,4 +331,16 @@ void FalconnectSocketManager::SocketThread() {
                 break;
         }
     }
+
+    if (!isError) {
+        char data[256];
+        data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
+
+        send(serverSocket, data, sizeof(data), 0);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    instance = nullptr;
+    delete this;
 }

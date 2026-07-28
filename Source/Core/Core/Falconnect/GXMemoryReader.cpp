@@ -36,9 +36,20 @@ u16 GXMemoryReader::Read16(const u32 offset) const {
     return read;
 }
 
-u16 GXMemoryReader::ReadGameMode() const {
+u16 GXMemoryReader::ReadGameMode() {
     const u16 mode = Read16(0x2453e0);
-    return mode;
+    if (mode != lastReadMode) {
+        modeChangeCount++;
+
+        if (modeChangeCount > 10) {
+            lastReadMode = mode;
+            modeChangeCount = 0;
+        }
+    } else {
+        modeChangeCount = 0;
+    }
+
+    return lastReadMode;
 }
 
 bool GXMemoryReader::ReadSettingsSelectedFlag() const {
@@ -99,7 +110,7 @@ char GXMemoryReader::ReadSelectedRacerID() const {
 bool GXMemoryReader::HasGridded() {
     if (lastTime == 0) lastTime = time(nullptr);
 
-    if (std::vector<u32> data = ReadRawRacerData(0); data[0] & 0x0000FF00) {
+    if (const std::vector<u32> data = ReadRawRacerData(0); data[0] & 0x0000FF00) {
         gridTimer += (time(nullptr) - lastTime);
         INFO_LOG_FMT(FALCONNECT, "{}", gridTimer);
     }
@@ -112,4 +123,9 @@ bool GXMemoryReader::HasGridded() {
 
     lastTime = time(nullptr);
     return false;
+}
+
+u8 GXMemoryReader::ReadSelectedCourse() const {
+    const char id = static_cast<char>(Read8(0x245471));
+    return id;
 }

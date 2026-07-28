@@ -9,15 +9,17 @@ import java.io.IOException;
 import java.net.Socket;
 
 public class FalconnectClientConnection {
-  private Socket socket;
+  public Socket socket;
   public DataInputStream fromClientStream;
   private final DataOutputStream toClientStream;
   public ClientState state;
 
   public byte playerNum;
   public byte racerId;
+  public byte selectedCourse;
 
   public boolean hasUpdated = false;
+  public boolean disconnected = false;
 
   private final MessageHandlerThread receiveMessageThread;
 
@@ -32,6 +34,7 @@ public class FalconnectClientConnection {
 
     state = ClientState.IN_MENUS;
     racerId = 6;
+    selectedCourse = 1;
 
     receiveMessageThread = new MessageHandlerThread(this);
     receiveMessageThread.start();
@@ -52,5 +55,12 @@ public class FalconnectClientConnection {
 
   public synchronized void setLastReceivedData(byte[] data) {
     this.lastReceivedData = data;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof FalconnectClientConnection other)) return false;
+
+    return other.playerNum == playerNum;
   }
 }

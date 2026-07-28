@@ -1,14 +1,15 @@
 package net.falconnect.messages;
 
+import net.falconnect.ClientState;
 import net.falconnect.FalconnectClientConnection;
-import net.falconnect.messages.fromclient.FromClientMessage;
-import net.falconnect.messages.fromclient.FullDataMessage;
-import net.falconnect.messages.fromclient.SettingsMessage;
-import net.falconnect.messages.fromclient.UpdateStateMessage;
+import net.falconnect.GameState;
+import net.falconnect.Main;
+import net.falconnect.messages.fromclient.*;
 import net.falconnect.messages.toclient.ToClientMessage;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.net.SocketException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Queue;
@@ -32,6 +33,8 @@ public class MessageHandlerThread extends Thread {
     messageTypes.put((byte) 0x0, UpdateStateMessage.class);
     messageTypes.put((byte) 0x1, FullDataMessage.class);
     messageTypes.put((byte) 0x2, SettingsMessage.class);
+    messageTypes.put((byte) 0x3, ResetMessage.class);
+    messageTypes.put((byte) 0x4, DisconnectMessage.class);
   }
 
   public void run() {
@@ -56,7 +59,33 @@ public class MessageHandlerThread extends Thread {
           // System.out.println("Sent message");
         }
 
-      } catch (IOException | InvocationTargetException | InstantiationException |
+        if (clientConnection.disconnected) {
+          System.out.println("Client disconnected: " + clientConnection.playerNum);
+
+          if (Main.server.gameState != GameState.RACING) {
+            Main.server.RemoveClient(clientConnection);
+          }
+
+          clientConnection.socket.close();
+
+          return;
+        }
+
+      } catch (SocketException e) {
+        System.out.println("Client disconnected: " + clientConnection.playerNum);
+
+        if (Main.server.gameState != GameState.RACING) {
+          Main.server.RemoveClient(clientConnection);
+        }
+
+        try {
+          clientConnection.socket.close();
+        } catch (IOException ex) {
+          throw new RuntimeException(ex);
+        }
+        return;
+      }
+      catch (IOException | InvocationTargetException | InstantiationException |
                IllegalAccessException | NoSuchMethodException | InterruptedException e) {
         throw new RuntimeException(e);
       }

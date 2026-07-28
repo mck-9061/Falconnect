@@ -20,16 +20,23 @@ public:
     void SocketThread();
     void SendFrame(const RacerMemoryBlock* frame);
 
+    bool hasConnected = false;
+    bool hasProperlyConnected = false;
+    bool isError = false;
     bool shouldRun = true;
     bool isHost = false;
     bool hasGridded = false;
     bool start = false;
     bool exited = false;
     bool canLoad = false;
+    bool shouldDisconnect = false;
 
     u16 ping = 0;
     u8 playerNumber = 0;
     u8 racerId = 6;
+    u8 selectedCourse = 1;
+    u8 usedCourseId = 1;
+    u8 cpuCount = 29;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;

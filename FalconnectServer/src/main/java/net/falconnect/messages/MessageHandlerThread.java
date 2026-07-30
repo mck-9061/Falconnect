@@ -63,10 +63,6 @@ public class MessageHandlerThread extends Thread {
         if (clientConnection.disconnected) {
           System.out.println("Client disconnected: " + clientConnection.playerNum);
 
-          if (Main.server.gameState != GameState.RACING) {
-            Main.server.RemoveClient(clientConnection);
-          }
-
           clientConnection.socket.close();
 
           return;
@@ -74,10 +70,6 @@ public class MessageHandlerThread extends Thread {
 
       } catch (SocketException e) {
         System.out.println("Client disconnected: " + clientConnection.playerNum);
-
-        if (Main.server.gameState != GameState.RACING) {
-          Main.server.RemoveClient(clientConnection);
-        }
 
         try {
           clientConnection.socket.close();

@@ -11,5 +11,7 @@ public class FullDataMessage extends FromClientMessage {
   public void ProcessMessage() {
     origin.setLastReceivedData(data);
     origin.hasUpdated = true;
+
+    //System.out.println("Received data starting with " + data[1]);
   }
 }

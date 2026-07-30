@@ -34,6 +34,7 @@ public:
     void SetCpuCount(u8 cpuCount) const;
     void ConstrainMenu() const;
     void InitialiseNameLabels() const;
+    void ResetToTitle() const;
 
     u32 referencePointer{};
     bool isReady{};

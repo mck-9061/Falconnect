@@ -29,6 +29,7 @@ public:
     u8 racerIDs[256];
     GameState currentState;
     bool shouldStart;
+    bool shouldReset = false;
 
 private:
     void log(const std::string& message);

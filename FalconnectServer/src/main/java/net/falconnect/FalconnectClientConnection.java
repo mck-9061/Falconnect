@@ -34,6 +34,7 @@ public class FalconnectClientConnection {
     toClientStream = new DataOutputStream(socket.getOutputStream());
 
     state = ClientState.IN_MENUS;
+    playerNum = 1;
     racerId = 6;
     selectedCourse = 1;
     name = new byte[32];

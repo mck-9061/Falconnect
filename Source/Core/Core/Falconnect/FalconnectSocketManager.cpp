@@ -1,6 +1,7 @@
 #include "FalconnectSocketManager.h"
 
 #include "ClientState.h"
+#include "Common/Assert.h"
 #include "SFML/System/String.hpp"
 
 #ifdef _WIN32
@@ -77,6 +78,20 @@ void FalconnectSocketManager::SocketThread() {
         recv(serverSocket, buffer, sizeof(buffer), 0);
 
         switch (static_cast<FromServerPacketType>(buffer[0])) {
+            case FromServerPacketType::DISCONNECT: {
+                INFO_LOG_FMT(FALCONNECT, "Disconnecting!");
+                hasProperlyConnected = true;
+                auto reason = std::string(buffer + 1);
+                SuccessAlertFmt("You have been disconnected from the Falconnect server.\n"
+                                "Reason: {}", reason);
+
+                FalconnectManager::instance->shouldReset = true;
+                shouldRun = false;
+                shouldDisconnect = true;
+                isError = true;
+                break;
+            }
+
             case FromServerPacketType::CONNECTED: {
               if (buffer[1] == 0)
               {
@@ -277,9 +292,7 @@ void FalconnectSocketManager::SocketThread() {
 
                     INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
 
-                    const std::vector<u8> racerData(buffer + 1 + (i * 255), buffer + 1 + ((i + 1) * 255));
-
-                    if (racerData[0] == 0x00) {
+                    if (const std::vector<u8> racerData(buffer + 1 + (i * 255), buffer + 1 + ((i + 1) * 255)); racerData[0] == 0x00) {
                         INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
                     } else {
                         RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
@@ -377,6 +390,5 @@ void FalconnectSocketManager::SocketThread() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    instance = nullptr;
     delete this;
 }

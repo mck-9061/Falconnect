@@ -26,8 +26,6 @@ void FalconnectManager::log(const std::string& message) {
 }
 
 void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
-
-
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
@@ -47,6 +45,18 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     }
 
     // Patcher ready; wait for practice mode
+
+    if (shouldReset) {
+        log("Resetting...");
+        shouldReset = false;
+
+        patcher->ResetToTitle();
+        currentState = GameState::FAILED_TO_CONNECT;
+
+        FalconnectSocketManager::instance = nullptr;
+
+        return;
+    }
 
     if (!(
             currentState == GameState::RACE_LOADED ||
@@ -104,6 +114,9 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
                       FalconnectSocketManager::instance->isError = true;
                       FalconnectSocketManager::instance->shouldDisconnect = true;
                   }
+
+                  SuccessAlertFmt("Failed to connect to Falconnect server!");
+                  shouldReset = true;
 
                   return;
               }

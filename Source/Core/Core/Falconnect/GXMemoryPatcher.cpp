@@ -443,3 +443,7 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
         SetRacerMachineName(usedIndex, FalconnectSocketManager::instance->names[i]);
     }
 }
+
+void GXMemoryPatcher::ResetToTitle() const {
+    interface.SetPatch(guard, referencePointer + 0x245474, 0x24000100);
+}

@@ -25,7 +25,7 @@ public:
     u32 energy;
     u32 trackOrientation[3];
     u32 bottomPosition[3];
-    u32 inputs[3];
+    u32 inputs[7];
     u32 sideAttack;
 };
 

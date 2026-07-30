@@ -248,7 +248,7 @@ void GXMemoryPatcher::SetSingleByte(const u32 address, const u8 byte) const {
     interface.SetPatch(guard, address, read);
 }
 
-void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const {
+void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &patchData) const {
   const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
 
     INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
@@ -259,6 +259,8 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchDat
     }
 
   interface.SetPatch(guard, baseAddress, patchData.state);
+    // Make sure the game thinks it's an AI so it isn't trying to update the inputs
+    SetSingleByte(baseAddress, 0x84);
 
   interface.SetPatch(guard, baseAddress + (31 * 4), patchData.centerPosition[0]);
   interface.SetPatch(guard, baseAddress + (32 * 4), patchData.centerPosition[1]);
@@ -275,6 +277,7 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchDat
   interface.SetPatch(guard, baseAddress + (46 * 4), patchData.velocityMachine[0]);
   interface.SetPatch(guard, baseAddress + (47 * 4), patchData.velocityMachine[1]);
   interface.SetPatch(guard, baseAddress + (48 * 4), patchData.velocityMachine[2]);
+    interface.SetPatch(guard, baseAddress + 0xd4, patchData.velocityMachine[2]);
 
   interface.SetPatch(guard, baseAddress + (59 * 4), patchData.orientationWorld[0]);
   interface.SetPatch(guard, baseAddress + (60 * 4), patchData.orientationWorld[1]);
@@ -303,8 +306,26 @@ void GXMemoryPatcher::SetRacerData(u8 racerNum, const RacerMemoryBlock &patchDat
   interface.SetPatch(guard, baseAddress + (123 * 4), patchData.inputs[0]);
   interface.SetPatch(guard, baseAddress + (124 * 4), patchData.inputs[1]);
   interface.SetPatch(guard, baseAddress + (125 * 4), patchData.inputs[2]);
+    INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
+    interface.SetPatch(guard, baseAddress + (126 * 4), patchData.inputs[3]);
+    interface.SetPatch(guard, baseAddress + (127 * 4), patchData.inputs[4]);
+    interface.SetPatch(guard, baseAddress + (128 * 4), patchData.inputs[5]);
+    interface.SetPatch(guard, baseAddress + (129 * 4), patchData.inputs[6]);
 
   interface.SetPatch(guard, baseAddress + (388 * 4), patchData.sideAttack);
+}
+
+void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {
+    const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+
+    INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
+
+    if (baseAddress < 0x80000000) {
+        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        return;
+    }
+
+    interface.SetPatch(guard, baseAddress + 0x3c, name);
 }
 
 void GXMemoryPatcher::SetGrid() const {
@@ -411,10 +432,14 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
         if (i == 0) usedIndex = FalconnectSocketManager::instance->playerNumber - 1;
         if (i == FalconnectSocketManager::instance->playerNumber - 1) {
             INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+            // Do want to put our own name in though
+            SetRacerMachineName(0, FalconnectSocketManager::instance->names[i]);
+
             continue; // Skip our data
         }
 
         const u32 nameAddress = 0x80377d00 + usedIndex * 32;
         interface.SetPatch(guard, nameAddress, FalconnectSocketManager::instance->names[i]);
+        SetRacerMachineName(usedIndex, FalconnectSocketManager::instance->names[i]);
     }
 }

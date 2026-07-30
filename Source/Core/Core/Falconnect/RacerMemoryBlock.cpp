@@ -48,6 +48,10 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
     block->inputs[0] = data[123]; // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
     block->inputs[1] = data[124];
     block->inputs[2] = data[125];
+    block->inputs[3] = data[126];
+    block->inputs[4] = data[127];
+    block->inputs[5] = data[128];
+    block->inputs[6] = data[129];
 
     block->sideAttack = data[388];
 
@@ -116,8 +120,12 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &
     block->inputs[0] = usedData[31]; // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
     block->inputs[1] = usedData[32];
     block->inputs[2] = usedData[33];
+    block->inputs[3] = usedData[34];
+    block->inputs[4] = usedData[35];
+    block->inputs[5] = usedData[36];
+    block->inputs[6] = usedData[37];
 
-    block->sideAttack = usedData[34];
+    block->sideAttack = usedData[38];
 
     return block;
 }
@@ -170,6 +178,10 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     data.push_back(inputs[0]);
     data.push_back(inputs[1]);
     data.push_back(inputs[2]);
+    data.push_back(inputs[3]);
+    data.push_back(inputs[4]);
+    data.push_back(inputs[5]);
+    data.push_back(inputs[6]);
 
     data.push_back(sideAttack);
 

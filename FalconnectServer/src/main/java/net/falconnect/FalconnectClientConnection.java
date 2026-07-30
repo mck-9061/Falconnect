@@ -17,6 +17,7 @@ public class FalconnectClientConnection {
   public byte playerNum;
   public byte racerId;
   public byte selectedCourse;
+  public byte[] name;
 
   public boolean hasUpdated = false;
   public boolean disconnected = false;
@@ -35,6 +36,8 @@ public class FalconnectClientConnection {
     state = ClientState.IN_MENUS;
     racerId = 6;
     selectedCourse = 1;
+    name = new byte[32];
+    name[0] = 0x46;
 
     receiveMessageThread = new MessageHandlerThread(this);
     receiveMessageThread.start();

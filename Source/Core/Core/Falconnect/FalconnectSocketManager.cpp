@@ -1,6 +1,7 @@
 #include "FalconnectSocketManager.h"
 
 #include "ClientState.h"
+#include "SFML/System/String.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -108,6 +109,16 @@ void FalconnectSocketManager::SocketThread() {
 
                 send(serverSocket, data, sizeof(data), 0);
 
+                // Send our name
+                char data1[256];
+                data1[0] = static_cast<char>(ToServerPacketType::NAME);
+
+                for (int i = 1; i <= 32; i++) {
+                    data1[i] = static_cast<char>(name[i]);
+                }
+
+                send(serverSocket, data1, sizeof(data1), 0);
+
                 char data2[256];
                 data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data2[1] = static_cast<char>(ClientState::READY);
@@ -165,11 +176,36 @@ void FalconnectSocketManager::SocketThread() {
                 break;
             }
 
+            case FromServerPacketType::NAMES: {
+                names.clear();
+
+                for (int i = 0; i < 30; i++) {
+                    // char name[32];
+                    // std::memcpy(name, buffer + 1 + (i * 32), 32);
+                    //
+                    // std::vector<u8> iHateCpp{};
+                    //
+                    // iHateCpp.reserve(32);
+                    // for (const char j : name) {
+                    //     iHateCpp.push_back(j);
+                    // }
+
+                    const std::vector<u8> iHateCpp(buffer + 1 + (i * 32), buffer + 1 + ((i + 1) * 32));
+
+                    std::string str(iHateCpp.begin(), iHateCpp.end());
+                    INFO_LOG_FMT(FALCONNECT, "Received name: {}", str);
+
+                    names.push_back(iHateCpp);
+                }
+
+                break;
+            }
+
             case FromServerPacketType::START: {
                 INFO_LOG_FMT(FALCONNECT, "START");
                 exited = false;
 
-                {
+                { // force the compiler to not be a whiny baby
                   FalconnectManager::instance->shouldStart = true;
                 }
 

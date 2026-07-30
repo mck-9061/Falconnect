@@ -32,6 +32,7 @@ public:
     void SetCourse(u8 courseID) const;
     void SetCpuCount(u8 cpuCount) const;
     void ConstrainMenu() const;
+    void InitialiseNameLabels() const;
 
     u32 referencePointer{};
     bool isReady{};

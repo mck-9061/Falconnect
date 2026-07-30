@@ -373,3 +373,48 @@ void GXMemoryPatcher::ConstrainMenu() const {
         SetSingleByte(address, 6);
     }
 }
+
+void GXMemoryPatcher::InitialiseNameLabels() const {
+    // Set font
+    SetSingleByte(referencePointer + 0x12a217, 0x03);
+
+    // Force all drivers to be rivals
+    interface.SetPatch(guard, referencePointer + 0x129bc4, 0x3ae00001);
+
+    // Branch to new code to load pointer
+    interface.SetPatch(guard, referencePointer + 0x129c3c, 0x48092d65);
+    interface.SetPatch(guard, referencePointer + 0x129c88, 0x48092d19);
+    interface.SetPatch(guard, referencePointer + 0x129ce4, 0x48092cbd);
+    interface.SetPatch(guard, referencePointer + 0x129d10, 0x48092c91);
+
+    // New code: Load pointer into r5
+    // pointer = base pointer + (0x20 * r27)
+    // 1d 1b 00 20
+    // 3c a0 80 37
+    // 60 a5 7d 00
+    // 7c a5 42 14
+    // 39 00 00 00
+    // 4e 80 00 20
+
+    const u32 codeAddress = referencePointer + 0x1bc9a0;
+
+    interface.SetPatch(guard, codeAddress, 0x1d1b0020);
+    interface.SetPatch(guard, codeAddress + 4, 0x3ca08037);
+    interface.SetPatch(guard, codeAddress + 8, 0x60a57d00);
+    interface.SetPatch(guard, codeAddress + 12, 0x7ca54214);
+    interface.SetPatch(guard, codeAddress + 16, 0x39000000);
+    interface.SetPatch(guard, codeAddress + 20, 0x4e800020);
+
+    // Set names
+    for (int i = 0; i < 30; i++) {
+        u8 usedIndex = i;
+        if (i == 0) usedIndex = FalconnectSocketManager::instance->playerNumber - 1;
+        if (i == FalconnectSocketManager::instance->playerNumber - 1) {
+            INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+            continue; // Skip our data
+        }
+
+        const u32 nameAddress = 0x80377d00 + usedIndex * 32;
+        interface.SetPatch(guard, nameAddress, FalconnectSocketManager::instance->names[i]);
+    }
+}

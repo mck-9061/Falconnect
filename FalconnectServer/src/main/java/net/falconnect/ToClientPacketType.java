@@ -6,5 +6,6 @@ public enum ToClientPacketType {
   START,
   START_RACE,
   RACER_IDS,
-  COURSE
+  COURSE,
+  NAMES
 }

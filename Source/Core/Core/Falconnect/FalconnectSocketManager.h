@@ -37,6 +37,8 @@ public:
     u8 selectedCourse = 1;
     u8 usedCourseId = 1;
     u8 cpuCount = 29;
+    std::vector<u8> name;
+    std::vector<std::vector<u8>> names;
 
     std::queue<OperationType> operationQueue;
     std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;

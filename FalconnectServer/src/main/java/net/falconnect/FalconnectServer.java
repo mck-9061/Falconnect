@@ -102,6 +102,8 @@ public class FalconnectServer {
           courseMessage.Send();
           RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
           racerIdsMessage.Send();
+          NamesMessage namesMessage = new NamesMessage(client, getClients());
+          namesMessage.Send();
           StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
           message.Send();
         }

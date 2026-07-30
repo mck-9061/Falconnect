@@ -143,6 +143,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         // Get our racer ID
         FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
         FalconnectSocketManager::instance->selectedCourse = patcher->memoryReader->ReadSelectedCourse();
+        FalconnectSocketManager::instance->name = patcher->memoryReader->ReadName();
 
         currentState = GameState::READY_TO_LOAD;
         if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
@@ -183,6 +184,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         if (FalconnectSocketManager::instance->start) {
             INFO_LOG_FMT(FALCONNECT, "Starting");
             patcher->StartCountdown();
+            patcher->InitialiseNameLabels();
             INFO_LOG_FMT(FALCONNECT, "Countdown started");
             currentState = GameState::RACING;
         }

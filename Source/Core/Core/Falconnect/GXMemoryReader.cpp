@@ -129,3 +129,14 @@ u8 GXMemoryReader::ReadSelectedCourse() const {
     const char id = static_cast<char>(Read8(0x245471));
     return id;
 }
+
+std::vector<u8> GXMemoryReader::ReadName() const {
+    std::vector<u8> name;
+
+    name.reserve(32);
+    for (int i = 0; i < 32; i++) {
+        name.push_back(Read8(0x230e41 + i));
+    }
+
+    return name;
+}

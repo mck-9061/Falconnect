@@ -12,6 +12,19 @@ public:
 
     std::vector<u8> GetSocketData() const;
 
+    bool operator==(const RacerMemoryBlock & all_block) const {
+        return
+            centerPosition[0] == all_block.centerPosition[0] &&
+            centerPosition[1] == all_block.centerPosition[1] &&
+            centerPosition[2] == all_block.centerPosition[2] &&
+            velocityWorld[0] == all_block.velocityWorld[0] &&
+            velocityWorld[1] == all_block.velocityWorld[1] &&
+            velocityWorld[2] == all_block.velocityWorld[2] &&
+            orientationWorld[0] == all_block.orientationWorld[0] &&
+            orientationWorld[1] == all_block.orientationWorld[1] &&
+            orientationWorld[2] == all_block.orientationWorld[2];
+    }
+
     u32 state;
     u32 centerPosition[3];
     u32 lastCenterPosition[3];
@@ -27,6 +40,11 @@ public:
     u32 bottomPosition[3];
     u32 inputs[7];
     u32 sideAttack;
+    u32 maxSpeedKmh;
+    u32 acceleration;
+    u32 baseSpeed;
+    u32 maxSpeed;
+    u32 restoreFlag;
 };
 
 

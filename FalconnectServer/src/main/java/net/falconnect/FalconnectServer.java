@@ -8,12 +8,13 @@ import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MasterServer {
+public class FalconnectServer {
   public ServerSocket socket;
   public List<FalconnectRace> currentRaces;
   private AcceptClientConnectionThread acceptClientConnectionThread;
+  private ConsoleCommandHandlerThread consoleCommandHandlerThread;
 
-  public MasterServer() throws IOException {
+  public FalconnectServer() throws IOException {
     super();
 
     currentRaces = new ArrayList<>();
@@ -23,6 +24,9 @@ public class MasterServer {
 
     acceptClientConnectionThread = new AcceptClientConnectionThread(this);
     acceptClientConnectionThread.start();
+
+    consoleCommandHandlerThread = new ConsoleCommandHandlerThread(this);
+    consoleCommandHandlerThread.start();
   }
 
   public synchronized void EndRace(FalconnectRace race) throws IOException, InterruptedException {
@@ -75,7 +79,7 @@ public class MasterServer {
     System.out.println("No space!");
 
     // No space anywhere for client :(
-    DisconnectMessage disconnectMessage = new DisconnectMessage(client, "Server is full!");
+    DisconnectMessage disconnectMessage = new DisconnectMessage(client, "This server is full. Please try again later.");
     disconnectMessage.Send();
     Thread.sleep(100);
     client.socket.close();

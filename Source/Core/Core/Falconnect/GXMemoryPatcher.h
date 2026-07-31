@@ -27,7 +27,7 @@ public:
     void SetOpponentRacerIds(const u8 racerIDs[]) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
-    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData) const;
+    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData, bool full) const;
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;

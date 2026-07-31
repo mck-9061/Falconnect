@@ -14,6 +14,7 @@ public class FalconnectClientConnection {
   private final DataOutputStream toClientStream;
   public ClientState state;
 
+  public int uid;
   public byte playerNum;
   public byte racerId;
   public byte selectedCourse;
@@ -65,6 +66,6 @@ public class FalconnectClientConnection {
   public boolean equals(Object o) {
     if (!(o instanceof FalconnectClientConnection other)) return false;
 
-    return other.playerNum == playerNum;
+    return other.socket.equals(socket);
   }
 }

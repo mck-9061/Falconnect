@@ -40,8 +40,12 @@ public:
     std::vector<u8> name;
     std::vector<std::vector<u8>> names;
 
-    std::queue<OperationType> operationQueue;
-    std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
+    //std::queue<OperationType> operationQueue;
+    //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
+
+    RacerMemoryBlock* allBlocks[30];
+    u8 usedIndices[30];
+    bool updated[30];
 
 private:
     void Start();

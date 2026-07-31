@@ -3,20 +3,19 @@ package net.falconnect;
 import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 public class FalconnectRace extends Thread {
   private List<FalconnectClientConnection> clients;
-  private MasterServer server;
+  private FalconnectServer server;
 
   private byte[] fullDataPacket;
 
   public GameState gameState;
 
-  public FalconnectRace(MasterServer server) throws IOException {
+  public FalconnectRace(FalconnectServer server) throws IOException {
     clients = new ArrayList<>();
     gameState = GameState.WAITING_FOR_READY;
 
@@ -54,7 +53,7 @@ public class FalconnectRace extends Thread {
   public void run() {
     while (true) {
       try {
-        Thread.sleep(32);
+        Thread.sleep(4);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -78,7 +77,7 @@ public class FalconnectRace extends Thread {
             }
           }
 
-          if (allReady) {
+          if (allReady && getClients().size() > 1) {
             System.out.println("Starting!");
             gameState = GameState.WAITING_FOR_GRID;
 
@@ -196,7 +195,6 @@ public class FalconnectRace extends Thread {
 
     for (FalconnectClientConnection client : getClients()) {
       byte[] lastClientData = client.getLastReceivedData();
-      client.hasUpdated = false;
 
       // System.out.println(client.playerNum);
 
@@ -212,8 +210,11 @@ public class FalconnectRace extends Thread {
     ConstructFullDataPacket();
 
     for (FalconnectClientConnection client : getClients()) {
-      FullDataMessage message = new FullDataMessage(client, fullDataPacket);
-      message.Send();
+      if (client.hasUpdated) {
+        FullDataMessage message = new FullDataMessage(client, fullDataPacket);
+        message.Send();
+        client.hasUpdated = false;
+      }
     }
 
     //System.out.println("Full data packet distributed");

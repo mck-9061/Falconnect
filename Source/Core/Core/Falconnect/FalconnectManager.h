@@ -30,12 +30,16 @@ public:
     GameState currentState;
     bool shouldStart;
     bool shouldReset = false;
+    bool shouldDisplayDisconnectedAlert = false;
+
+    RacerMemoryBlock* lastWrittenBlocks[29];
 
 private:
     void log(const std::string& message);
     std::string lastLogged;
 
     u8 readCounter = 0;
+    u8 frameCount = 0;
 };
 
 

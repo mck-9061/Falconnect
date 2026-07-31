@@ -26,11 +26,20 @@ void FalconnectManager::log(const std::string& message) {
 }
 
 void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
+    if (shouldDisplayDisconnectedAlert) {
+        shouldDisplayDisconnectedAlert = false;
+        SuccessAlertFmt("Lost connection to the Falconnect server.");
+    }
+
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
 
-        if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->shouldDisconnect = true;
+        if (FalconnectSocketManager::instance != nullptr) {
+            FalconnectSocketManager::instance->shouldDisconnect = true;
+            shouldReset = true;
+            FalconnectSocketManager::instance = nullptr;
+        }
 
         return;
     }
@@ -54,6 +63,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         currentState = GameState::FAILED_TO_CONNECT;
 
         FalconnectSocketManager::instance = nullptr;
+        delete patcher;
+        patcher = nullptr;
 
         return;
     }
@@ -88,6 +99,8 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
               delete FalconnectSocketManager::instance;
 
               FalconnectSocketManager::instance = new FalconnectSocketManager();
+
+              FalconnectSocketManager::instance->name = patcher->memoryReader->ReadName();
 
               std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
 
@@ -156,7 +169,6 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         // Get our racer ID
         FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
         FalconnectSocketManager::instance->selectedCourse = patcher->memoryReader->ReadSelectedCourse();
-        FalconnectSocketManager::instance->name = patcher->memoryReader->ReadName();
 
         currentState = GameState::READY_TO_LOAD;
         if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
@@ -209,7 +221,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
         INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
-        u16 ping = FalconnectSocketManager::instance->ping - 32;
+        u16 ping = FalconnectSocketManager::instance->ping - 6;
         if (ping > 1000) ping = 1; // overflow
         const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
 
@@ -218,38 +230,22 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->ConstrainMenu();
         INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
-        u32 queueLength = static_cast<u32>(FalconnectSocketManager::instance->operationQueue.size());
+        frameCount++;
+        for (int i = 0; i < 30; i++) {
+            INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
+            if (const auto racerNum = FalconnectSocketManager::instance->usedIndices[i]; racerNum != 0) {
+                const auto racerBlock = FalconnectSocketManager::instance->allBlocks[i];
 
-        while (queueLength != 0)
-        {
-            const OperationType operation = FalconnectSocketManager::instance->operationQueue.front();
-            FalconnectSocketManager::instance->operationQueue.pop();
-
-            switch (operation)
-            {
-              case (OperationType::SET_RACER_BLOCK):
-              {
-                  INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
-                  const auto racerNum = get<u8>(
-                    FalconnectSocketManager::instance->operationArgumentsQueue.front());
-                  FalconnectSocketManager::instance->operationArgumentsQueue.pop();
-
-                const auto racerBlock = get<RacerMemoryBlock>(
-                    FalconnectSocketManager::instance->operationArgumentsQueue.front());
-                FalconnectSocketManager::instance->operationArgumentsQueue.pop();
-
-                patcher->SetRacerData(racerNum, racerBlock);
-                  INFO_LOG_FMT(FALCONNECT, "Racer data set");
-
-                break;
-              }
-
-              default:
-                  break;
+                if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
+                    patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 6);
+                    lastWrittenBlocks[racerNum - 1] = racerBlock;
+                    INFO_LOG_FMT(FALCONNECT, "Racer data set");
+                } else {
+                    INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
+                }
             }
-
-            queueLength -= 1;
         }
+        if (frameCount >= 6) frameCount = 0;
 
         // Check if we've exited the race to the menu
         if (!patcher->memoryReader->ReadIsInRace()) {
@@ -258,7 +254,19 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
             if (readCounter > 3) {
                 INFO_LOG_FMT(FALCONNECT, "Exited race!");
                 FalconnectSocketManager::instance->exited = true;
-                currentState = GameState::IN_PRACTICE;
+
+                // Check that we're still in practice mode; if not, disconnect
+                u16 mode = patcher->memoryReader->ReadGameMode();
+                for (int i = 0; i < 15; i++) mode = patcher->memoryReader->ReadGameMode();
+
+                if (mode != 3) {
+                    SuccessAlertFmt("You disconnected from the race.");
+                    FalconnectSocketManager::instance->shouldDisconnect = true;
+                    currentState = GameState::NOT_IN_PRACTICE;
+                    shouldReset = true;
+                } else {
+                    currentState = GameState::IN_PRACTICE;
+                }
             }
         } else {
             readCounter = 0;

@@ -68,6 +68,8 @@ void FalconnectSocketManager::SocketThread() {
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
+    int invalidPacketCount = 0;
+
     while (shouldRun && !isError) {
         if (shouldDisconnect) {
             break;
@@ -95,12 +97,36 @@ void FalconnectSocketManager::SocketThread() {
             case FromServerPacketType::CONNECTED: {
               if (buffer[1] == 0)
               {
-                //INFO_LOG_FMT(FALCONNECT, "Dropping invalid packet!");
+                INFO_LOG_FMT(FALCONNECT, "Dropping invalid packet!");
+                  invalidPacketCount++;
+
+                  if (invalidPacketCount > 50) {
+                      // Server probably closed, or we lost connection
+                      INFO_LOG_FMT(FALCONNECT, "Disconnecting!");
+                      {
+                          FalconnectManager::instance->shouldDisplayDisconnectedAlert = true;
+                      }
+                      std::this_thread::sleep_for(std::chrono::seconds(1));
+                      shouldDisconnect = true;
+                      shouldRun = false;
+                      isError = true;
+                      FalconnectManager::instance->shouldReset = true;
+                  }
                 break;
               }
 
                 hasProperlyConnected = true;
                 playerNumber = buffer[1];
+
+                // Send our name
+                char data1[256];
+                data1[0] = static_cast<char>(ToServerPacketType::NAME);
+
+                for (int i = 1; i <= 32; i++) {
+                    data1[i] = static_cast<char>(name[i]);
+                }
+
+                send(serverSocket, data1, sizeof(data1), 0);
 
                 // Connected: Wait for us to be ready
                 while (!canLoad) {
@@ -124,16 +150,6 @@ void FalconnectSocketManager::SocketThread() {
 
                 send(serverSocket, data, sizeof(data), 0);
 
-                // Send our name
-                char data1[256];
-                data1[0] = static_cast<char>(ToServerPacketType::NAME);
-
-                for (int i = 1; i <= 32; i++) {
-                    data1[i] = static_cast<char>(name[i]);
-                }
-
-                send(serverSocket, data1, sizeof(data1), 0);
-
                 char data2[256];
                 data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data2[1] = static_cast<char>(ClientState::READY);
@@ -142,6 +158,9 @@ void FalconnectSocketManager::SocketThread() {
 
                 break;
             }
+
+            default:
+                invalidPacketCount = 0;
 
             // case FromServerPacketType::RACER_ID: {
             //     INFO_LOG_FMT(FALCONNECT, "RACER_ID");
@@ -276,6 +295,9 @@ void FalconnectSocketManager::SocketThread() {
             }
 
             case FromServerPacketType::FULL_DATA: {
+                // ping spoofing lol
+                //std::this_thread::sleep_for(std::chrono::milliseconds(6));
+
                 INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
                 INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
                 // Set last read frame
@@ -296,9 +318,15 @@ void FalconnectSocketManager::SocketThread() {
                         INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
                     } else {
                         RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
-                        operationQueue.push(OperationType::SET_RACER_BLOCK);
-                        operationArgumentsQueue.emplace(usedIndex);
-                        operationArgumentsQueue.emplace(*block);
+                        // operationQueue.push(OperationType::SET_RACER_BLOCK);
+                        // operationArgumentsQueue.emplace(usedIndex);
+                        // operationArgumentsQueue.emplace(*block);
+
+                        //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
+                        //else updated[i] = true;
+
+                        allBlocks[i] = block;
+                        usedIndices[i] = usedIndex;
                     }
                 }
 
@@ -375,9 +403,6 @@ void FalconnectSocketManager::SocketThread() {
             //
             //     break;
             // }
-
-            default:
-                break;
         }
     }
 

@@ -1,26 +1,27 @@
 package net.falconnect;
 
-import net.falconnect.messages.toclient.ConnectedMessage;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
 public class AcceptClientConnectionThread extends Thread {
-  MasterServer server;
+  FalconnectServer server;
 
-  public AcceptClientConnectionThread(MasterServer server) {
+  public AcceptClientConnectionThread(FalconnectServer server) {
     super();
     this.server = server;
   }
 
   public void run() {
+    int uid = 0;
     while (true) {
       System.out.println("Looking for clients...");
 
       try {
         Socket clientSocket = server.socket.accept();
         FalconnectClientConnection clientConnection = new FalconnectClientConnection(clientSocket);
+        clientConnection.uid = uid;
+        uid++;
 
         System.out.println("Client connected: " + ((InetSocketAddress) clientSocket.getRemoteSocketAddress()).getAddress());
 

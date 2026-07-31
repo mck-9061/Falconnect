@@ -55,6 +55,13 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
 
     block->sideAttack = data[388];
 
+    block->maxSpeedKmh = data[54];
+    block->acceleration = data[136];
+    block->baseSpeed = data[137];
+    block->maxSpeed = data[139];
+
+    block->restoreFlag = data[12];
+
     return block;
 }
 
@@ -118,14 +125,21 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &
     block->bottomPosition[2] = usedData[30];
 
     block->inputs[0] = usedData[31]; // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
-    block->inputs[1] = usedData[32];
-    block->inputs[2] = usedData[33];
-    block->inputs[3] = usedData[34];
-    block->inputs[4] = usedData[35];
-    block->inputs[5] = usedData[36];
-    block->inputs[6] = usedData[37];
+     block->inputs[1] = usedData[32];
+     block->inputs[2] = usedData[33];
+     block->inputs[3] = usedData[34];
+     block->inputs[4] = usedData[35];
+     block->inputs[5] = usedData[36];
+     block->inputs[6] = usedData[37];
 
     block->sideAttack = usedData[38];
+
+    block->maxSpeedKmh = usedData[39];
+    block->acceleration = usedData[40];
+    block->baseSpeed = usedData[41];
+    block->maxSpeed = usedData[42];
+
+    block->restoreFlag = usedData[43];
 
     return block;
 }
@@ -184,6 +198,13 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     data.push_back(inputs[6]);
 
     data.push_back(sideAttack);
+
+    data.push_back(maxSpeedKmh);
+    data.push_back(acceleration);
+    data.push_back(baseSpeed);
+    data.push_back(maxSpeed);
+
+    data.push_back(restoreFlag);
 
     // convert to u8 vector
     std::vector<uint8_t> out;

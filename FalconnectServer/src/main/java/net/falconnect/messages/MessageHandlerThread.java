@@ -61,7 +61,7 @@ public class MessageHandlerThread extends Thread {
         }
 
         if (clientConnection.disconnected) {
-          System.out.println("Client disconnected: " + clientConnection.playerNum);
+          System.out.println("Client disconnected gracefully: " + clientConnection.playerNum);
 
           clientConnection.socket.close();
 
@@ -69,7 +69,8 @@ public class MessageHandlerThread extends Thread {
         }
 
       } catch (SocketException e) {
-        System.out.println("Client disconnected: " + clientConnection.playerNum);
+        System.out.println("Client disconnected ungracefully: " + clientConnection.playerNum);
+        clientConnection.disconnected = true;
 
         try {
           clientConnection.socket.close();

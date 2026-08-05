@@ -10,6 +10,9 @@ public class UpdateStateMessage extends FromClientMessage {
 
   @Override
   public void ProcessMessage() {
+    byte checkByte = data[2];
+    if (checkByte != 1) return;
+
     byte state = data[1];
     origin.state = ClientState.values()[state];
 

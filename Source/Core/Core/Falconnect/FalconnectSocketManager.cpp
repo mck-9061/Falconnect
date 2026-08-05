@@ -38,7 +38,7 @@ void FalconnectSocketManager::Start() {
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
+        inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -136,7 +136,7 @@ void FalconnectSocketManager::SocketThread() {
                 serverUdpAddress.sin_family = AF_INET;
                 serverUdpAddress.sin_port = htons(9000 - playerNumber);
 
-                inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
+                inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
 
                 // connect(serverUdpSocket, reinterpret_cast<struct sockaddr *>(&serverUdpAddress), sizeof(serverUdpAddress));
 
@@ -175,6 +175,7 @@ void FalconnectSocketManager::SocketThread() {
                 char data2[7680];
                 data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data2[1] = static_cast<char>(ClientState::READY);
+                data2[2] = 1;
 
                 send(serverSocket, data2, 256 * (1 + ourCpus), 0);
 
@@ -283,6 +284,7 @@ void FalconnectSocketManager::SocketThread() {
                 char data[7680];
                 data[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data[1] = static_cast<char>(ClientState::GRIDDED);
+                data[2] = 1;
 
                 send(serverSocket, data, 256 * (1 + ourCpus), 0);
 

@@ -63,7 +63,7 @@ public class FalconnectClientConnection {
   }
 
   public void SendPacket(byte[] packet) throws IOException, InterruptedException {
-    Thread.sleep(4);
+    //Thread.sleep(4);
 
     if (packet[0] == ToClientPacketType.FULL_DATA.ordinal()) {
       if (lastReceivedUdpPort != 0) {

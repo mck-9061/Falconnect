@@ -130,12 +130,16 @@ public class FalconnectRace extends Thread {
 
             for (FalconnectClientConnection client : getClients()) {
               CourseMessage courseMessage = new CourseMessage(client, usedCourse, (byte) (getClients().size() - 1));
+              Thread.sleep(20);
               courseMessage.Send();
               RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
+              Thread.sleep(20);
               racerIdsMessage.Send();
               NamesMessage namesMessage = new NamesMessage(client, getClients());
+              Thread.sleep(20);
               namesMessage.Send();
               StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
+              Thread.sleep(20);
               message.Send();
             }
           }

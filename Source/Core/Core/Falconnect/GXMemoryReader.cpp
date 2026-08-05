@@ -69,6 +69,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     stream << std::hex << baseAddress;
 
     const u32 address = baseAddress + (racerNum * 0x620);
+    //INFO_LOG_FMT(FALCONNECT, "Address: {}", address);
 
     std::vector<u32> dolphinMemory;
 
@@ -78,6 +79,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     }
 
     RacerMemoryBlock* block = RacerMemoryBlock::CreateFromDolphinData(dolphinMemory);
+    //INFO_LOG_FMT(FALCONNECT, "State: {}", block->state);
 
     return block;
 }

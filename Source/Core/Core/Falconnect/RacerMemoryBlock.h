@@ -45,6 +45,9 @@ public:
     u32 baseSpeed;
     u32 maxSpeed;
     u32 restoreFlag;
+    u32 centerPosOscX;
+    u32 centerPosOscY;
+    u32 centerPosOscZ;
 };
 
 

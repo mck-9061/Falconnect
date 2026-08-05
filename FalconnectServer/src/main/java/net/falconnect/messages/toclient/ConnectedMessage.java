@@ -9,5 +9,7 @@ public class ConnectedMessage extends ToClientMessage {
 
     data[0] = (byte) ToClientPacketType.CONNECTED.ordinal();
     data[1] = destination.playerNum;
+    data[2] = destination.numCpus;
+    data[3] = destination.cpuStartIndex;
   }
 }

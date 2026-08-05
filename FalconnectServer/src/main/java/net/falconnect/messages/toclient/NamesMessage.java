@@ -16,5 +16,10 @@ public class NamesMessage extends ToClientMessage {
       System.arraycopy(client.name, 0, data, cursor, 32);
       cursor += 32;
     }
+
+    while (cursor < 961) {
+      System.arraycopy("CPU".getBytes(), 0, data, cursor, 3);
+      cursor += 32;
+    }
   }
 }

@@ -94,9 +94,40 @@ void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
 }
 
 void GXMemoryPatcher::DisableAIControl() const {
+    // Set code to set AI movement per CPU
+    const u32 freeAddress = referencePointer + 0x1cd1a0;
+    interface.SetPatch(guard, freeAddress, 0x7de802a6);
+    interface.SetPatch(guard, freeAddress + 4, 0x8a0300e0);
+    interface.SetPatch(guard, freeAddress + 8, 0x2c100000);
+    interface.SetPatch(guard, freeAddress + 12, 0x41820008);
+    interface.SetPatch(guard, freeAddress + 16, 0x4bef9e01);
+    interface.SetPatch(guard, freeAddress + 20, 0x7de803a6);
+    interface.SetPatch(guard, freeAddress + 24, 0x4e800020);
+
     const u32 aiMoveAddress = referencePointer + 0x839a0;
 
-    interface.SetPatch(guard, aiMoveAddress, 0x60000000);
+    interface.SetPatch(guard, aiMoveAddress, 0x48149801);
+}
+
+void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
+    if (start == 0) return;
+
+    u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+    if (baseAddress < 0x80000000) {
+        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        baseAddress = racerBaseAddress;
+        if (baseAddress < 0x80000000) {
+            INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+            return;
+        }
+    }
+
+    racerBaseAddress = baseAddress;
+
+    for (int i = 0; i < count; i++) {
+        const u32 address = baseAddress + ((start + i) * 0x620);
+        SetSingleByte(address + 0xe0, 0x1);
+    }
 }
 
 void GXMemoryPatcher::DisableCountdown() const {
@@ -140,13 +171,11 @@ void GXMemoryPatcher::InitialiseText() const {
 }
 
 void GXMemoryPatcher::SetBoostLap(const u8 lap) const {
-    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000);
-    // NOP check for practice mode on lap 2 boost announcement
+    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000); // NOP check for practice mode on lap 2 boost announcement
     interface.SetPatch(guard, referencePointer + 0x34b68, 0x60000000); // NOP announcement at start of practice mode
     interface.SetPatch(guard, referencePointer + 0x33300, 0x60000000); // NOP practice mode check in boost
 
-    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c);
-    // Nullify check for practice mode in energy bar render
+    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c); // Nullify check for practice mode in energy bar render
 
     interface.SetPatch(guard, referencePointer + 0x3330C, 0x2c000000 + lap); // Set lap check for boost
     interface.SetPatch(guard, referencePointer + 0xc91d8, 0x2c000001 + lap); // Set lap check for energy bar render
@@ -211,14 +240,14 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
 
 void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
     // Blank previous text
-    INFO_LOG_FMT(FALCONNECT, "Blanking text");
+    //INFO_LOG_FMT(FALCONNECT, "Blanking text");
     for (int offset = 0; offset < 100; offset++) {
         constexpr u32 textAddress = 0x80390000;
         const u32 address = textAddress + (offset * 4);
         interface.SetPatch(guard, address, 0x0);
     }
 
-    INFO_LOG_FMT(FALCONNECT, "Setting text");
+    //INFO_LOG_FMT(FALCONNECT, "Setting text");
     const std::vector<u32> rep = stringToUint32Array(text);
 
     for (u8 offset = 0; offset < rep.size(); offset++) {
@@ -248,21 +277,29 @@ void GXMemoryPatcher::SetSingleByte(const u32 address, const u8 byte) const {
     interface.SetPatch(guard, address, read);
 }
 
-void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &patchData, bool full) const {
-  const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &patchData, bool full) {
+    if (racerNum == 0) return;
+
+  u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
 
     INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
     if (baseAddress < 0x80000000) {
         INFO_LOG_FMT(FALCONNECT, "Invalid address!");
-        return;
+        baseAddress = racerBaseAddress;
+        if (baseAddress < 0x80000000) {
+            INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+            return;
+        }
     }
+
+    racerBaseAddress = baseAddress;
 
 
 
   interface.SetPatch(guard, baseAddress, patchData.state);
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
-    SetSingleByte(baseAddress, 0x84);
+    SetSingleByte(baseAddress, 0x04);
 
     if (full) {
         interface.SetPatch(guard, baseAddress + (31 * 4), patchData.centerPosition[0]);
@@ -272,6 +309,14 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         interface.SetPatch(guard, baseAddress + (34 * 4), patchData.lastCenterPosition[0]);
         interface.SetPatch(guard, baseAddress + (35 * 4), patchData.lastCenterPosition[1]);
         interface.SetPatch(guard, baseAddress + (36 * 4), patchData.lastCenterPosition[2]);
+        //
+        // interface.SetPatch(guard, baseAddress + 0x1e0, patchData.lastCenterPosition[0]);
+        // interface.SetPatch(guard, baseAddress + 0x1e4, patchData.lastCenterPosition[1]);
+        // interface.SetPatch(guard, baseAddress + 0x1e8, patchData.lastCenterPosition[2]);
+
+        interface.SetPatch(guard, baseAddress + 0x158, patchData.centerPosOscX);
+        interface.SetPatch(guard, baseAddress + 0x168, patchData.centerPosOscY);
+        interface.SetPatch(guard, baseAddress + 0x178, patchData.centerPosOscZ);
 
         // set last center position to received center position?
         // interface.SetPatch(guard, baseAddress + (34 * 4), patchData.centerPosition[0]);
@@ -281,7 +326,7 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         interface.SetPatch(guard, baseAddress + (37 * 4), patchData.velocityWorld[0]);
         interface.SetPatch(guard, baseAddress + (38 * 4), patchData.velocityWorld[1]);
         interface.SetPatch(guard, baseAddress + (39 * 4), patchData.velocityWorld[2]);
-
+        //
         interface.SetPatch(guard, baseAddress + (46 * 4), patchData.velocityMachine[0]);
         interface.SetPatch(guard, baseAddress + (47 * 4), patchData.velocityMachine[1]);
         interface.SetPatch(guard, baseAddress + (48 * 4), patchData.velocityMachine[2]);
@@ -465,4 +510,34 @@ void GXMemoryPatcher::ResetToTitle() const {
     interface.ClearPatches(guard);
     interface.SetPC(0x80003154);
     //interface.SetPatch(guard, referencePointer + 0x245474, 0x24000100);
+}
+
+void GXMemoryPatcher::EnablePositionAnnouncementsInPractice() const {
+    // Bypass mode check in finish announcement
+    interface.SetPatch(guard, referencePointer + 0x15c81c, 0x3b80012c);
+    interface.SetPatch(guard, referencePointer + 0x15c82c, 0x3b80012c);
+}
+
+void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
+    // Add code to only update machine if 0xe0 == 1 or 0x00 == 80
+    u32 codeAddress = referencePointer + 0x1d63a0;
+
+    interface.SetPatch(guard, codeAddress, 0x7de802a6);
+    interface.SetPatch(guard, codeAddress + 4, 0x8a0300e0);
+    interface.SetPatch(guard, codeAddress + 8, 0x2c100000);
+    interface.SetPatch(guard, codeAddress + 12, 0x4182001c);
+    interface.SetPatch(guard, codeAddress + 16, 0x3e000006);
+    interface.SetPatch(guard, codeAddress + 20, 0x6210059c);
+    interface.SetPatch(guard, codeAddress + 24, 0x7e107850);
+    interface.SetPatch(guard, codeAddress + 28, 0x7e0803a6);
+    interface.SetPatch(guard, codeAddress + 32, 0x4e800021);
+    interface.SetPatch(guard, codeAddress + 36, 0x48000010);
+    interface.SetPatch(guard, codeAddress + 40, 0x8a030000);
+    interface.SetPatch(guard, codeAddress + 44, 0x2c100080);
+    interface.SetPatch(guard, codeAddress + 48, 0x4080ffe0);
+    interface.SetPatch(guard, codeAddress + 52, 0x7de803a6);
+    interface.SetPatch(guard, codeAddress + 56, 0x4e800020);
+
+    // Branch to this
+    interface.SetPatch(guard, referencePointer + 0x83d40,0x48152661);
 }

@@ -27,7 +27,7 @@ public:
     void SetOpponentRacerIds(const u8 racerIDs[]) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
-    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData, bool full) const;
+    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData, bool full);
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;
@@ -35,6 +35,9 @@ public:
     void ConstrainMenu() const;
     void InitialiseNameLabels() const;
     void ResetToTitle() const;
+    void EnablePositionAnnouncementsInPractice() const;
+    void EnableAIControlFor(u8 start, u8 count);
+    void StopPhysicsOnReceivedMachines() const;
 
     u32 referencePointer{};
     bool isReady{};
@@ -43,6 +46,8 @@ public:
 private:
     const Core::CPUThreadGuard& guard;
     PPCDebugInterface& interface;
+
+    u32 racerBaseAddress;
 
     void SetSingleByte(u32 address, u8 byte) const;
 };

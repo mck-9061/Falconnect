@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <unistd.h>
 #include "expr.h"
 #endif
 
@@ -37,7 +38,7 @@ void FalconnectSocketManager::Start() {
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        inet_pton(AF_INET, "localhost", &serverAddress.sin_addr); // Remote IP address
+        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -51,14 +52,16 @@ void FalconnectSocketManager::Start() {
     } else {
         hasConnected = true;
     }
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-void FalconnectSocketManager::SendFrame(const RacerMemoryBlock* frame) {
+void FalconnectSocketManager::SendFrame(RacerMemoryBlock *frame, const u8 index) {
   while (lockFrameToSend)
   {
   }
   lockFrameToSend = true;
-    frameToSend = frame;
+    framesToSend[index] = frame;
   lockFrameToSend = false;
     doneFirst = true;
 }
@@ -117,16 +120,35 @@ void FalconnectSocketManager::SocketThread() {
 
                 hasProperlyConnected = true;
                 playerNumber = buffer[1];
+                ourCpus = buffer[2];
+                cpuStartIndex = buffer[3];
+
+                // Setup UDP
+#ifdef _WIN32
+                closesocket(serverUdpSocket);
+#else
+                close(serverUdpSocket);
+#endif
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                serverUdpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+                serverUdpAddress.sin_family = AF_INET;
+                serverUdpAddress.sin_port = htons(9000 - playerNumber);
+
+                inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
+
+                // connect(serverUdpSocket, reinterpret_cast<struct sockaddr *>(&serverUdpAddress), sizeof(serverUdpAddress));
 
                 // Send our name
-                char data1[256];
+                char data1[7680];
                 data1[0] = static_cast<char>(ToServerPacketType::NAME);
 
                 for (int i = 1; i <= 32; i++) {
                     data1[i] = static_cast<char>(name[i]);
                 }
 
-                send(serverSocket, data1, sizeof(data1), 0);
+                send(serverSocket, data1, 256 * (1 + ourCpus), 0);
 
                 // Connected: Wait for us to be ready
                 while (!canLoad) {
@@ -143,18 +165,18 @@ void FalconnectSocketManager::SocketThread() {
                 }
 
                 // First send our selected racer ID, then say we're ready
-                char data[256];
+                char data[7680];
                 data[0] = static_cast<char>(ToServerPacketType::SETTINGS);
                 data[1] = static_cast<char>(racerId);
                 data[2] = static_cast<char>(selectedCourse);
 
-                send(serverSocket, data, sizeof(data), 0);
+                send(serverSocket, data, 256 * (1 + ourCpus), 0);
 
-                char data2[256];
+                char data2[7680];
                 data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data2[1] = static_cast<char>(ClientState::READY);
 
-                send(serverSocket, data2, sizeof(data2), 0);
+                send(serverSocket, data2, 256 * (1 + ourCpus), 0);
 
                 break;
             }
@@ -258,11 +280,11 @@ void FalconnectSocketManager::SocketThread() {
                     break;
                 }
 
-                char data[256];
+                char data[7680];
                 data[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data[1] = static_cast<char>(ClientState::GRIDDED);
 
-                send(serverSocket, data, sizeof(data), 0);
+                send(serverSocket, data, 256 * (1 + ourCpus), 0);
 
                 break;
             }
@@ -273,100 +295,15 @@ void FalconnectSocketManager::SocketThread() {
 
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 
-                // Send the first frame
-                lockFrameToSend = true;
-
-                INFO_LOG_FMT(FALCONNECT, "Reading data");
-                const std::vector<u8> dataToSend = frameToSend->GetSocketData();
-                INFO_LOG_FMT(FALCONNECT, "Data read");
-
-                lockFrameToSend = false;
-
-                char data[256];
-                data[0] = static_cast<char>(ToServerPacketType::FULL_DATA);
-
-                std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
-
-                send(serverSocket, data, sizeof(data), 0);
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+                shouldRunDataThread = true;
+                std::thread sendThread(&FalconnectSocketManager::DataThread, this);
+                sendThread.detach();
 
                 break;
             }
 
             case FromServerPacketType::FULL_DATA: {
-                // ping spoofing lol
-                //std::this_thread::sleep_for(std::chrono::milliseconds(6));
 
-                INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
-                INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
-                // Set last read frame
-                if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
-                INFO_LOG_FMT(FALCONNECT, "Receiving...");
-
-                for (u8 i = 0; i < 30; i++) {
-                    u8 usedIndex = i;
-                    if (i == 0) usedIndex = playerNumber - 1;
-                    if (i == playerNumber - 1) {
-                      INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
-                        continue; // Skip our data
-                    }
-
-                    INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
-
-                    if (const std::vector<u8> racerData(buffer + 1 + (i * 255), buffer + 1 + ((i + 1) * 255)); racerData[0] == 0x00) {
-                        INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
-                    } else {
-                        RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
-                        // operationQueue.push(OperationType::SET_RACER_BLOCK);
-                        // operationArgumentsQueue.emplace(usedIndex);
-                        // operationArgumentsQueue.emplace(*block);
-
-                        //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
-                        //else updated[i] = true;
-
-                        allBlocks[i] = block;
-                        usedIndices[i] = usedIndex;
-                    }
-                }
-
-                // std::this_thread::sleep_for(std::chrono::milliseconds(16));
-
-                // If exited, stop sending frames
-                if (exited) {
-                    // Reset everything, tell server
-                    hasGridded = false;
-                    start = false;
-                    exited = false;
-                    canLoad = false;
-
-                    char data[256];
-                    data[0] = static_cast<char>(ToServerPacketType::RESET);
-
-                    send(serverSocket, data, sizeof(data), 0);
-
-                    break;
-                }
-
-                if (frameToSend != nullptr) {
-                    INFO_LOG_FMT(FALCONNECT, "Sending...");
-
-                    // Send frame to be sent to remote
-                    timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-                    lockFrameToSend = true;
-
-                    const std::vector<u8> dataToSend = frameToSend->GetSocketData();
-
-                    lockFrameToSend = false;
-
-                    char data[256];
-                    data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
-
-                    std::memcpy(data + 1, dataToSend.data(), dataToSend.size());
-
-                    send(serverSocket, data, sizeof(data), 0);
-                }
 
                 // std::this_thread::sleep_for(std::chrono::milliseconds(25));
                 // }
@@ -407,13 +344,147 @@ void FalconnectSocketManager::SocketThread() {
     }
 
     if (!isError) {
-        char data[256];
+        char data[7680];
         data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
 
-        send(serverSocket, data, sizeof(data), 0);
+        send(serverSocket, data, 256 * (1 + ourCpus), 0);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     delete this;
+}
+
+void FalconnectSocketManager::DataThread() {
+    while (shouldRunDataThread) {
+        // Send our frames
+
+        while (framesToSend[0] == nullptr) {
+            INFO_LOG_FMT(FALCONNECT, "Bad frame!");
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+
+        INFO_LOG_FMT(FALCONNECT, "Sending...");
+
+        // Send frame to be sent to remote
+        timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+        lockFrameToSend = true;
+
+        char data[7680];
+        data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
+
+        int i = 0;
+        int j = 1;
+        for (const RacerMemoryBlock* frame : framesToSend) {
+            if (j > ourCpus + 1) break;
+
+            const std::vector<u8> dataToSend = frame->GetSocketData();
+
+            std::memcpy(data + 1 + i, dataToSend.data(), dataToSend.size());
+
+            i += 255;
+            j++;
+        }
+
+        lockFrameToSend = false;
+
+        sendto(serverUdpSocket,
+            data,
+            256 * (1 + ourCpus),
+            0,
+            reinterpret_cast<sockaddr *>(&serverUdpAddress),
+            sizeof(serverUdpAddress));
+
+        INFO_LOG_FMT(FALCONNECT, "Sent");
+
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+
+        // Receive datagram
+        char buffer[7680] = { 0 };
+        sockaddr_in from{};
+        socklen_t fromLen = sizeof(from);
+
+        recvfrom(serverUdpSocket,
+                             buffer,
+                             sizeof(buffer),
+                             0,
+                             reinterpret_cast<sockaddr *>(&from),
+                             &fromLen);
+
+        // ping spoofing lol
+        // std::this_thread::sleep_for(std::chrono::milliseconds(6));
+
+        INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
+        INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
+        // Set last read frame
+        if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
+        INFO_LOG_FMT(FALCONNECT, "Receiving...");
+
+        const u32 packetNum =
+            ((buffer[1] & 0xff) << 24) |
+                ((buffer[2] & 0xff) << 16) |
+                    ((buffer[3] & 0xff) << 8) |
+                        (buffer[4] & 0xff);
+
+        if (packetNum < lastPacketNum) {
+            INFO_LOG_FMT(FALCONNECT, "Skipping old packet {}", packetNum);
+            break;
+        }
+
+        lastPacketNum = packetNum;
+        INFO_LOG_FMT(FALCONNECT, "Packet {}", packetNum);
+
+        for (u8 i = 0; i < 30; i++) {
+            u8 usedIndex = i;
+            if (i == 0) usedIndex = playerNumber - 1;
+            if (i == playerNumber - 1) {
+              INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+                continue; // Skip our data
+            }
+
+            if (usedIndex >= cpuStartIndex && usedIndex < cpuStartIndex + ourCpus) {
+                INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our CPU", i);
+                continue;
+            }
+
+            INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
+
+            if (const std::vector<u8> racerData(buffer + 5 + (i * 255), buffer + 5 + ((i + 1) * 255)); racerData[0] == 0x00) {
+                INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
+            } else {
+                RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
+                // operationQueue.push(OperationType::SET_RACER_BLOCK);
+                // operationArgumentsQueue.emplace(usedIndex);
+                // operationArgumentsQueue.emplace(*block);
+
+                //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
+                //else updated[i] = true;
+
+                allBlocks[i] = block;
+                usedIndices[i] = usedIndex;
+            }
+        }
+
+        // std::this_thread::sleep_for(std::chrono::milliseconds(16));
+
+        // If exited, stop sending frames
+        if (exited) {
+            // Reset everything, tell server
+            hasGridded = false;
+            start = false;
+            exited = false;
+            canLoad = false;
+            shouldRunDataThread = false;
+
+            char data[7680];
+            data[0] = static_cast<char>(ToServerPacketType::RESET);
+
+            send(serverSocket, data, 256 * (1 + ourCpus), 0);
+
+            break;
+        }
+    }
 }

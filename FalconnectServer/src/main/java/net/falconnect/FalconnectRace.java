@@ -3,6 +3,7 @@ package net.falconnect;
 import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -14,12 +15,17 @@ public class FalconnectRace extends Thread {
   private byte[] fullDataPacket;
 
   public GameState gameState;
+  public boolean isRunning;
 
   public FalconnectRace(FalconnectServer server) throws IOException {
     clients = new ArrayList<>();
     gameState = GameState.WAITING_FOR_READY;
 
     this.server = server;
+    isRunning = true;
+
+    //HackyAssSoftlockPreventionThread hackyAssSoftlockPreventionThread = new HackyAssSoftlockPreventionThread(this);
+    //hackyAssSoftlockPreventionThread.start();
   }
 
   public synchronized boolean HasSpace() {
@@ -99,16 +105,28 @@ public class FalconnectRace extends Thread {
             byte num = 1;
 
             RemoveDisconnectedClients();
+            int aaa = 0;
             for (FalconnectClientConnection client : getClients()) {
               // Re-assign player numbers
               client.playerNum = num;
               num++;
+
+              client.numCpus = (byte) (int) Math.floor((30.0 - getClients().size()) / getClients().size());
+              //client.numCpus = 5;
+              client.cpuStartIndex = (byte) (getClients().size() + aaa);
+              aaa += client.numCpus;
+
+              if (client.udpSocket != null) client.udpSocket.close();
+
+              client.udpSocket = new DatagramSocket(9000 - client.playerNum); // listens
 
               ConnectedMessage connectedMessage = new ConnectedMessage(client);
               connectedMessage.Send();
             }
 
             Thread.sleep(1000);
+
+            RacerIdsMessage.shouldRandomise = true;
 
             for (FalconnectClientConnection client : getClients()) {
               CourseMessage courseMessage = new CourseMessage(client, usedCourse, (byte) (getClients().size() - 1));
@@ -167,6 +185,7 @@ public class FalconnectRace extends Thread {
             RemoveDisconnectedClients();
 
             server.EndRace(this);
+            isRunning = false;
             return;
           }
         }
@@ -188,18 +207,36 @@ public class FalconnectRace extends Thread {
     }
   }
 
+  private long packetNum = 0;
+
   public void ConstructFullDataPacket() {
     byte[] packet = new byte[7680];
     packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
-    int cursor = 1;
+    packetNum++;
+
+    packet[1] = (byte) ((packetNum >>> 24) & 0xff);
+    packet[2] = (byte) ((packetNum >>> 16) & 0xff);
+    packet[3] = (byte) ((packetNum >>> 8) & 0xff);
+    packet[4] = (byte) ((packetNum) & 0xff);
+
+    int cursor;
 
     for (FalconnectClientConnection client : getClients()) {
-      byte[] lastClientData = client.getLastReceivedData();
+      int i = 0;
 
-      // System.out.println(client.playerNum);
+      for (byte[] racerData : client.getLastReceivedData()) {
+        if (i == 0) {
+          // Player's data
+          cursor = ((client.playerNum - 1) * 255) + 5;
+          System.arraycopy(racerData, 0, packet, cursor, 255);
+        } else {
+          // CPU data
+          cursor = ((client.cpuStartIndex + i - 1) * 255) + 5;
+          System.arraycopy(racerData, 0, packet, cursor, 255);
+        }
 
-      System.arraycopy(lastClientData, 1, packet, cursor, 255);
-      cursor += 255;
+        i++;
+      }
     }
 
     fullDataPacket = packet;
@@ -210,11 +247,13 @@ public class FalconnectRace extends Thread {
     ConstructFullDataPacket();
 
     for (FalconnectClientConnection client : getClients()) {
-      if (client.hasUpdated) {
+      //if (client.hasUpdated) {
         FullDataMessage message = new FullDataMessage(client, fullDataPacket);
         message.Send();
         client.hasUpdated = false;
-      }
+      //} else {
+        //System.out.println("Skipped " + client.uid);
+      //}
     }
 
     //System.out.println("Full data packet distributed");

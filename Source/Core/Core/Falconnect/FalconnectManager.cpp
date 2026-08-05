@@ -163,6 +163,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->SetBoostLap(1);
 
         patcher->SetDefaultRaceSettings();
+        patcher->EnablePositionAnnouncementsInPractice();
 
         patcher->SetGrid();
 
@@ -182,7 +183,6 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
-
         // Set racer IDs
         //patcher->SetOpponentRacerId(racerIDs[1]);
         //u8 racerIds[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
@@ -191,6 +191,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         patcher->SetCourse(FalconnectSocketManager::instance->usedCourseId);
         patcher->SetCpuCount(FalconnectSocketManager::instance->cpuCount);
         patcher->SetGrid();
+        //patcher->StopPhysicsOnReceivedMachines();
 
         patcher->StartRaceFromPracticeOptions();
     }
@@ -198,9 +199,19 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     // Wait for the machine to grid, then let the socket manager know we've gridded
     if (currentState == GameState::RACE_LOADED) {
         if (patcher->memoryReader->HasGridded()) {
-            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
+            INFO_LOG_FMT(FALCONNECT, "Sending initial frames");
+
+            for (int i = 0; i < FalconnectSocketManager::instance->ourCpus; i++) {
+                FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(FalconnectSocketManager::instance->cpuStartIndex + i), i + 1);
+                INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
+            }
+
+            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
+            INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
+
             currentState = GameState::RACE_GRIDDED;
             FalconnectSocketManager::instance->hasGridded = true;
+            patcher->EnableAIControlFor(FalconnectSocketManager::instance->cpuStartIndex, FalconnectSocketManager::instance->ourCpus);
         }
     }
 
@@ -216,36 +227,43 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     }
 
     if (currentState == GameState::RACING) {
-        INFO_LOG_FMT(FALCONNECT, "Sending frame");
+        //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Process operation queue and keep frame to send updated
-        FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0));
-        INFO_LOG_FMT(FALCONNECT, "Frame sent");
+        patcher->EnableAIControlFor(FalconnectSocketManager::instance->cpuStartIndex, FalconnectSocketManager::instance->ourCpus);
+        FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
 
-        u16 ping = FalconnectSocketManager::instance->ping - 6;
+        for (int i = 0; i < FalconnectSocketManager::instance->ourCpus; i++) {
+            //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
+            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(FalconnectSocketManager::instance->cpuStartIndex + i), i + 1);
+        }
+        //INFO_LOG_FMT(FALCONNECT, "Frame sent");
+
+        u16 ping = FalconnectSocketManager::instance->ping - 4;
         if (ping > 1000) ping = 1; // overflow
         const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
 
         patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " + std::to_string(packetRate) + "p/s");
 
         patcher->ConstrainMenu();
-        INFO_LOG_FMT(FALCONNECT, "Menu constrained");
+        //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
         frameCount++;
         for (int i = 0; i < 30; i++) {
-            INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
+            //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
             if (const auto racerNum = FalconnectSocketManager::instance->usedIndices[i]; racerNum != 0) {
                 const auto racerBlock = FalconnectSocketManager::instance->allBlocks[i];
 
-                if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
-                    patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 6);
+                // if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
+                    patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 1);
                     lastWrittenBlocks[racerNum - 1] = racerBlock;
                     INFO_LOG_FMT(FALCONNECT, "Racer data set");
-                } else {
-                    INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
-                }
+                // } else {
+                //     //
+                //     //INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
+                // }
             }
         }
-        if (frameCount >= 6) frameCount = 0;
+        if (frameCount >= 1) frameCount = 0;
 
         // Check if we've exited the race to the menu
         if (!patcher->memoryReader->ReadIsInRace()) {

@@ -7,6 +7,8 @@
 #include <mutex>
 #include <queue>
 
+#include "Memmap.h"
+#include "MemoryInterface.h"
 #include "AudioCommon/AudioCommon.h"
 #include "Common/Event.h"
 #include "Common/Thread.h"
@@ -20,6 +22,8 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "Core/TimePlayed.h"
+#include "Core/Falconnect/FalconnectManager.h"
+#include "Core/Falconnect/FalconnectSocketManager.h"
 #include "VideoCommon/Fifo.h"
 
 namespace CPU
@@ -116,6 +120,7 @@ void CPUManager::Run()
   }
 
   std::unique_lock state_lock(m_state_change_lock);
+
   while (m_state != State::PowerDown)
   {
     m_state_cpu_cvar.wait(state_lock, [this] { return !m_state_paused_and_locked; });
@@ -128,6 +133,19 @@ void CPUManager::Run()
     case State::Running:
       m_state_cpu_thread_active = true;
       state_lock.unlock();
+
+
+
+        // Falconnect: If after vehicle block update call, re-update
+        // if (FalconnectSocketManager::instance != nullptr) {
+        //   if (FalconnectManager::instance->currentState == GameState::RACING) {
+        //     if (power_pc.GetPPCState().pc == FalconnectManager::instance->patcher->referencePointer + 0x839a4) {
+        //       const Core::CPUThreadGuard guard(m_system);
+        //
+        //       FalconnectManager::instance->Update(guard);
+        //     }
+        //   }
+        // }
 
       // Adjust PC when debugging
       // SingleStep so that the "continue", "step over" and "step out" debugger functions

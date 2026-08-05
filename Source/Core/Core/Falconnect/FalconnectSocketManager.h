@@ -3,6 +3,7 @@
 #include <queue>
 #include <thread>
 #include <variant>
+#include <netinet/in.h>
 
 #include "OperationType.h"
 #include "RacerMemoryBlock.h"
@@ -18,7 +19,8 @@ public:
     bool lockFrameToSend = false;
 
     void SocketThread();
-    void SendFrame(const RacerMemoryBlock* frame);
+    void DataThread();
+    void SendFrame(RacerMemoryBlock *frame, u8 index);
 
     bool hasConnected = false;
     bool hasProperlyConnected = false;
@@ -37,8 +39,11 @@ public:
     u8 selectedCourse = 1;
     u8 usedCourseId = 1;
     u8 cpuCount = 29;
+    u8 ourCpus = 0;
+    u8 cpuStartIndex = 1;
     std::vector<u8> name;
     std::vector<std::vector<u8>> names;
+    u32 lastPacketNum = 0;
 
     //std::queue<OperationType> operationQueue;
     //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
@@ -50,12 +55,16 @@ public:
 private:
     void Start();
 
-    const RacerMemoryBlock* frameToSend = nullptr;
+    RacerMemoryBlock* framesToSend[30] = {};
 
     int localSocket = 0;
     int serverSocket = 0;
+    int serverUdpSocket = 0;
+    sockaddr_in serverUdpAddress{};
     bool hasStarted = false;
     bool doneFirst = false;
+
+    bool shouldRunDataThread = true;
 
     u32 timeBeforePing = 0;
 };

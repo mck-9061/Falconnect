@@ -40,7 +40,7 @@ public class MessageHandlerThread extends Thread {
 
   public void run() {
     while (true) {
-      byte[] data = new byte[256];
+      byte[] data = new byte[256 * (clientConnection.numCpus + 1)];
 
       try {
         if (clientConnection.fromClientStream.available() > 0) {

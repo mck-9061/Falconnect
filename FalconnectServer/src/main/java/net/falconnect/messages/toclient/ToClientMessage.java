@@ -13,7 +13,7 @@ public abstract class ToClientMessage {
     data = new byte[7680];
   }
 
-  public void SendDataFromThread() throws IOException {
+  public void SendDataFromThread() throws IOException, InterruptedException {
     destination.SendPacket(data);
   }
 

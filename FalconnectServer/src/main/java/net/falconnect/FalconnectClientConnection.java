@@ -62,7 +62,9 @@ public class FalconnectClientConnection {
     System.out.println("Message receiver thread started");
   }
 
-  public void SendPacket(byte[] packet) throws IOException {
+  public void SendPacket(byte[] packet) throws IOException, InterruptedException {
+    Thread.sleep(4);
+
     if (packet[0] == ToClientPacketType.FULL_DATA.ordinal()) {
       if (lastReceivedUdpPort != 0) {
         DatagramPacket dPacket = new DatagramPacket(packet, packet.length, socket.getInetAddress(), lastReceivedUdpPort);

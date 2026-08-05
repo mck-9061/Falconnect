@@ -78,6 +78,7 @@ void FalconnectSocketManager::SocketThread() {
             break;
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
         // Read data from server
         char buffer[7680] = { 0 };
         recv(serverSocket, buffer, sizeof(buffer), 0);

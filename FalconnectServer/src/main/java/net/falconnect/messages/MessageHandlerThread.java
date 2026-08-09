@@ -57,7 +57,7 @@ public class MessageHandlerThread extends Thread {
         if (!messagesToSend.isEmpty()) {
           ToClientMessage message = messagesToSend.take();
           message.SendDataFromThread();
-          Thread.sleep(2);
+          //Thread.sleep(2);
           // System.out.println("Sent message");
         }
 

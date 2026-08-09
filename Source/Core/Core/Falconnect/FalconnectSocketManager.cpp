@@ -66,6 +66,23 @@ void FalconnectSocketManager::SendFrame(RacerMemoryBlock *frame, const u8 index)
     doneFirst = true;
 }
 
+bool recvAll(int sock, char* buffer, int size)
+{
+    int total = 0;
+
+    while (total < size)
+    {
+        int n = recv(sock, buffer + total, size - total, 0);
+
+        if (n <= 0)
+            return false;
+
+        total += n;
+    }
+
+    return true;
+}
+
 void FalconnectSocketManager::SocketThread() {
     Start();
 
@@ -78,10 +95,10 @@ void FalconnectSocketManager::SocketThread() {
             break;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(4));
         // Read data from server
         char buffer[7680] = { 0 };
-        recv(serverSocket, buffer, sizeof(buffer), 0);
+        recvAll(serverSocket, buffer, sizeof(buffer));
 
         switch (static_cast<FromServerPacketType>(buffer[0])) {
             case FromServerPacketType::DISCONNECT: {
@@ -130,7 +147,7 @@ void FalconnectSocketManager::SocketThread() {
 #else
                 close(serverUdpSocket);
 #endif
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
                 serverUdpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -434,7 +451,7 @@ void FalconnectSocketManager::DataThread() {
 
         if (packetNum < lastPacketNum) {
             INFO_LOG_FMT(FALCONNECT, "Skipping old packet {}", packetNum);
-            break;
+            continue;
         }
 
         lastPacketNum = packetNum;

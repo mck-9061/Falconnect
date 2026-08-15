@@ -169,7 +169,7 @@ void OnFrameEnd(Core::System& system)
   const CPUThreadGuard guard(system);
 
   if (FalconnectManager::instance != nullptr) {
-    FalconnectManager::instance->Update(guard);
+    FalconnectManager::instance->Update();
   }
 }
 

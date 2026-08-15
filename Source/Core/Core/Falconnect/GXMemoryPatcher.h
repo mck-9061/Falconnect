@@ -3,13 +3,14 @@
 #include "GXMemoryReader.h"
 #include "Core/Core.h"
 #include "Core/Debugger/PPCDebugInterface.h"
+#include "Core/HW/Memmap.h"
 
 
 class GXMemoryReader;
 
 class GXMemoryPatcher {
 public:
-    explicit GXMemoryPatcher(const Core::CPUThreadGuard& cpuGuard);
+    explicit GXMemoryPatcher();
 
     void Initialise();
 
@@ -44,12 +45,11 @@ public:
     GXMemoryReader* memoryReader;
 
 private:
-    const Core::CPUThreadGuard& guard;
-    PPCDebugInterface& interface;
+    Memory::MemoryManager& manager;
 
     u32 racerBaseAddress;
 
-    void SetSingleByte(u32 address, u8 byte) const;
+    void WriteU8Vector(const std::vector<u8> &in, u32 address) const;
 };
 
 

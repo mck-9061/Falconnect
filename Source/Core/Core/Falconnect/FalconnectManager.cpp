@@ -25,7 +25,7 @@ void FalconnectManager::log(const std::string& message) {
     }
 }
 
-void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
+void FalconnectManager::Update() {
     if (shouldDisplayDisconnectedAlert) {
         shouldDisplayDisconnectedAlert = false;
         SuccessAlertFmt("Lost connection to the Falconnect server.");
@@ -45,7 +45,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
     }
 
     if (patcher == nullptr) {
-        patcher = new GXMemoryPatcher(guard);
+        patcher = new GXMemoryPatcher();
     }
 
     if (!patcher->isReady) {
@@ -186,7 +186,7 @@ void FalconnectManager::Update(const Core::CPUThreadGuard& guard) {
         // Set racer IDs
         //patcher->SetOpponentRacerId(racerIDs[1]);
         //u8 racerIds[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
-        patcher->SetDefaultRaceSettings();
+        //patcher->SetDefaultRaceSettings();
         patcher->SetOpponentRacerIds(racerIDs);
         patcher->SetCourse(FalconnectSocketManager::instance->usedCourseId);
         patcher->SetCpuCount(FalconnectSocketManager::instance->cpuCount);

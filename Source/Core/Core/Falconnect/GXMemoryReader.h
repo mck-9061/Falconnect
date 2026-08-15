@@ -4,15 +4,14 @@
 #include "Common/CommonTypes.h"
 #include "Core/Core.h"
 #include "Core/Debugger/PPCDebugInterface.h"
+#include "Core/HW/Memmap.h"
 
 
 class GXMemoryReader {
 public:
-    explicit GXMemoryReader(const Core::CPUThreadGuard& cpuGuard);
+    explicit GXMemoryReader();
 
     u32 ReadReferencePointer();
-    u8 Read8(u32 offset) const;
-    [[nodiscard]] u16 Read16(u32 offset) const;
 
     [[nodiscard]] u16 ReadGameMode();
     [[nodiscard]] bool ReadSettingsSelectedFlag() const;
@@ -28,8 +27,7 @@ public:
     u32 referencePointer{};
 
 private:
-    const Core::CPUThreadGuard& guard;
-    PPCDebugInterface& interface;
+    Memory::MemoryManager& manager;
 
     u32 lastTime = 0;
     u32 gridTimer = 0;

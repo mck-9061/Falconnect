@@ -45,7 +45,7 @@ public class MessageHandlerThread extends Thread {
       try {
         if (clientConnection.fromClientStream.available() > 0) {
           // System.out.println("Receiving message...");
-          clientConnection.fromClientStream.read(data);
+          clientConnection.fromClientStream.readFully(data);
           // System.out.println("Message received");
 
           byte messageType = data[0];

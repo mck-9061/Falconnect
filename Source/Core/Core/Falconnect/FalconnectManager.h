@@ -22,7 +22,7 @@ public:
     explicit FalconnectManager();
 
     static FalconnectManager* instance;
-    void Update(const Core::CPUThreadGuard& guard);
+    void Update();
 
     GXMemoryPatcher* patcher;
 

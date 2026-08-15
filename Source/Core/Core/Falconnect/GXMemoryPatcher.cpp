@@ -9,11 +9,11 @@
 #include "Core/Debugger/PPCDebugInterface.h"
 #include "Core/PowerPC/PowerPC.h"
 
-GXMemoryPatcher::GXMemoryPatcher(const Core::CPUThreadGuard &cpuGuard) : guard(cpuGuard),
-                                                                         interface(
-                                                                             Core::System::GetInstance().GetPowerPC().
-                                                                             GetDebugInterface()) {
-    memoryReader = new GXMemoryReader(guard);
+GXMemoryPatcher::GXMemoryPatcher() :
+                                                                         manager(
+                                                                             Core::System::GetInstance().GetMemory()) {
+    memoryReader = new GXMemoryReader();
+
     Initialise();
 }
 
@@ -56,21 +56,36 @@ void GXMemoryPatcher::Initialise() {
     isReady = true;
 }
 
+void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address) const {
+    u8 i = 0;
+
+    for (const u8 d : in) {
+        manager.Write_U8(d, address + i);
+        i++;
+    }
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, i, true);
+}
+
 void GXMemoryPatcher::DisableOptionsMenuControl() const {
     const u32 menuControlAddress = referencePointer + 0x3e28f0;
-    interface.SetPatch(guard, menuControlAddress, 0x3c608060);
-    interface.SetPatch(guard, menuControlAddress + 4, 0x60000000);
-    interface.SetPatch(guard, menuControlAddress + 8, 0x88630000);
+    manager.Write_U32(0x3c608060, menuControlAddress);
+    manager.Write_U32(0x60000000, menuControlAddress + 4);
+    manager.Write_U32(0x88630000, menuControlAddress + 8);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(menuControlAddress, 12, true);
 }
 
 void GXMemoryPatcher::FullyDisableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
-    interface.SetPatch(guard, address, 0x60000000);
+    manager.Write_U32(0x60000000, address);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
 }
 
 void GXMemoryPatcher::ReEnableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
-    interface.SetPatch(guard, address, 0x480056d1);
+    manager.Write_U32(0x480056d1, address);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
 }
 
 void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
@@ -81,38 +96,41 @@ void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
     // Blank any existing text
     for (int offset = 0; offset < 100; offset++) {
         const u32 address = textPosition + (offset * 4);
-        interface.SetPatch(guard, address, 0x0);
+        manager.Write_U32(0x0, address);
     }
 
     for (u8 offset = 0; offset < ascii.size(); offset++) {
         const u32 address = textPosition + (offset * 4);
-        interface.SetPatch(guard, address, ascii[offset]);
+        manager.Write_U32(ascii[offset], address);
     }
 
     // Replace pointer
-    interface.SetPatch(guard, pointerAddress, textPosition);
+    manager.Write_U32(textPosition, pointerAddress);
 }
 
 void GXMemoryPatcher::DisableAIControl() const {
     // Set code to set AI movement per CPU
     const u32 freeAddress = referencePointer + 0x1cd1a0;
-    interface.SetPatch(guard, freeAddress, 0x7de802a6);
-    interface.SetPatch(guard, freeAddress + 4, 0x8a0300e0);
-    interface.SetPatch(guard, freeAddress + 8, 0x2c100000);
-    interface.SetPatch(guard, freeAddress + 12, 0x41820008);
-    interface.SetPatch(guard, freeAddress + 16, 0x4bef9e01);
-    interface.SetPatch(guard, freeAddress + 20, 0x7de803a6);
-    interface.SetPatch(guard, freeAddress + 24, 0x4e800020);
+    manager.Write_U32(0x7de802a6, freeAddress);
+    manager.Write_U32(0x8a0300e0, freeAddress + 4);
+    manager.Write_U32(0x2c100000, freeAddress + 8);
+    manager.Write_U32(0x41820008, freeAddress + 12);
+    manager.Write_U32(0x4bef9e01, freeAddress + 16);
+    manager.Write_U32(0x7de803a6, freeAddress + 20);
+    manager.Write_U32(0x4e800020, freeAddress + 24);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(freeAddress, 28, true);
 
     const u32 aiMoveAddress = referencePointer + 0x839a0;
 
-    interface.SetPatch(guard, aiMoveAddress, 0x48149801);
+    manager.Write_U32(0x48149801, aiMoveAddress);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(aiMoveAddress, 4, true);
 }
 
 void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
     if (start == 0) return;
 
-    u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+    u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
     if (baseAddress < 0x80000000) {
         INFO_LOG_FMT(FALCONNECT, "Invalid address!");
         baseAddress = racerBaseAddress;
@@ -126,21 +144,25 @@ void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
 
     for (int i = 0; i < count; i++) {
         const u32 address = baseAddress + ((start + i) * 0x620);
-        SetSingleByte(address + 0xe0, 0x1);
+        manager.Write_U8(0x1, address + 0xe0);
     }
 }
 
 void GXMemoryPatcher::DisableCountdown() const {
     const u32 countdownAddress = referencePointer + 0x34a30;
 
-    interface.SetPatch(guard, countdownAddress, 0x48000150);
+    manager.Write_U32(0x48000150, countdownAddress);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(countdownAddress, 4, true);
 }
 
 void GXMemoryPatcher::InitialiseText() const {
     // Add text function to unused section of memory
     constexpr u32 functionBaseAddress = 0x80400000;
 
-    interface.SetPatch(guard, functionBaseAddress, PowerPCScripts::CustomStringScript);
+    WriteU8Vector(PowerPCScripts::CustomStringScript, functionBaseAddress);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(functionBaseAddress, 200, true);
 
     // Create entry point for text function
     const u32 entryPointAddress = referencePointer + 0xca44c;
@@ -148,13 +170,15 @@ void GXMemoryPatcher::InitialiseText() const {
     const u32 offsetFromBase = functionBaseAddress - entryPointAddress;
     const u32 instruction = 0x48000000 + offsetFromBase + 1;
 
-    interface.SetPatch(guard, entryPointAddress, instruction);
+    manager.Write_U32(instruction, entryPointAddress);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(entryPointAddress, 4, true);
 
     // // Add text
     // for (int offset = 0; offset < 11; offset++) {
     //     constexpr u32 textAddress = 0x80390000;
     //     const u32 address = textAddress + (offset * 4);
-    //     interface.SetPatch(guard, address, PowerPCScripts::InitialText[offset]);
+    //     manager.Write_U32(address, PowerPCScripts::InitialText[offset]);
     // }
     SetRenderedText("Falconnect C++ Port Test | Do a barrel roll!");
 
@@ -166,76 +190,91 @@ void GXMemoryPatcher::InitialiseText() const {
     constexpr auto bitsX = std::bit_cast<uint32_t>(x);
     constexpr auto bitsY = std::bit_cast<uint32_t>(y);
 
-    interface.SetPatch(guard, positionFloatsAddress, bitsX);
-    interface.SetPatch(guard, positionFloatsAddress + 8, bitsY);
+    manager.Write_U32(bitsX, positionFloatsAddress);
+    manager.Write_U32(bitsY, positionFloatsAddress + 8);
 }
 
 void GXMemoryPatcher::SetBoostLap(const u8 lap) const {
-    interface.SetPatch(guard, referencePointer + 0x3294c, 0x60000000); // NOP check for practice mode on lap 2 boost announcement
-    interface.SetPatch(guard, referencePointer + 0x34b68, 0x60000000); // NOP announcement at start of practice mode
-    interface.SetPatch(guard, referencePointer + 0x33300, 0x60000000); // NOP practice mode check in boost
+    manager.Write_U32(0x60000000, referencePointer + 0x3294c); // NOP check for practice mode on lap 2 boost announcement
+    manager.Write_U32(0x60000000, referencePointer + 0x34b68); // NOP announcement at start of practice mode
+    manager.Write_U32(0x60000000, referencePointer + 0x33300); // NOP practice mode check in boost
 
-    interface.SetPatch(guard, referencePointer + 0xc91ec, 0x4800017c); // Nullify check for practice mode in energy bar render
+    manager.Write_U32(0x4800017c, referencePointer + 0xc91ec); // Nullify check for practice mode in energy bar render
 
-    interface.SetPatch(guard, referencePointer + 0x3330C, 0x2c000000 + lap); // Set lap check for boost
-    interface.SetPatch(guard, referencePointer + 0xc91d8, 0x2c000001 + lap); // Set lap check for energy bar render
-    interface.SetPatch(guard, referencePointer + 0x32938, 0x281e0000 + lap); // Set lap check for announcement
+    manager.Write_U32(0x2c000000 + lap, referencePointer + 0x3330C); // Set lap check for boost
+    manager.Write_U32(0x2c000001 + lap, referencePointer + 0xc91d8); // Set lap check for energy bar render
+    manager.Write_U32(0x281e0000 + lap, referencePointer + 0x32938); // Set lap check for announcement
+
+    // Invalidations
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x3294c, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x34b68, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x33300, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0xc91ec, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x3330C, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0xc91d8, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x32938, 4, true);
 }
 
 void GXMemoryPatcher::StartRaceFromPracticeOptions() const {
-    interface.SetPatch(guard, 0x80600000, 0x01010101);
+    manager.Write_U32(0x01010101, 0x80600000);
 }
 
 void GXMemoryPatcher::StartCountdown() const {
     const u32 countdownAddress = referencePointer + 0x34a30;
 
-    interface.SetPatch(guard, countdownAddress, 0x40820150);
+    manager.Write_U32(0x40820150, countdownAddress);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(countdownAddress, 4, true);
 }
 
 void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
     const u32 idLoadAddress = referencePointer + 0x00034E40;
 
     // Replace instruction to load the correct racer ID to always load given ID
-    //interface.SetPatch(guard, idLoadAddress, 0x3AA00000 + racerID);
+    //manager.Write_U32(idLoadAddress, 0x3AA00000 + racerID);
 
     // Load array into memory
     for (int i = 0; i < 31; i++) {
         const u32 address = 0x803d1a00 + i;
         if (i == 0) {
-            interface.SetPatch(guard, address, 0); // index
+            manager.Write_U8(0, address); // index
             continue;
         }
 
-        u32 data = static_cast<u32>(racerIDs[i - 1]) << 24;
-        if (data == 0) data = 0x06000000;
+        u8 data = racerIDs[i - 1];
+        if (data == 0) data = 0x06;
 
-        interface.SetPatch(guard, address, data);
+        manager.Write_U8(data, address);
     }
 
     // Create function to read IDs from array
     constexpr u32 functionAddress = 0x803d1aa0;
 
-    interface.SetPatch(guard, functionAddress, 0x3dc0803d);
-    interface.SetPatch(guard, functionAddress + 4, 0x61cf1a00);
-    interface.SetPatch(guard, functionAddress + 8, 0x8a0f0000);
-    interface.SetPatch(guard, functionAddress + 12, 0x3a300001);
-    interface.SetPatch(guard, functionAddress + 16, 0x9a2f0000);
-    interface.SetPatch(guard, functionAddress + 20, 0x7eaf88ae);
-    interface.SetPatch(guard, functionAddress + 24, 0x39c00000);
-    interface.SetPatch(guard, functionAddress + 28, 0x61cf0000);
-    interface.SetPatch(guard, functionAddress + 32, 0x7dee7b78);
-    interface.SetPatch(guard, functionAddress + 36, 0x7df07b78);
-    interface.SetPatch(guard, functionAddress + 40, 0x7df17b78);
-    interface.SetPatch(guard, functionAddress + 44, 0x4e800020);
+    manager.Write_U32(0x3dc0803d, functionAddress);
+    manager.Write_U32(0x61cf1a00, functionAddress + 4);
+    manager.Write_U32(0x8a0f0000, functionAddress + 8);
+    manager.Write_U32(0x3a300001, functionAddress + 12);
+    manager.Write_U32(0x9a2f0000, functionAddress + 16);
+    manager.Write_U32(0x7eaf88ae, functionAddress + 20);
+    manager.Write_U32(0x39c00000, functionAddress + 24);
+    manager.Write_U32(0x61cf0000, functionAddress + 28);
+    manager.Write_U32(0x7dee7b78, functionAddress + 32);
+    manager.Write_U32(0x7df07b78, functionAddress + 36);
+    manager.Write_U32(0x7df17b78, functionAddress + 40);
+    manager.Write_U32(0x4e800020, functionAddress + 44);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(functionAddress, 48, true);
 
     // Set jump instruction
-    interface.SetPatch(guard, idLoadAddress, 0x48000001 + (functionAddress - idLoadAddress));
+    manager.Write_U32(0x48000001 + (functionAddress - idLoadAddress), idLoadAddress);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(idLoadAddress, 4, true);
 
     const u32 racer_check_address = idLoadAddress + 60;
 
     // Remove duplicate racer check
-    interface.SetPatch(guard, racer_check_address, 0x60000000);
-    interface.SetPatch(guard, racer_check_address + 8, 0x60000000);
+    manager.Write_U32(0x60000000, racer_check_address);
+    manager.Write_U32(0x60000000, racer_check_address + 8);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(racer_check_address, 12, true);
 }
 
 void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
@@ -244,7 +283,7 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
     for (int offset = 0; offset < 100; offset++) {
         constexpr u32 textAddress = 0x80390000;
         const u32 address = textAddress + (offset * 4);
-        interface.SetPatch(guard, address, 0x0);
+        manager.Write_U32(0x0, address);
     }
 
     //INFO_LOG_FMT(FALCONNECT, "Setting text");
@@ -253,34 +292,26 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
     for (u8 offset = 0; offset < rep.size(); offset++) {
         constexpr u32 textAddress = 0x80390000;
         const u32 address = textAddress + (offset * 4);
-        interface.SetPatch(guard, address, rep[offset]);
+        manager.Write_U32(rep[offset], address);
     }
 }
 
 void GXMemoryPatcher::SetDefaultRaceSettings() const {
-    SetSingleByte(referencePointer + 0x24550d, 0x04); // 4 CPU
-    SetSingleByte(referencePointer + 0x245517, 0x01); // Allow restore
-    SetSingleByte(referencePointer + 0x24551b, 0x03); // 3 laps
-    SetSingleByte(referencePointer + 0x2453e9, 0x03); // Master
-    SetSingleByte(referencePointer + 0x2453eb, 0x03); // Master
+    manager.Write_U8(0x04, referencePointer + 0x24550d); // 4 CPU
+    manager.Write_U8(0x01, referencePointer + 0x245517); // Allow restore
+    manager.Write_U8(0x03, referencePointer + 0x24551b); // 3 laps
+    manager.Write_U8(0x03, referencePointer + 0x2453e9); // Master
+    manager.Write_U8(0x03, referencePointer + 0x2453eb); // Master
 }
 
 void GXMemoryPatcher::SetCpuCount(const u8 cpuCount) const {
-    SetSingleByte(referencePointer + 0x24550d, cpuCount);
-}
-
-void GXMemoryPatcher::SetSingleByte(const u32 address, const u8 byte) const {
-    const u32 mem = interface.ReadMemory(guard, address);
-
-    const u32 read = ((mem << 8) >> 8) | (static_cast<u32>(byte) << 24); // 10 cpus
-
-    interface.SetPatch(guard, address, read);
+    manager.Write_U8(cpuCount, referencePointer + 0x24550d);
 }
 
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &patchData, bool full) {
     if (racerNum == 0) return;
 
-  u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+  u32 baseAddress = manager.Read_U32(referencePointer + 0x227878) + (racerNum * 0x620);
 
     INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
@@ -297,88 +328,88 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
 
 
 
-  interface.SetPatch(guard, baseAddress, patchData.state);
+  manager.Write_U32(patchData.state, baseAddress);
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
-    SetSingleByte(baseAddress, 0x04);
+    manager.Write_U8(0x04, baseAddress);
 
     if (full) {
-        interface.SetPatch(guard, baseAddress + (31 * 4), patchData.centerPosition[0]);
-        interface.SetPatch(guard, baseAddress + (32 * 4), patchData.centerPosition[1]);
-        interface.SetPatch(guard, baseAddress + (33 * 4), patchData.centerPosition[2]);
+        manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
+        manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
+        manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
         //
-        interface.SetPatch(guard, baseAddress + (34 * 4), patchData.lastCenterPosition[0]);
-        interface.SetPatch(guard, baseAddress + (35 * 4), patchData.lastCenterPosition[1]);
-        interface.SetPatch(guard, baseAddress + (36 * 4), patchData.lastCenterPosition[2]);
+        manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
+        manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));
+        manager.Write_U32(patchData.lastCenterPosition[2], baseAddress + (36 * 4));
         //
-        // interface.SetPatch(guard, baseAddress + 0x1e0, patchData.lastCenterPosition[0]);
-        // interface.SetPatch(guard, baseAddress + 0x1e4, patchData.lastCenterPosition[1]);
-        // interface.SetPatch(guard, baseAddress + 0x1e8, patchData.lastCenterPosition[2]);
+        // manager.Write_U32(baseAddress + 0x1e0, patchData.lastCenterPosition[0]);
+        // manager.Write_U32(baseAddress + 0x1e4, patchData.lastCenterPosition[1]);
+        // manager.Write_U32(baseAddress + 0x1e8, patchData.lastCenterPosition[2]);
 
-        interface.SetPatch(guard, baseAddress + 0x158, patchData.centerPosOscX);
-        interface.SetPatch(guard, baseAddress + 0x168, patchData.centerPosOscY);
-        interface.SetPatch(guard, baseAddress + 0x178, patchData.centerPosOscZ);
+        manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
+        manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
+        manager.Write_U32(patchData.centerPosOscZ, baseAddress + 0x178);
 
         // set last center position to received center position?
-        // interface.SetPatch(guard, baseAddress + (34 * 4), patchData.centerPosition[0]);
-        // interface.SetPatch(guard, baseAddress + (35 * 4), patchData.centerPosition[1]);
-        // interface.SetPatch(guard, baseAddress + (36 * 4), patchData.centerPosition[2]);
+        // manager.Write_U32(baseAddress + (34 * 4), patchData.centerPosition[0]);
+        // manager.Write_U32(baseAddress + (35 * 4), patchData.centerPosition[1]);
+        // manager.Write_U32(baseAddress + (36 * 4), patchData.centerPosition[2]);
 
-        interface.SetPatch(guard, baseAddress + (37 * 4), patchData.velocityWorld[0]);
-        interface.SetPatch(guard, baseAddress + (38 * 4), patchData.velocityWorld[1]);
-        interface.SetPatch(guard, baseAddress + (39 * 4), patchData.velocityWorld[2]);
+        manager.Write_U32(patchData.velocityWorld[0], baseAddress + (37 * 4));
+        manager.Write_U32(patchData.velocityWorld[1], baseAddress + (38 * 4));
+        manager.Write_U32(patchData.velocityWorld[2], baseAddress + (39 * 4));
         //
-        interface.SetPatch(guard, baseAddress + (46 * 4), patchData.velocityMachine[0]);
-        interface.SetPatch(guard, baseAddress + (47 * 4), patchData.velocityMachine[1]);
-        interface.SetPatch(guard, baseAddress + (48 * 4), patchData.velocityMachine[2]);
-        //interface.SetPatch(guard, baseAddress + 0xd4, patchData.velocityMachine[2]);
+        manager.Write_U32(patchData.velocityMachine[0], baseAddress + (46 * 4));
+        manager.Write_U32(patchData.velocityMachine[1], baseAddress + (47 * 4));
+        manager.Write_U32(patchData.velocityMachine[2], baseAddress + (48 * 4));
+        //manager.Write_U32(baseAddress + 0xd4, patchData.velocityMachine[2]);
 
-        interface.SetPatch(guard, baseAddress + (59 * 4), patchData.orientationWorld[0]);
-        interface.SetPatch(guard, baseAddress + (60 * 4), patchData.orientationWorld[1]);
-        interface.SetPatch(guard, baseAddress + (61 * 4), patchData.orientationWorld[2]);
+        manager.Write_U32(patchData.orientationWorld[0], baseAddress + (59 * 4));
+        manager.Write_U32(patchData.orientationWorld[1], baseAddress + (60 * 4));
+        manager.Write_U32(patchData.orientationWorld[2], baseAddress + (61 * 4));
 
-        interface.SetPatch(guard, baseAddress + (63 * 4), patchData.upVector[0]);
-        interface.SetPatch(guard, baseAddress + (64 * 4), patchData.upVector[1]);
-        interface.SetPatch(guard, baseAddress + (65 * 4), patchData.upVector[2]);
+        manager.Write_U32(patchData.upVector[0], baseAddress + (63 * 4));
+        manager.Write_U32(patchData.upVector[1], baseAddress + (64 * 4));
+        manager.Write_U32(patchData.upVector[2], baseAddress + (65 * 4));
 
-        interface.SetPatch(guard, baseAddress + (67 * 4), patchData.orientationGravity[0]);
-        interface.SetPatch(guard, baseAddress + (68 * 4), patchData.orientationGravity[1]);
-        interface.SetPatch(guard, baseAddress + (69 * 4), patchData.orientationGravity[2]);
+        manager.Write_U32(patchData.orientationGravity[0], baseAddress + (67 * 4));
+        manager.Write_U32(patchData.orientationGravity[1], baseAddress + (68 * 4));
+        manager.Write_U32(patchData.orientationGravity[2], baseAddress + (69 * 4));
 
-        interface.SetPatch(guard, baseAddress + (95 * 4), patchData.speed);
-        interface.SetPatch(guard, baseAddress + (96 * 4), patchData.arialTilt);
+        manager.Write_U32(patchData.speed, baseAddress + (95 * 4));
+        manager.Write_U32(patchData.arialTilt, baseAddress + (96 * 4));
         //
-        interface.SetPatch(guard, baseAddress + (111 * 4), patchData.trackOrientation[0]);
-        interface.SetPatch(guard, baseAddress + (112 * 4), patchData.trackOrientation[1]);
-        interface.SetPatch(guard, baseAddress + (113 * 4), patchData.trackOrientation[2]);
+        manager.Write_U32(patchData.trackOrientation[0], baseAddress + (111 * 4));
+        manager.Write_U32(patchData.trackOrientation[1], baseAddress + (112 * 4));
+        manager.Write_U32(patchData.trackOrientation[2], baseAddress + (113 * 4));
 
-        interface.SetPatch(guard, baseAddress + (117 * 4), patchData.bottomPosition[0]);
-        interface.SetPatch(guard, baseAddress + (118 * 4), patchData.bottomPosition[1]);
-        interface.SetPatch(guard, baseAddress + (119 * 4), patchData.bottomPosition[2]);
+        manager.Write_U32(patchData.bottomPosition[0], baseAddress + (117 * 4));
+        manager.Write_U32(patchData.bottomPosition[1], baseAddress + (118 * 4));
+        manager.Write_U32(patchData.bottomPosition[2], baseAddress + (119 * 4));
     }
 
-    interface.SetPatch(guard, baseAddress + (97 * 4), patchData.energy);
+    manager.Write_U32(patchData.energy, baseAddress + (97 * 4));
 
-  interface.SetPatch(guard, baseAddress + (123 * 4), patchData.inputs[0]);
-  interface.SetPatch(guard, baseAddress + (124 * 4), patchData.inputs[1]);
-  interface.SetPatch(guard, baseAddress + (125 * 4), patchData.inputs[2]);
+  manager.Write_U32(patchData.inputs[0], baseAddress + (123 * 4));
+  manager.Write_U32(patchData.inputs[1], baseAddress + (124 * 4));
+  manager.Write_U32(patchData.inputs[2], baseAddress + (125 * 4));
   INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
-  interface.SetPatch(guard, baseAddress + (126 * 4), patchData.inputs[3]);
-  interface.SetPatch(guard, baseAddress + (127 * 4), patchData.inputs[4]);
-  interface.SetPatch(guard, baseAddress + (128 * 4), patchData.inputs[5]);
-  interface.SetPatch(guard, baseAddress + (129 * 4), patchData.inputs[6]);
+  manager.Write_U32(patchData.inputs[3], baseAddress + (126 * 4));
+  manager.Write_U32(patchData.inputs[4], baseAddress + (127 * 4));
+  manager.Write_U32(patchData.inputs[5], baseAddress + (128 * 4));
+  manager.Write_U32(patchData.inputs[6], baseAddress + (129 * 4));
 
-  interface.SetPatch(guard, baseAddress + (388 * 4), patchData.sideAttack);
+  manager.Write_U32(patchData.sideAttack, baseAddress + (388 * 4));
 
-    interface.SetPatch(guard, baseAddress + (54 * 4), patchData.maxSpeedKmh);
-    interface.SetPatch(guard, baseAddress + (136 * 4), patchData.acceleration);
-    interface.SetPatch(guard, baseAddress + (137 * 4), patchData.baseSpeed);
-    interface.SetPatch(guard, baseAddress + (139 * 4), patchData.maxSpeed);
+    manager.Write_U32(patchData.maxSpeedKmh, baseAddress + (54 * 4));
+    manager.Write_U32(patchData.acceleration, baseAddress + (136 * 4));
+    manager.Write_U32(patchData.baseSpeed, baseAddress + (137 * 4));
+    manager.Write_U32(patchData.maxSpeed, baseAddress + (139 * 4));
 
-    interface.SetPatch(guard, baseAddress + (12 * 4), patchData.restoreFlag);
+    manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 }
 
 void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {
-    const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878) + (racerNum * 0x620);
+    const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878) + (racerNum * 0x620);
 
     INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
@@ -387,7 +418,7 @@ void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u
         return;
     }
 
-    interface.SetPatch(guard, baseAddress + 0x3c, name);
+    WriteU8Vector(name, baseAddress + 0x3c);
 }
 
 void GXMemoryPatcher::SetGrid() const {
@@ -414,12 +445,12 @@ void GXMemoryPatcher::SetGrid() const {
     //     const u32 loadInstruction = 0x39c00000 + numToInsert;
     //     const u32 storeInstruction = 0xb1c30000 + (i * 2);
     //
-    //     interface.SetPatch(guard, address + (i * 8), loadInstruction);
-    //     interface.SetPatch(guard, address + (i * 8) + 4, storeInstruction);
+    //     manager.Write_U32(address + (i * 8), loadInstruction);
+    //     manager.Write_U32(address + (i * 8) + 4, storeInstruction);
     // }
     //
-    // interface.SetPatch(guard, address + (30 * 8), 0x39c00000); // Reset r14
-    // interface.SetPatch(guard, address + (30 * 8) + 4, 0x4e800020); // Return
+    // manager.Write_U32(address + (30 * 8), 0x39c00000); // Reset r14
+    // manager.Write_U32(address + (30 * 8) + 4, 0x4e800020); // Return
 
     const u32 address = referencePointer + 0x85bf8;
     const u32 offsetToFreeAddress = 0x80376a00 - address;
@@ -434,41 +465,52 @@ void GXMemoryPatcher::SetGrid() const {
         const u32 loadInstruction = 0x39c00000 + playerNumToInsert;
         const u32 storeInstruction = 0xb1c30000 + (i * 2);
 
-        interface.SetPatch(guard, 0x80376a00 + (i * 8), loadInstruction);
-        interface.SetPatch(guard, 0x80376a00 + (i * 8) + 4, storeInstruction);
+        manager.Write_U32(loadInstruction, 0x80376a00 + (i * 8));
+        manager.Write_U32(storeInstruction, 0x80376a00 + (i * 8) + 4);
+
+        Core::System::GetInstance().GetJitInterface().InvalidateICache(0x80376a00 + (i * 8), 8, true);
     }
 
-    interface.SetPatch(guard, 0x80376a00 + (30 * 8), 0x39c00000); // Reset r14
-    interface.SetPatch(guard, 0x80376a00 + (30 * 8) + 4, 0x4e800020); // Return
+    manager.Write_U32(0x39c00000, 0x80376a00 + (30 * 8)); // Reset r14
+    manager.Write_U32(0x4e800020, 0x80376a00 + (30 * 8) + 4); // Return
 
-    interface.SetPatch(guard, address, jumpInstruction);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(0x80376a00 + (30 * 8), 8, true);
+
+    manager.Write_U32(jumpInstruction, address);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(jumpInstruction, 4, true);
 }
 
 void GXMemoryPatcher::SetCourse(const u8 courseID) const {
     const u32 address = referencePointer + 0x245471;
-    SetSingleByte(address, courseID);
+    manager.Write_U8(courseID, address);
 }
 
 void GXMemoryPatcher::ConstrainMenu() const {
     const u32 address = referencePointer + 0x1bf144;
 
-    if (const u8 current = memoryReader->Read8(0x1bf144); current == 3 || current == 5) {
-        SetSingleByte(address, 6);
+    if (const u8 current = manager.Read_U8(referencePointer + 0x1bf144); current == 3 || current == 5) {
+        manager.Write_U8(6, address);
     }
 }
 
 void GXMemoryPatcher::InitialiseNameLabels() const {
     // Set font
-    SetSingleByte(referencePointer + 0x12a217, 0x03);
+    manager.Write_U8(0x03, referencePointer + 0x12a217);
 
     // Force all drivers to be rivals
-    interface.SetPatch(guard, referencePointer + 0x129bc4, 0x3ae00001);
+    manager.Write_U32(0x3ae00001, referencePointer + 0x129bc4);
 
     // Branch to new code to load pointer
-    interface.SetPatch(guard, referencePointer + 0x129c3c, 0x48092d65);
-    interface.SetPatch(guard, referencePointer + 0x129c88, 0x48092d19);
-    interface.SetPatch(guard, referencePointer + 0x129ce4, 0x48092cbd);
-    interface.SetPatch(guard, referencePointer + 0x129d10, 0x48092c91);
+    manager.Write_U32(0x48092d65, referencePointer + 0x129c3c);
+    manager.Write_U32(0x48092d19, referencePointer + 0x129c88);
+    manager.Write_U32(0x48092cbd, referencePointer + 0x129ce4);
+    manager.Write_U32(0x48092c91, referencePointer + 0x129d10);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129c3c, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129c88, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129ce4, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129d10, 4, true);
 
     // New code: Load pointer into r5
     // pointer = base pointer + (0x20 * r27)
@@ -481,12 +523,14 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
 
     const u32 codeAddress = referencePointer + 0x1bc9a0;
 
-    interface.SetPatch(guard, codeAddress, 0x1d1b0020);
-    interface.SetPatch(guard, codeAddress + 4, 0x3ca08037);
-    interface.SetPatch(guard, codeAddress + 8, 0x60a57d00);
-    interface.SetPatch(guard, codeAddress + 12, 0x7ca54214);
-    interface.SetPatch(guard, codeAddress + 16, 0x39000000);
-    interface.SetPatch(guard, codeAddress + 20, 0x4e800020);
+    manager.Write_U32(0x1d1b0020, codeAddress);
+    manager.Write_U32(0x3ca08037, codeAddress + 4);
+    manager.Write_U32(0x60a57d00, codeAddress + 8);
+    manager.Write_U32(0x7ca54214, codeAddress + 12);
+    manager.Write_U32(0x39000000, codeAddress + 16);
+    manager.Write_U32(0x4e800020, codeAddress + 20);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(codeAddress, 24, true);
 
     // Set names
     for (int i = 0; i < 30; i++) {
@@ -501,43 +545,48 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
         }
 
         const u32 nameAddress = 0x80377d00 + usedIndex * 32;
-        interface.SetPatch(guard, nameAddress, FalconnectSocketManager::instance->names[i]);
+        WriteU8Vector(FalconnectSocketManager::instance->names[i], nameAddress);
         SetRacerMachineName(usedIndex, FalconnectSocketManager::instance->names[i]);
     }
 }
 
 void GXMemoryPatcher::ResetToTitle() const {
-    interface.ClearPatches(guard);
-    interface.SetPC(0x80003154);
-    //interface.SetPatch(guard, referencePointer + 0x245474, 0x24000100);
+    Core::System::GetInstance().GetPowerPC().GetDebugInterface().SetPC(0x80003154);
+    //manager.Write_U32(referencePointer + 0x245474, 0x24000100);
 }
 
 void GXMemoryPatcher::EnablePositionAnnouncementsInPractice() const {
     // Bypass mode check in finish announcement
-    interface.SetPatch(guard, referencePointer + 0x15c81c, 0x3b80012c);
-    interface.SetPatch(guard, referencePointer + 0x15c82c, 0x3b80012c);
+    manager.Write_U32(0x3b80012c, referencePointer + 0x15c81c);
+    manager.Write_U32(0x3b80012c, referencePointer + 0x15c82c);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x15c81c, 0x14, true);
 }
 
 void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
     // Add code to only update machine if 0xe0 == 1 or 0x00 == 80
-    u32 codeAddress = referencePointer + 0x1d63a0;
+    const u32 codeAddress = referencePointer + 0x1d63a0;
 
-    interface.SetPatch(guard, codeAddress, 0x7de802a6);
-    interface.SetPatch(guard, codeAddress + 4, 0x8a0300e0);
-    interface.SetPatch(guard, codeAddress + 8, 0x2c100000);
-    interface.SetPatch(guard, codeAddress + 12, 0x4182001c);
-    interface.SetPatch(guard, codeAddress + 16, 0x3e000006);
-    interface.SetPatch(guard, codeAddress + 20, 0x6210059c);
-    interface.SetPatch(guard, codeAddress + 24, 0x7e107850);
-    interface.SetPatch(guard, codeAddress + 28, 0x7e0803a6);
-    interface.SetPatch(guard, codeAddress + 32, 0x4e800021);
-    interface.SetPatch(guard, codeAddress + 36, 0x48000010);
-    interface.SetPatch(guard, codeAddress + 40, 0x8a030000);
-    interface.SetPatch(guard, codeAddress + 44, 0x2c100080);
-    interface.SetPatch(guard, codeAddress + 48, 0x4080ffe0);
-    interface.SetPatch(guard, codeAddress + 52, 0x7de803a6);
-    interface.SetPatch(guard, codeAddress + 56, 0x4e800020);
+    manager.Write_U32(0x7de802a6, codeAddress);
+    manager.Write_U32(0x8a0300e0, codeAddress + 4);
+    manager.Write_U32(0x2c100000, codeAddress + 8);
+    manager.Write_U32(0x4182001c, codeAddress + 12);
+    manager.Write_U32(0x3e000006, codeAddress + 16);
+    manager.Write_U32(0x6210059c, codeAddress + 20);
+    manager.Write_U32(0x7e107850, codeAddress + 24);
+    manager.Write_U32(0x7e0803a6, codeAddress + 28);
+    manager.Write_U32(0x4e800021, codeAddress + 32);
+    manager.Write_U32(0x48000010, codeAddress + 36);
+    manager.Write_U32(0x8a030000, codeAddress + 40);
+    manager.Write_U32(0x2c100080, codeAddress + 44);
+    manager.Write_U32(0x4080ffe0, codeAddress + 48);
+    manager.Write_U32(0x7de803a6, codeAddress + 52);
+    manager.Write_U32(0x4e800020, codeAddress + 56);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(codeAddress, 60, true);
 
     // Branch to this
-    interface.SetPatch(guard, referencePointer + 0x83d40,0x48152661);
+    manager.Write_U32(0x48152661,referencePointer + 0x83d40);
+
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x83d40, 4, true);
 }

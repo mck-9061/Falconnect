@@ -5,12 +5,12 @@
 #include "Core/System.h"
 #include "Core/PowerPC/PowerPC.h"
 
-GXMemoryReader::GXMemoryReader(const Core::CPUThreadGuard &cpuGuard) : guard(cpuGuard), interface(Core::System::GetInstance().GetPowerPC().GetDebugInterface()) {
+GXMemoryReader::GXMemoryReader() : manager(Core::System::GetInstance().GetMemory()) {
 }
 
 u32 GXMemoryReader::ReadReferencePointer() {
     constexpr u32 address = 0x800030c8;
-    referencePointer = interface.ReadMemory(guard, address);
+    referencePointer = manager.Read_U32(address);
 
     std::stringstream stream;
     stream << std::hex << referencePointer;
@@ -18,27 +18,8 @@ u32 GXMemoryReader::ReadReferencePointer() {
     return referencePointer;
 }
 
-u8 GXMemoryReader::Read8(const u32 offset) const {
-    const u32 address = referencePointer + offset;
-    const u32 mem = interface.ReadMemory(guard, address);
-
-    const u8 read = static_cast<u8>(mem >> 24);
-
-    return read;
-}
-
-u16 GXMemoryReader::Read16(const u32 offset) const {
-    const u32 address = referencePointer + offset;
-    const u32 mem = interface.ReadMemory(guard, address);
-
-    const u16 read = static_cast<u8>(mem >> 16);
-
-    return read;
-}
-
 u16 GXMemoryReader::ReadGameMode() {
-    const u16 mode = Read16(0x2453e0);
-    if (mode != lastReadMode) {
+    if (const u16 mode = manager.Read_U16(referencePointer + 0x2453e0); mode != lastReadMode) {
         modeChangeCount++;
 
         if (modeChangeCount > 10) {
@@ -53,17 +34,17 @@ u16 GXMemoryReader::ReadGameMode() {
 }
 
 bool GXMemoryReader::ReadSettingsSelectedFlag() const {
-    const u16 state = Read16(0x2454e2);
+    const u16 state = manager.Read_U16(referencePointer + 0x2454e2);
     return state == 7;
 }
 
 bool GXMemoryReader::ReadIsInRace() const {
-    const u16 state = Read16(0x2454e2);
+    const u16 state = manager.Read_U16(referencePointer + 0x2454e2);
     return state != 0;
 }
 
 RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
-    const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+    const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
 
     std::stringstream stream;
     stream << std::hex << baseAddress;
@@ -74,7 +55,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     std::vector<u32> dolphinMemory;
 
     for (int offset = 0; offset <= 0x620; offset += 0x4) {
-        u32 read = interface.ReadMemory(guard, address + offset);
+        u32 read = manager.Read_U32(address + offset);
         dolphinMemory.push_back(read);
     }
 
@@ -86,7 +67,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
 
 std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
 {
-  const u32 baseAddress = interface.ReadMemory(guard, referencePointer + 0x227878);
+  const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
 
   std::stringstream stream;
   stream << std::hex << baseAddress;
@@ -97,7 +78,7 @@ std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
 
   for (int offset = 0; offset <= 0x620; offset += 0x4)
   {
-    u32 read = interface.ReadMemory(guard, address + offset);
+    u32 read = manager.Read_U32(address + offset);
     dolphinMemory.push_back(read);
   }
 
@@ -105,7 +86,7 @@ std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
 }
 
 char GXMemoryReader::ReadSelectedRacerID() const {
-    const char id = static_cast<char>(Read8(0x2453ef));
+    const char id = static_cast<char>(manager.Read_U8(referencePointer + 0x2453ef));
     return id;
 }
 
@@ -128,7 +109,7 @@ bool GXMemoryReader::HasGridded() {
 }
 
 u8 GXMemoryReader::ReadSelectedCourse() const {
-    const char id = static_cast<char>(Read8(0x245471));
+    const char id = static_cast<char>(manager.Read_U8(referencePointer + 0x245471));
     return id;
 }
 
@@ -137,7 +118,7 @@ std::vector<u8> GXMemoryReader::ReadName() const {
 
     name.reserve(32);
     for (int i = 0; i < 32; i++) {
-        name.push_back(Read8(0x230e41 + i));
+        name.push_back(manager.Read_U8(referencePointer + 0x230e41 + i));
     }
 
     return name;

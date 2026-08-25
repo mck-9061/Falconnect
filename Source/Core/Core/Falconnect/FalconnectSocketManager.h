@@ -51,6 +51,7 @@ public:
     //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
 
     RacerMemoryBlock* allBlocks[30];
+    RacerMemoryBlock* ourLastKnownData;
     u8 usedIndices[30];
     bool updated[30];
 

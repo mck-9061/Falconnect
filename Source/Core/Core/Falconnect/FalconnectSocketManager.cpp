@@ -397,18 +397,19 @@ void FalconnectSocketManager::MemoryThread() const {
                     //INFO_LOG_FMT(FALCONNECT, "Racer data set");
                 }
             }
-
-            //std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            const u32 time = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            //FalconnectManager::instance->patcher->SetRenderedText(std::to_string(time - timeBeforeUpdate));
-            timeBeforeUpdate = time;
         }
     }
 }
 
 void FalconnectSocketManager::SendDataThread() {
     u32 sentCount = 0;
+    u32 timeBeforeUpdate = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
     while (shouldRunDataThread) {
+        int sendPing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforeUpdate;
+        INFO_LOG_FMT(FALCONNECT, "Send delay: {}", sendPing);
+        timeBeforeUpdate = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
         if (FalconnectManager::instance->currentState != GameState::RACING) continue;
         // Send our frames
         sentCount++;
@@ -462,7 +463,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         //INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        //std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
     }
 }
 
@@ -508,6 +509,11 @@ void FalconnectSocketManager::DataThread() {
             if (i == 0) usedIndex = playerNumber - 1;
             if (i == playerNumber - 1) {
               //INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+
+                // Store the server's last known position of us
+                const std::vector<u8> racerData(buffer + 5 + (i * 124), buffer + 5 + ((i + 1) * 124));
+                ourLastKnownData = RacerMemoryBlock::CreateFromSocketData(racerData);
+
                 continue; // Skip our data
             }
 
@@ -526,14 +532,17 @@ void FalconnectSocketManager::DataThread() {
                 // operationArgumentsQueue.emplace(usedIndex);
                 // operationArgumentsQueue.emplace(*block);
 
-                //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
-                //else updated[i] = true;
+                if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
+                else updated[i] = true;
 
                 allBlocks[i] = block;
                 usedIndices[i] = usedIndex;
 
-                //FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
-                //FalconnectManager::instance->lastWrittenBlocks[usedIndex - 1] = block;
+                //if (updated[i]) {
+                    FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
+                //} else {
+                    //FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, false);
+                //}
             }
         }
 

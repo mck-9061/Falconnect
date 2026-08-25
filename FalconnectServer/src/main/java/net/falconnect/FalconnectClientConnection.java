@@ -40,6 +40,7 @@ public class FalconnectClientConnection {
   private final UDPHandlerThread udpHandlerThread;
 
   private List<byte[]> lastReceivedData;
+  public byte[] dataToSend;
 
   public FalconnectClientConnection(Socket socket) throws IOException {
     this.socket = socket;

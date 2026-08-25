@@ -4,9 +4,9 @@ import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
 import java.net.DatagramSocket;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.*;
 
 public class FalconnectRace extends Thread {
   private List<FalconnectClientConnection> clients;
@@ -59,7 +59,7 @@ public class FalconnectRace extends Thread {
   public void run() {
     while (true) {
       try {
-        Thread.sleep(6);
+        Thread.sleep(4);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -225,6 +225,8 @@ public class FalconnectRace extends Thread {
     packet[3] = (byte) ((packetNum >>> 8) & 0xff);
     packet[4] = (byte) ((packetNum) & 0xff);
 
+    //HashMap<Integer, Set<Float>> playerPositions = new HashMap<>();
+
     int cursor;
 
     for (FalconnectClientConnection client : getClients()) {
@@ -235,15 +237,52 @@ public class FalconnectRace extends Thread {
           // Player's data
           cursor = ((client.playerNum - 1) * 124) + 5;
           System.arraycopy(racerData, 0, packet, cursor, 124);
+
+          //playerPositions.put(client.playerNum - 1, new HashSet<>());
+          // Get racer's position from received data
+//          byte[] x = new byte[4];
+//          byte[] y = new byte[4];
+//          byte[] z = new byte[4];
+//          System.arraycopy(racerData, 4, x, 0, 4);
+//          System.arraycopy(racerData, 8, y, 0, 4);
+//          System.arraycopy(racerData, 12, z, 0, 4);
+//
+//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(x).order(ByteOrder.BIG_ENDIAN).getFloat());
+//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(y).order(ByteOrder.BIG_ENDIAN).getFloat());
+//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(z).order(ByteOrder.BIG_ENDIAN).getFloat());
+
         } else {
           // CPU data
           cursor = ((client.cpuStartIndex + i - 1) * 124) + 5;
           System.arraycopy(racerData, 0, packet, cursor, 124);
+
+          //playerPositions.put(client.cpuStartIndex + i - 1, new HashSet<>());
+          // Get racer's position from received data
+//          byte[] x = new byte[4];
+//          byte[] y = new byte[4];
+//          byte[] z = new byte[4];
+//          System.arraycopy(racerData, 4, x, 0, 4);
+//          System.arraycopy(racerData, 8, y, 0, 4);
+//          System.arraycopy(racerData, 12, z, 0, 4);
+//
+//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(x).order(ByteOrder.BIG_ENDIAN).getFloat());
+//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(y).order(ByteOrder.BIG_ENDIAN).getFloat());
+//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(z).order(ByteOrder.BIG_ENDIAN).getFloat());
         }
 
         i++;
       }
     }
+
+    // Calculate offsets for each racer's position
+//    for (FalconnectClientConnection client : getClients()) {
+//      byte[] toSend = new byte[3844];
+//      System.arraycopy(packet, 0, toSend, 0, 3844);
+//
+//      for (Integer racer : playerPositions.keySet()) {
+//
+//      }
+//    }
 
     fullDataPacket = packet;
     // System.out.println("Packet constructed");

@@ -29,6 +29,7 @@ public class FalconnectClientConnection {
   public byte cpuStartIndex;
 
   public int lastReceivedUdpPort;
+  public int lastReceivedCount;
 
   public boolean hasUpdated = false;
   public boolean disconnected = false;
@@ -53,6 +54,7 @@ public class FalconnectClientConnection {
     name[0] = 0x46;
     numCpus = 0;
     cpuStartIndex = 1;
+    lastReceivedCount = 0;
 
     receiveMessageThread = new MessageHandlerThread(this);
     receiveMessageThread.start();

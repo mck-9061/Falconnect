@@ -57,7 +57,7 @@ void GXMemoryPatcher::Initialise() {
 }
 
 void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address) const {
-    u8 i = 0;
+    u16 i = 0;
 
     for (const u8 d : in) {
         manager.Write_U8(d, address + i);
@@ -162,7 +162,7 @@ void GXMemoryPatcher::InitialiseText() const {
 
     WriteU8Vector(PowerPCScripts::CustomStringScript, functionBaseAddress);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(functionBaseAddress, 200, true);
+    //Core::System::GetInstance().GetJitInterface().InvalidateICache(functionBaseAddress, 200, true);
 
     // Create entry point for text function
     const u32 entryPointAddress = referencePointer + 0xca44c;
@@ -478,7 +478,7 @@ void GXMemoryPatcher::SetGrid() const {
 
     manager.Write_U32(jumpInstruction, address);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(jumpInstruction, 4, true);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
 }
 
 void GXMemoryPatcher::SetCourse(const u8 courseID) const {
@@ -500,6 +500,7 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
 
     // Force all drivers to be rivals
     manager.Write_U32(0x3ae00001, referencePointer + 0x129bc4);
+    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129bc4, 4, true);
 
     // Branch to new code to load pointer
     manager.Write_U32(0x48092d65, referencePointer + 0x129c3c);

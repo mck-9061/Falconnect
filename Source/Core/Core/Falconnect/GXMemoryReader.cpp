@@ -69,6 +69,13 @@ std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
 {
   const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
 
+    if (baseAddress < 0x80000000 || baseAddress > 0x81000000) {
+        INFO_LOG_FMT(FALCONNECT, "Invalid racer pointer!");
+        std::vector<u32> dolphinMemory;
+        dolphinMemory.push_back(0);
+        return dolphinMemory;
+    }
+
   std::stringstream stream;
   stream << std::hex << baseAddress;
 
@@ -93,9 +100,22 @@ char GXMemoryReader::ReadSelectedRacerID() const {
 bool GXMemoryReader::HasGridded() {
     if (lastTime == 0) lastTime = time(nullptr);
 
-    if (const std::vector<u32> data = ReadRawRacerData(0); data[0] & 0x0000FF00) {
+    const std::vector<u32> data = ReadRawRacerData(0);
+
+    if (data[0] == 0) {
+        lastTime = time(nullptr);
+        return false;
+    }
+
+    if (time(nullptr) - lastTime > 1) {
+        lastTime = time(nullptr);
+    }
+
+    if (data[0] & 0x0000FF00) {
         gridTimer += (time(nullptr) - lastTime);
         INFO_LOG_FMT(FALCONNECT, "{}", gridTimer);
+    } else {
+        gridTimer = 0;
     }
 
     if (gridTimer > 3) {

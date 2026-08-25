@@ -141,6 +141,8 @@ public class FalconnectRace extends Thread {
               StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
               Thread.sleep(20);
               message.Send();
+
+              client.lastReceivedCount = 0;
             }
           }
         }

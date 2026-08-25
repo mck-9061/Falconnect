@@ -376,12 +376,14 @@ void FalconnectSocketManager::SocketThread() {
 }
 
 void FalconnectSocketManager::DataThread() {
+    u32 sentCount = 0;
     while (shouldRunDataThread) {
         // Send our frames
+        sentCount++;
 
         while (framesToSend[0] == nullptr) {
             INFO_LOG_FMT(FALCONNECT, "Bad frame!");
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         INFO_LOG_FMT(FALCONNECT, "Sending...");
@@ -394,6 +396,11 @@ void FalconnectSocketManager::DataThread() {
         char data[7680];
         data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
 
+        data[1] = static_cast<char>((sentCount >> 24) & 0xff);
+        data[2] = static_cast<char>((sentCount >> 16) & 0xff);
+        data[3] = static_cast<char>((sentCount >> 8) & 0xff);
+        data[4] = static_cast<char>(sentCount & 0xff);
+
         int i = 0;
         int j = 1;
         for (const RacerMemoryBlock* frame : framesToSend) {
@@ -401,7 +408,7 @@ void FalconnectSocketManager::DataThread() {
 
             const std::vector<u8> dataToSend = frame->GetSocketData();
 
-            std::memcpy(data + 1 + i, dataToSend.data(), dataToSend.size());
+            std::memcpy(data + 5 + i, dataToSend.data(), dataToSend.size());
 
             i += 255;
             j++;
@@ -411,16 +418,16 @@ void FalconnectSocketManager::DataThread() {
 
         sendto(serverUdpSocket,
             data,
-            256 * (1 + ourCpus),
+            256 * (1 + ourCpus) + 4,
             0,
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));
 
         INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(4));
-        }
+        // {
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        // }
 
         // Receive datagram
         char buffer[7680] = { 0 };
@@ -483,8 +490,11 @@ void FalconnectSocketManager::DataThread() {
                 //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
                 //else updated[i] = true;
 
-                allBlocks[i] = block;
-                usedIndices[i] = usedIndex;
+                // allBlocks[i] = block;
+                // usedIndices[i] = usedIndex;
+
+                FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
+                FalconnectManager::instance->lastWrittenBlocks[usedIndex - 1] = block;
             }
         }
 

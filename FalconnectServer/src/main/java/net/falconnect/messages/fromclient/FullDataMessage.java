@@ -14,14 +14,26 @@ public class FullDataMessage extends FromClientMessage {
   public void ProcessMessage() {
     List<byte[]> allData = new ArrayList<>();
 
-    for (int i = 0; i < 1 + origin.numCpus; i++) {
-      byte[] racerData = new byte[255];
-      System.arraycopy(data, 1 + (i * 255), racerData, 0, 255);
-      allData.add(racerData);
+    int count = data[1] << 24;
+    count += data[2] << 16;
+    count += data[3] << 8;
+    count += data[4];
+
+    if (count > origin.lastReceivedCount) {
+      origin.lastReceivedCount = count;
+      for (int i = 0; i < 1 + origin.numCpus; i++) {
+        byte[] racerData = new byte[255];
+        System.arraycopy(data, 5 + (i * 255), racerData, 0, 255);
+        allData.add(racerData);
+      }
+
+      origin.setLastReceivedData(allData);
+      origin.hasUpdated = true;
+    } else {
+      System.out.println("Skipping old packet");
     }
 
-    origin.setLastReceivedData(allData);
-    origin.hasUpdated = true;
+
 
     //System.out.println("Received data starting with " + data[1]);
   }

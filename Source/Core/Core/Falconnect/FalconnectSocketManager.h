@@ -21,6 +21,7 @@ public:
     void SocketThread();
     void DataThread();
     void MemoryThread() const;
+    void SendDataThread();
     void SendFrame(RacerMemoryBlock *frame, u8 index);
 
     bool hasConnected = false;

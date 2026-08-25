@@ -316,11 +316,14 @@ void FalconnectSocketManager::SocketThread() {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 
                 shouldRunDataThread = true;
-                std::thread sendThread(&FalconnectSocketManager::DataThread, this);
-                sendThread.detach();
+                std::thread readThread(&FalconnectSocketManager::DataThread, this);
+                readThread.detach();
 
                 std::thread memThread(&FalconnectSocketManager::MemoryThread, this);
                 memThread.detach();
+
+                std::thread sendThread(&FalconnectSocketManager::SendDataThread, this);
+                sendThread.detach();
 
                 break;
             }
@@ -395,15 +398,16 @@ void FalconnectSocketManager::MemoryThread() const {
 
             //std::this_thread::sleep_for(std::chrono::milliseconds(1));
             const u32 time = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-            FalconnectManager::instance->patcher->SetRenderedText(std::to_string(time - timeBeforeUpdate));
+            //FalconnectManager::instance->patcher->SetRenderedText(std::to_string(time - timeBeforeUpdate));
             timeBeforeUpdate = time;
         }
     }
 }
 
-void FalconnectSocketManager::DataThread() {
+void FalconnectSocketManager::SendDataThread() {
     u32 sentCount = 0;
     while (shouldRunDataThread) {
+        if (FalconnectManager::instance->currentState != GameState::RACING) continue;
         // Send our frames
         sentCount++;
 
@@ -451,10 +455,12 @@ void FalconnectSocketManager::DataThread() {
 
         INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        // {
-        //     std::this_thread::sleep_for(std::chrono::milliseconds(4));
-        // }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
 
+void FalconnectSocketManager::DataThread() {
+    while (shouldRunDataThread) {
         // Receive datagram
         char buffer[7680] = { 0 };
         sockaddr_in from{};

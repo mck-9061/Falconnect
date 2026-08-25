@@ -59,7 +59,7 @@ public class FalconnectRace extends Thread {
   public void run() {
     while (true) {
       try {
-        Thread.sleep(2);
+        Thread.sleep(5);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }

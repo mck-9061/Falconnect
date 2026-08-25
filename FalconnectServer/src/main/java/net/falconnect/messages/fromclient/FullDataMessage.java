@@ -14,10 +14,10 @@ public class FullDataMessage extends FromClientMessage {
   public void ProcessMessage() {
     List<byte[]> allData = new ArrayList<>();
 
-    int count = data[1] << 24;
-    count += data[2] << 16;
-    count += data[3] << 8;
-    count += data[4];
+    int count = (data[1] & 0xff) << 24;
+    count |= (data[2] & 0xff) << 16;
+    count |= (data[3] & 0xff) << 8;
+    count |= (data[4] & 0xff);
 
     if (count > origin.lastReceivedCount) {
       origin.lastReceivedCount = count;

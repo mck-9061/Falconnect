@@ -56,11 +56,7 @@ public class MessageHandlerThread extends Thread {
         // Check if there's any messages to send
         if (!messagesToSend.isEmpty()) {
           ToClientMessage message = messagesToSend.take();
-          if (message instanceof net.falconnect.messages.toclient.FullDataMessage) {
-
-          } else {
-            message.SendDataFromThread();
-          }
+          message.SendDataFromThread();
           //Thread.sleep(2);
           // System.out.println("Sent message");
         }

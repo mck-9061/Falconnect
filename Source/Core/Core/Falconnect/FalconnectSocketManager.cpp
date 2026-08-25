@@ -411,6 +411,13 @@ void FalconnectSocketManager::SendDataThread() {
         // Send our frames
         sentCount++;
 
+        instance->SendFrame(FalconnectManager::instance->patcher->memoryReader->ReadRacerData(0), 0);
+
+        for (int i = 0; i < instance->ourCpus; i++) {
+            //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
+            instance->SendFrame(FalconnectManager::instance->patcher->memoryReader->ReadRacerData(instance->cpuStartIndex + i), i + 1);
+        }
+
         while (framesToSend[0] == nullptr) {
             INFO_LOG_FMT(FALCONNECT, "Bad frame!");
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -455,7 +462,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(4));
     }
 }
 

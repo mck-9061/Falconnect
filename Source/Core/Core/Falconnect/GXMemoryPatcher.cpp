@@ -311,7 +311,7 @@ void GXMemoryPatcher::SetCpuCount(const u8 cpuCount) const {
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &patchData, bool full) {
     if (racerNum == 0) return;
 
-  u32 baseAddress = manager.Read_U32(referencePointer + 0x227878) + (racerNum * 0x620);
+  u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
 
     INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
@@ -325,6 +325,8 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
     }
 
     racerBaseAddress = baseAddress;
+
+    baseAddress += (racerNum * 0x620);
 
 
 

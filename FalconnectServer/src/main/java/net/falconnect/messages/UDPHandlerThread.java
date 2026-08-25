@@ -22,7 +22,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class UDPHandlerThread extends Thread {
   FalconnectClientConnection clientConnection;
 
-  public BlockingQueue<ToClientMessage> messagesToSend;
+  public BlockingQueue<ToClientMessage> messagesToProcess;
 
   // Dictionary of message type bytes to from-client message classes
   HashMap<Byte, Class<? extends FromClientMessage>> messageTypes = new HashMap<>();
@@ -30,7 +30,7 @@ public class UDPHandlerThread extends Thread {
   public UDPHandlerThread(FalconnectClientConnection clientConnection) {
     this.clientConnection = clientConnection;
 
-    messagesToSend = new LinkedBlockingQueue<>();
+    messagesToProcess = new LinkedBlockingQueue<>();
 
     messageTypes.put((byte) 0x1, FullDataMessage.class);
   }
@@ -39,6 +39,7 @@ public class UDPHandlerThread extends Thread {
     while (!clientConnection.disconnected) {
       if (clientConnection.udpSocket != null) {
         byte[] data = new byte[124 * (clientConnection.numCpus + 1) + 5];
+
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
         try {

@@ -38,7 +38,8 @@ void FalconnectSocketManager::Start() {
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
+        //inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
+        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -154,7 +155,8 @@ void FalconnectSocketManager::SocketThread() {
                 serverUdpAddress.sin_family = AF_INET;
                 serverUdpAddress.sin_port = htons(9000 - playerNumber);
 
-                inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
+                //inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
+                inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
 
                 // connect(serverUdpSocket, reinterpret_cast<struct sockaddr *>(&serverUdpAddress), sizeof(serverUdpAddress));
 
@@ -423,11 +425,9 @@ void FalconnectSocketManager::SendDataThread() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
-        INFO_LOG_FMT(FALCONNECT, "Sending...");
+        //INFO_LOG_FMT(FALCONNECT, "Sending...");
 
         // Send frame to be sent to remote
-        timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
         lockFrameToSend = true;
 
         char data[3844];
@@ -460,9 +460,9 @@ void FalconnectSocketManager::SendDataThread() {
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));
 
-        INFO_LOG_FMT(FALCONNECT, "Sent");
+        //INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
 
@@ -483,11 +483,11 @@ void FalconnectSocketManager::DataThread() {
         // ping spoofing lol
         // std::this_thread::sleep_for(std::chrono::milliseconds(6));
 
-        INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
-        INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
+        //INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
+        //INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
         // Set last read frame
         if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
-        INFO_LOG_FMT(FALCONNECT, "Receiving...");
+        //INFO_LOG_FMT(FALCONNECT, "Receiving...");
 
         const u32 packetNum =
             ((buffer[1] & 0xff) << 24) |
@@ -496,30 +496,30 @@ void FalconnectSocketManager::DataThread() {
                         (buffer[4] & 0xff);
 
         if (packetNum < lastPacketNum) {
-            INFO_LOG_FMT(FALCONNECT, "Skipping old packet {}", packetNum);
+            //INFO_LOG_FMT(FALCONNECT, "Skipping old packet {}", packetNum);
             continue;
         }
 
         lastPacketNum = packetNum;
-        INFO_LOG_FMT(FALCONNECT, "Packet {}", packetNum);
+        //INFO_LOG_FMT(FALCONNECT, "Packet {}", packetNum);
 
         for (u8 i = 0; i < 30; i++) {
             u8 usedIndex = i;
             if (i == 0) usedIndex = playerNumber - 1;
             if (i == playerNumber - 1) {
-              INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+              //INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
                 continue; // Skip our data
             }
 
             if (usedIndex >= cpuStartIndex && usedIndex < cpuStartIndex + ourCpus) {
-                INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our CPU", i);
+                //INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our CPU", i);
                 continue;
             }
 
-            INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
+            //INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
 
             if (const std::vector<u8> racerData(buffer + 5 + (i * 124), buffer + 5 + ((i + 1) * 124)); racerData[0] == 0x00) {
-                INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
+                //INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
             } else {
                 RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
                 // operationQueue.push(OperationType::SET_RACER_BLOCK);
@@ -555,5 +555,7 @@ void FalconnectSocketManager::DataThread() {
 
             break;
         }
+
+        timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
 }

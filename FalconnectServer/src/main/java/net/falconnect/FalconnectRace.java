@@ -111,8 +111,8 @@ public class FalconnectRace extends Thread {
               client.playerNum = num;
               num++;
 
-              client.numCpus = (byte) (int) Math.floor((30.0 - getClients().size()) / getClients().size());
-              //client.numCpus = 5;
+              //client.numCpus = (byte) (int) Math.floor((30.0 - getClients().size()) / getClients().size());
+              client.numCpus = 5;
               client.cpuStartIndex = (byte) (getClients().size() + aaa);
               aaa += client.numCpus;
 

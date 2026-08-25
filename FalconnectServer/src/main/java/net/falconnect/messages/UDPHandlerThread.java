@@ -38,7 +38,7 @@ public class UDPHandlerThread extends Thread {
   public void run() {
     while (!clientConnection.disconnected) {
       if (clientConnection.udpSocket != null) {
-        byte[] data = new byte[256 * (clientConnection.numCpus + 1)];
+        byte[] data = new byte[124 * (clientConnection.numCpus + 1) + 5];
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
         try {

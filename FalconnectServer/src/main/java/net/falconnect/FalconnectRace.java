@@ -233,12 +233,12 @@ public class FalconnectRace extends Thread {
       for (byte[] racerData : client.getLastReceivedData()) {
         if (i == 0) {
           // Player's data
-          cursor = ((client.playerNum - 1) * 255) + 5;
-          System.arraycopy(racerData, 0, packet, cursor, 255);
+          cursor = ((client.playerNum - 1) * 124) + 5;
+          System.arraycopy(racerData, 0, packet, cursor, 124);
         } else {
           // CPU data
-          cursor = ((client.cpuStartIndex + i - 1) * 255) + 5;
-          System.arraycopy(racerData, 0, packet, cursor, 255);
+          cursor = ((client.cpuStartIndex + i - 1) * 124) + 5;
+          System.arraycopy(racerData, 0, packet, cursor, 124);
         }
 
         i++;

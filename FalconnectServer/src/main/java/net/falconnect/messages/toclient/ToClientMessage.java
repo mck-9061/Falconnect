@@ -10,7 +10,7 @@ public abstract class ToClientMessage {
 
   protected ToClientMessage(FalconnectClientConnection destination) {
     this.destination = destination;
-    data = new byte[7680];
+    data = new byte[3844];
   }
 
   public void SendDataFromThread() throws IOException, InterruptedException {

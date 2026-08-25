@@ -339,17 +339,17 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
         manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
         //
-        manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
-        manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));
-        manager.Write_U32(patchData.lastCenterPosition[2], baseAddress + (36 * 4));
+        //manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
+        //manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));
+        //manager.Write_U32(patchData.lastCenterPosition[2], baseAddress + (36 * 4));
         //
         // manager.Write_U32(baseAddress + 0x1e0, patchData.lastCenterPosition[0]);
         // manager.Write_U32(baseAddress + 0x1e4, patchData.lastCenterPosition[1]);
         // manager.Write_U32(baseAddress + 0x1e8, patchData.lastCenterPosition[2]);
 
-        manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
-        manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
-        manager.Write_U32(patchData.centerPosOscZ, baseAddress + 0x178);
+        //manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
+        //manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
+        //manager.Write_U32(patchData.centerPosOscZ, baseAddress + 0x178);
 
         // set last center position to received center position?
         // manager.Write_U32(baseAddress + (34 * 4), patchData.centerPosition[0]);
@@ -360,9 +360,9 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         manager.Write_U32(patchData.velocityWorld[1], baseAddress + (38 * 4));
         manager.Write_U32(patchData.velocityWorld[2], baseAddress + (39 * 4));
         //
-        manager.Write_U32(patchData.velocityMachine[0], baseAddress + (46 * 4));
-        manager.Write_U32(patchData.velocityMachine[1], baseAddress + (47 * 4));
-        manager.Write_U32(patchData.velocityMachine[2], baseAddress + (48 * 4));
+        //manager.Write_U32(patchData.velocityMachine[0], baseAddress + (46 * 4));
+        //manager.Write_U32(patchData.velocityMachine[1], baseAddress + (47 * 4));
+        //manager.Write_U32(patchData.velocityMachine[2], baseAddress + (48 * 4));
         //manager.Write_U32(baseAddress + 0xd4, patchData.velocityMachine[2]);
 
         manager.Write_U32(patchData.orientationWorld[0], baseAddress + (59 * 4));
@@ -380,25 +380,25 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         manager.Write_U32(patchData.speed, baseAddress + (95 * 4));
         manager.Write_U32(patchData.arialTilt, baseAddress + (96 * 4));
         //
-        manager.Write_U32(patchData.trackOrientation[0], baseAddress + (111 * 4));
-        manager.Write_U32(patchData.trackOrientation[1], baseAddress + (112 * 4));
-        manager.Write_U32(patchData.trackOrientation[2], baseAddress + (113 * 4));
+        //manager.Write_U32(patchData.trackOrientation[0], baseAddress + (111 * 4));
+        //manager.Write_U32(patchData.trackOrientation[1], baseAddress + (112 * 4));
+        //manager.Write_U32(patchData.trackOrientation[2], baseAddress + (113 * 4));
 
-        manager.Write_U32(patchData.bottomPosition[0], baseAddress + (117 * 4));
-        manager.Write_U32(patchData.bottomPosition[1], baseAddress + (118 * 4));
-        manager.Write_U32(patchData.bottomPosition[2], baseAddress + (119 * 4));
+        //manager.Write_U32(patchData.bottomPosition[0], baseAddress + (117 * 4));
+        //manager.Write_U32(patchData.bottomPosition[1], baseAddress + (118 * 4));
+        //manager.Write_U32(patchData.bottomPosition[2], baseAddress + (119 * 4));
     }
 
     manager.Write_U32(patchData.energy, baseAddress + (97 * 4));
 
-  // manager.Write_U32(patchData.inputs[0], baseAddress + (123 * 4));
-  // manager.Write_U32(patchData.inputs[1], baseAddress + (124 * 4));
-  // manager.Write_U32(patchData.inputs[2], baseAddress + (125 * 4));
-  // INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
-  // manager.Write_U32(patchData.inputs[3], baseAddress + (126 * 4));
-  // manager.Write_U32(patchData.inputs[4], baseAddress + (127 * 4));
-  // manager.Write_U32(patchData.inputs[5], baseAddress + (128 * 4));
-  // manager.Write_U32(patchData.inputs[6], baseAddress + (129 * 4));
+  manager.Write_U32(patchData.inputs[0], baseAddress + (123 * 4));
+  manager.Write_U32(patchData.inputs[1], baseAddress + (124 * 4));
+  manager.Write_U32(patchData.inputs[2], baseAddress + (125 * 4));
+  INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
+  manager.Write_U32(patchData.inputs[3], baseAddress + (126 * 4));
+  manager.Write_U32(patchData.inputs[4], baseAddress + (127 * 4));
+  manager.Write_U32(patchData.inputs[5], baseAddress + (128 * 4));
+  manager.Write_U32(patchData.inputs[6], baseAddress + (129 * 4));
 
   manager.Write_U32(patchData.sideAttack, baseAddress + (388 * 4));
 

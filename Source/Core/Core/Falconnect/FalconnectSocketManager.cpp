@@ -97,7 +97,7 @@ void FalconnectSocketManager::SocketThread() {
 
         //std::this_thread::sleep_for(std::chrono::milliseconds(4));
         // Read data from server
-        char buffer[7680] = { 0 };
+        char buffer[3844] = { 0 };
         recvAll(serverSocket, buffer, sizeof(buffer));
 
         switch (static_cast<FromServerPacketType>(buffer[0])) {
@@ -159,14 +159,14 @@ void FalconnectSocketManager::SocketThread() {
                 // connect(serverUdpSocket, reinterpret_cast<struct sockaddr *>(&serverUdpAddress), sizeof(serverUdpAddress));
 
                 // Send our name
-                char data1[7680];
+                char data1[3844];
                 data1[0] = static_cast<char>(ToServerPacketType::NAME);
 
                 for (int i = 1; i <= 32; i++) {
                     data1[i] = static_cast<char>(name[i]);
                 }
 
-                send(serverSocket, data1, 256 * (1 + ourCpus), 0);
+                send(serverSocket, data1, 124 * (1 + ourCpus) + 5, 0);
 
                 // Connected: Wait for us to be ready
                 while (!canLoad) {
@@ -183,19 +183,19 @@ void FalconnectSocketManager::SocketThread() {
                 }
 
                 // First send our selected racer ID, then say we're ready
-                char data[7680];
+                char data[3844];
                 data[0] = static_cast<char>(ToServerPacketType::SETTINGS);
                 data[1] = static_cast<char>(racerId);
                 data[2] = static_cast<char>(selectedCourse);
 
-                send(serverSocket, data, 256 * (1 + ourCpus), 0);
+                send(serverSocket, data, 124 * (1 + ourCpus) + 5, 0);
 
-                char data2[7680];
+                char data2[3844];
                 data2[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data2[1] = static_cast<char>(ClientState::READY);
                 data2[2] = 1;
 
-                send(serverSocket, data2, 256 * (1 + ourCpus), 0);
+                send(serverSocket, data2, 124 * (1 + ourCpus) + 5, 0);
 
                 break;
             }
@@ -299,12 +299,12 @@ void FalconnectSocketManager::SocketThread() {
                     break;
                 }
 
-                char data[7680];
+                char data[3844];
                 data[0] = static_cast<char>(ToServerPacketType::UPDATE_STATE);
                 data[1] = static_cast<char>(ClientState::GRIDDED);
                 data[2] = 1;
 
-                send(serverSocket, data, 256 * (1 + ourCpus), 0);
+                send(serverSocket, data, 124 * (1 + ourCpus) + 5, 0);
 
                 break;
             }
@@ -370,10 +370,10 @@ void FalconnectSocketManager::SocketThread() {
     }
 
     if (!isError) {
-        char data[7680];
+        char data[3844];
         data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
 
-        send(serverSocket, data, 256 * (1 + ourCpus), 0);
+        send(serverSocket, data, 124 * (1 + ourCpus) + 5, 0);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -430,7 +430,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         lockFrameToSend = true;
 
-        char data[7680];
+        char data[3844];
         data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
 
         data[1] = static_cast<char>((sentCount >> 24) & 0xff);
@@ -447,7 +447,7 @@ void FalconnectSocketManager::SendDataThread() {
 
             std::memcpy(data + 5 + i, dataToSend.data(), dataToSend.size());
 
-            i += 255;
+            i += 124;
             j++;
         }
 
@@ -455,7 +455,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         sendto(serverUdpSocket,
             data,
-            256 * (1 + ourCpus) + 4,
+            124 * (1 + ourCpus) + 5,
             0,
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));
@@ -469,7 +469,7 @@ void FalconnectSocketManager::SendDataThread() {
 void FalconnectSocketManager::DataThread() {
     while (shouldRunDataThread) {
         // Receive datagram
-        char buffer[7680] = { 0 };
+        char buffer[3844] = { 0 };
         sockaddr_in from{};
         socklen_t fromLen = sizeof(from);
 
@@ -518,7 +518,7 @@ void FalconnectSocketManager::DataThread() {
 
             INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
 
-            if (const std::vector<u8> racerData(buffer + 5 + (i * 255), buffer + 5 + ((i + 1) * 255)); racerData[0] == 0x00) {
+            if (const std::vector<u8> racerData(buffer + 5 + (i * 124), buffer + 5 + ((i + 1) * 124)); racerData[0] == 0x00) {
                 INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
             } else {
                 RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
@@ -548,10 +548,10 @@ void FalconnectSocketManager::DataThread() {
             canLoad = false;
             shouldRunDataThread = false;
 
-            char data[7680];
+            char data[3844];
             data[0] = static_cast<char>(ToServerPacketType::RESET);
 
-            send(serverSocket, data, 256 * (1 + ourCpus), 0);
+            send(serverSocket, data, 124 * (1 + ourCpus) + 5, 0);
 
             break;
         }

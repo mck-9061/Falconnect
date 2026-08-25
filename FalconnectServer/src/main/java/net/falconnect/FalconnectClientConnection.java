@@ -1,6 +1,7 @@
 package net.falconnect;
 
 import net.falconnect.messages.MessageHandlerThread;
+import net.falconnect.messages.MessageSenderThread;
 import net.falconnect.messages.UDPHandlerThread;
 import net.falconnect.messages.toclient.ToClientMessage;
 
@@ -35,6 +36,7 @@ public class FalconnectClientConnection {
   public boolean disconnected = false;
 
   private final MessageHandlerThread receiveMessageThread;
+  private final MessageSenderThread sendMessageThread;
   private final UDPHandlerThread udpHandlerThread;
 
   private List<byte[]> lastReceivedData;
@@ -59,6 +61,9 @@ public class FalconnectClientConnection {
     receiveMessageThread = new MessageHandlerThread(this);
     receiveMessageThread.start();
 
+    sendMessageThread = new MessageSenderThread(this);
+    sendMessageThread.start();
+
     udpHandlerThread = new UDPHandlerThread(this);
     udpHandlerThread.start();
     System.out.println("Message receiver thread started");
@@ -81,7 +86,7 @@ public class FalconnectClientConnection {
   }
 
   public void SendMessage(ToClientMessage message) throws InterruptedException {
-    receiveMessageThread.messagesToSend.put(message);
+    sendMessageThread.messagesToSend.put(message);
   }
 
   public synchronized List<byte[]> getLastReceivedData() {

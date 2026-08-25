@@ -5,6 +5,7 @@ import net.falconnect.FalconnectClientConnection;
 import net.falconnect.GameState;
 import net.falconnect.Main;
 import net.falconnect.messages.fromclient.*;
+import net.falconnect.messages.toclient.FullDataMessage;
 import net.falconnect.messages.toclient.ToClientMessage;
 
 import java.io.IOException;
@@ -34,6 +35,20 @@ public class MessageSenderThread extends Thread {
         // Check if there's any messages to send
         if (!messagesToSend.isEmpty()) {
           ToClientMessage message = messagesToSend.take();
+
+          if (message instanceof FullDataMessage) {
+            while (!messagesToSend.isEmpty()) {
+              ToClientMessage nMessage = messagesToSend.take();
+              if (nMessage instanceof FullDataMessage) {
+                message = nMessage;
+                System.out.println("Skipped old message");
+              } else {
+                message = nMessage;
+                break;
+              }
+            }
+          }
+
           message.SendDataFromThread();
         }
 

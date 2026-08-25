@@ -59,7 +59,7 @@ public class FalconnectRace extends Thread {
   public void run() {
     while (true) {
       try {
-        Thread.sleep(2);
+        Thread.sleep(4);
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       }
@@ -216,7 +216,7 @@ public class FalconnectRace extends Thread {
   private long packetNum = 0;
 
   public void ConstructFullDataPacket() {
-    byte[] packet = new byte[7680];
+    byte[] packet = new byte[3844];
     packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
     packetNum++;
 

@@ -319,6 +319,9 @@ void FalconnectSocketManager::SocketThread() {
                 std::thread sendThread(&FalconnectSocketManager::DataThread, this);
                 sendThread.detach();
 
+                std::thread memThread(&FalconnectSocketManager::MemoryThread, this);
+                memThread.detach();
+
                 break;
             }
 
@@ -373,6 +376,29 @@ void FalconnectSocketManager::SocketThread() {
     }
 
     delete this;
+}
+
+void FalconnectSocketManager::MemoryThread() const {
+    u32 timeBeforeUpdate = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    while (shouldRunDataThread) {
+        if (FalconnectManager::instance->currentState == GameState::RACING) {
+            for (int i = 0; i < 30; i++) {
+                if (const auto racerNum = instance->usedIndices[i]; racerNum != 0) {
+                    const auto racerBlock = instance->allBlocks[i];
+
+                    FalconnectManager::instance->patcher->SetRacerData(racerNum, *racerBlock, true);
+                    //FalconnectManager::instance->lastWrittenBlocks[racerNum - 1] = racerBlock;
+                    //INFO_LOG_FMT(FALCONNECT, "Racer data set");
+                }
+            }
+
+            //std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            const u32 time = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            FalconnectManager::instance->patcher->SetRenderedText(std::to_string(time - timeBeforeUpdate));
+            timeBeforeUpdate = time;
+        }
+    }
 }
 
 void FalconnectSocketManager::DataThread() {
@@ -490,11 +516,11 @@ void FalconnectSocketManager::DataThread() {
                 //if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
                 //else updated[i] = true;
 
-                // allBlocks[i] = block;
-                // usedIndices[i] = usedIndex;
+                allBlocks[i] = block;
+                usedIndices[i] = usedIndex;
 
-                FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
-                FalconnectManager::instance->lastWrittenBlocks[usedIndex - 1] = block;
+                //FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
+                //FalconnectManager::instance->lastWrittenBlocks[usedIndex - 1] = block;
             }
         }
 

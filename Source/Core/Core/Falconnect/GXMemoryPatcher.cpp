@@ -389,14 +389,14 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
 
     manager.Write_U32(patchData.energy, baseAddress + (97 * 4));
 
-  manager.Write_U32(patchData.inputs[0], baseAddress + (123 * 4));
-  manager.Write_U32(patchData.inputs[1], baseAddress + (124 * 4));
-  manager.Write_U32(patchData.inputs[2], baseAddress + (125 * 4));
-  INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
-  manager.Write_U32(patchData.inputs[3], baseAddress + (126 * 4));
-  manager.Write_U32(patchData.inputs[4], baseAddress + (127 * 4));
-  manager.Write_U32(patchData.inputs[5], baseAddress + (128 * 4));
-  manager.Write_U32(patchData.inputs[6], baseAddress + (129 * 4));
+  // manager.Write_U32(patchData.inputs[0], baseAddress + (123 * 4));
+  // manager.Write_U32(patchData.inputs[1], baseAddress + (124 * 4));
+  // manager.Write_U32(patchData.inputs[2], baseAddress + (125 * 4));
+  // INFO_LOG_FMT(FALCONNECT, "Accelerator input: {}", patchData.inputs[5]);
+  // manager.Write_U32(patchData.inputs[3], baseAddress + (126 * 4));
+  // manager.Write_U32(patchData.inputs[4], baseAddress + (127 * 4));
+  // manager.Write_U32(patchData.inputs[5], baseAddress + (128 * 4));
+  // manager.Write_U32(patchData.inputs[6], baseAddress + (129 * 4));
 
   manager.Write_U32(patchData.sideAttack, baseAddress + (388 * 4));
 

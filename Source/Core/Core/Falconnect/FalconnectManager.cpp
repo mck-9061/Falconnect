@@ -258,14 +258,15 @@ void FalconnectManager::Update() {
             if (const auto racerNum = FalconnectSocketManager::instance->usedIndices[i]; racerNum != 0) {
                 const auto racerBlock = FalconnectSocketManager::instance->allBlocks[i];
 
-                // if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
+                if (FalconnectSocketManager::instance->updated[i]) {
                     patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 1);
                     lastWrittenBlocks[racerNum - 1] = racerBlock;
-                    INFO_LOG_FMT(FALCONNECT, "Racer data set");
-                // } else {
-                //     //
-                //     //INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
-                // }
+                    //INFO_LOG_FMT(FALCONNECT, "Racer data set");
+                } else {
+                    patcher->SetRacerData(racerNum, *racerBlock, false);
+                    lastWrittenBlocks[racerNum - 1] = racerBlock;
+                    //INFO_LOG_FMT(FALCONNECT, "Racer data set");
+                }
             }
         }
         if (frameCount >= 1) frameCount = 0;

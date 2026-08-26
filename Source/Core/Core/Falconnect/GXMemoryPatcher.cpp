@@ -345,6 +345,10 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
         manager.Write_U32(x, baseAddress + (31 * 4));
         manager.Write_U32(y, baseAddress + (32 * 4));
         manager.Write_U32(z, baseAddress + (33 * 4));
+
+        // manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
+        // manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
+        // manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
         //
         //manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
         //manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));

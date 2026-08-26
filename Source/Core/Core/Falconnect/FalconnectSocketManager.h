@@ -34,6 +34,7 @@ public:
     bool exited = false;
     bool canLoad = false;
     bool shouldDisconnect = false;
+    bool hasReceived = false;
 
     u16 ping = 0;
     u8 playerNumber = 0;

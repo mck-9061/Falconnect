@@ -247,22 +247,27 @@ void FalconnectManager::Update() {
         patcher->ConstrainMenu();
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
+        while (!FalconnectSocketManager::instance->hasReceived) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        FalconnectSocketManager::instance->hasReceived = false;
+
         frameCount++;
-        // for (int i = 0; i < 30; i++) {
-        //     //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
-        //     if (const auto racerNum = FalconnectSocketManager::instance->usedIndices[i]; racerNum != 0) {
-        //         const auto racerBlock = FalconnectSocketManager::instance->allBlocks[i];
-        //
-        //         // if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
-        //             patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 1);
-        //             lastWrittenBlocks[racerNum - 1] = racerBlock;
-        //             INFO_LOG_FMT(FALCONNECT, "Racer data set");
-        //         // } else {
-        //         //     //
-        //         //     //INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
-        //         // }
-        //     }
-        // }
+        for (int i = 0; i < 30; i++) {
+            //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
+            if (const auto racerNum = FalconnectSocketManager::instance->usedIndices[i]; racerNum != 0) {
+                const auto racerBlock = FalconnectSocketManager::instance->allBlocks[i];
+
+                // if (lastWrittenBlocks[racerNum - 1] == nullptr || racerBlock != lastWrittenBlocks[racerNum - 1]) {
+                    patcher->SetRacerData(racerNum, *racerBlock, frameCount >= 1);
+                    lastWrittenBlocks[racerNum - 1] = racerBlock;
+                    INFO_LOG_FMT(FALCONNECT, "Racer data set");
+                // } else {
+                //     //
+                //     //INFO_LOG_FMT(FALCONNECT, "Skipping as unchanged");
+                // }
+            }
+        }
         if (frameCount >= 1) frameCount = 0;
 
         // Check if we've exited the race to the menu

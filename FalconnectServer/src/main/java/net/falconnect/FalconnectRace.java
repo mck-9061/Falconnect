@@ -57,12 +57,14 @@ public class FalconnectRace extends Thread {
   }
 
   public void run() {
+    long time = System.nanoTime();
     while (true) {
-      try {
-        Thread.sleep(4);
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      }
+      // wait for a frame to pass
+      long currentTime = System.nanoTime();
+      if (currentTime - time < 16666666) continue;
+
+      time = currentTime;
+
 
       try {
         // Wait for all players to be ready
@@ -112,7 +114,11 @@ public class FalconnectRace extends Thread {
               num++;
 
               //client.numCpus = (byte) (int) Math.floor((30.0 - getClients().size()) / getClients().size());
-              client.numCpus = 5;
+              //client.numCpus = 5;
+
+              if (client.playerNum == 1) client.numCpus = 28;
+              else client.numCpus = 0;
+
               client.cpuStartIndex = (byte) (getClients().size() + aaa);
               aaa += client.numCpus;
 

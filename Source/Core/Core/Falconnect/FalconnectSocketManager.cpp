@@ -38,8 +38,8 @@ void FalconnectSocketManager::Start() {
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        //inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
-        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
+        inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
+        //inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -156,7 +156,7 @@ void FalconnectSocketManager::SocketThread() {
                 serverUdpAddress.sin_port = htons(9000 - playerNumber);
 
                 //inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
-                inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
+                inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
 
                 // connect(serverUdpSocket, reinterpret_cast<struct sockaddr *>(&serverUdpAddress), sizeof(serverUdpAddress));
 
@@ -386,19 +386,19 @@ void FalconnectSocketManager::SocketThread() {
 void FalconnectSocketManager::MemoryThread() const {
     u32 timeBeforeUpdate = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-    while (shouldRunDataThread) {
-        if (FalconnectManager::instance->currentState == GameState::RACING) {
-            for (int i = 0; i < 30; i++) {
-                if (const auto racerNum = instance->usedIndices[i]; racerNum != 0) {
-                    const auto racerBlock = instance->allBlocks[i];
-
-                    FalconnectManager::instance->patcher->SetRacerData(racerNum, *racerBlock, true);
-                    //FalconnectManager::instance->lastWrittenBlocks[racerNum - 1] = racerBlock;
-                    //INFO_LOG_FMT(FALCONNECT, "Racer data set");
-                }
-            }
-        }
-    }
+    // while (shouldRunDataThread) {
+    //     if (FalconnectManager::instance->currentState == GameState::RACING) {
+    //         for (int i = 0; i < 30; i++) {
+    //             if (const auto racerNum = instance->usedIndices[i]; racerNum != 0) {
+    //                 const auto racerBlock = instance->allBlocks[i];
+    //
+    //                 FalconnectManager::instance->patcher->SetRacerData(racerNum, *racerBlock, true);
+    //                 //FalconnectManager::instance->lastWrittenBlocks[racerNum - 1] = racerBlock;
+    //                 //INFO_LOG_FMT(FALCONNECT, "Racer data set");
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 void FalconnectSocketManager::SendDataThread() {
@@ -463,7 +463,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         //INFO_LOG_FMT(FALCONNECT, "Sent");
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(4));
     }
 }
 
@@ -538,17 +538,19 @@ void FalconnectSocketManager::DataThread() {
                 allBlocks[i] = block;
                 usedIndices[i] = usedIndex;
 
-                //if (updated[i]) {
-                    FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
-                //} else {
-                    //FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, false);
-                //}
+                // if (updated[i]) {
+                //     FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
+                // } else {
+                //     FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, false);
+                // }
             }
         }
 
+        hasReceived = true;
+
         // std::this_thread::sleep_for(std::chrono::milliseconds(16));
 
-        // If exited, stop sending frames
+        // If exited, stop everything
         if (exited) {
             // Reset everything, tell server
             hasGridded = false;

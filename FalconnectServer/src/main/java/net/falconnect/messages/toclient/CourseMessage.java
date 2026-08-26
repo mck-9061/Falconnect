@@ -10,7 +10,7 @@ public class CourseMessage extends ToClientMessage {
     data[0] = (byte) ToClientPacketType.COURSE.ordinal();
     data[1] = courseID;
     //data[2] = cpuCount;
-    //data[2] = 29;
-    data[2] = 11;
+    data[2] = 29;
+    //data[2] = 11;
   }
 }

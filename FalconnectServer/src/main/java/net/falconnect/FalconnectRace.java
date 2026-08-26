@@ -226,6 +226,8 @@ public class FalconnectRace extends Thread {
     packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
     packetNum++;
 
+    System.out.println(packetNum);
+
     packet[1] = (byte) ((packetNum >>> 24) & 0xff);
     packet[2] = (byte) ((packetNum >>> 16) & 0xff);
     packet[3] = (byte) ((packetNum >>> 8) & 0xff);

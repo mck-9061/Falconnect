@@ -30,7 +30,7 @@ public class FullDataMessage extends FromClientMessage {
       origin.setLastReceivedData(allData);
       origin.hasUpdated = true;
     } else {
-      //System.out.println("Skipping old packet");
+      System.out.println("Skipping old packet: " + count + ". Latest packet: " + origin.lastReceivedCount);
     }
 
 

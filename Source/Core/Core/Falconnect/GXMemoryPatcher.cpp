@@ -335,20 +335,20 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock &pa
     manager.Write_U8(0x04, baseAddress);
 
     if (full) {
-        const u32 x =
-            std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[0]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[0]) + std::bit_cast<float>(ourActualData->centerPosition[0]));
-        const u32 y =
-            std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[1]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[1]) + std::bit_cast<float>(ourActualData->centerPosition[1]));
-        const u32 z =
-            std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[2]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[2]) + std::bit_cast<float>(ourActualData->centerPosition[2]));
+        // const u32 x =
+        //     std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[0]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[0]) + std::bit_cast<float>(ourActualData->centerPosition[0]));
+        // const u32 y =
+        //     std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[1]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[1]) + std::bit_cast<float>(ourActualData->centerPosition[1]));
+        // const u32 z =
+        //     std::bit_cast<u32>(std::bit_cast<float>(patchData.centerPosition[2]) - std::bit_cast<float>(FalconnectSocketManager::instance->ourLastKnownData->centerPosition[2]) + std::bit_cast<float>(ourActualData->centerPosition[2]));
+        //
+        // manager.Write_U32(x, baseAddress + (31 * 4));
+        // manager.Write_U32(y, baseAddress + (32 * 4));
+        // manager.Write_U32(z, baseAddress + (33 * 4));
 
-        manager.Write_U32(x, baseAddress + (31 * 4));
-        manager.Write_U32(y, baseAddress + (32 * 4));
-        manager.Write_U32(z, baseAddress + (33 * 4));
-
-        // manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
-        // manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
-        // manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
+        manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
+        manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
+        manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
         //
         //manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
         //manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));

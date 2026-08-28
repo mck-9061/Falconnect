@@ -10,7 +10,8 @@ enum class FromServerPacketType : char {
     RACER_IDS,
     COURSE,
     NAMES,
-    DISCONNECT
+    DISCONNECT,
+    CPU_ASSIGNMENT
 };
 
 enum class ToServerPacketType : char {

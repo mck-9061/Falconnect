@@ -41,7 +41,7 @@ public class UDPHandlerThread extends Thread {
     while (!clientConnection.disconnected) {
       DatagramSocket udpSocket = clientConnection.udpSocket;
       if (udpSocket != null) {
-        byte[] data = new byte[RaceDataFormat.packetBytesForRacers(clientConnection.numCpus + 1)];
+        byte[] data = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
 
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
@@ -52,7 +52,8 @@ public class UDPHandlerThread extends Thread {
           clientConnection.lastReceivedUdpPort = datagramPacket.getPort();
 
           byte messageType = data[0];
-          FromClientMessage message = messageTypes.get(messageType).getDeclaredConstructor(FalconnectClientConnection.class, byte[].class).newInstance(clientConnection, data);
+          byte[] packetData = java.util.Arrays.copyOf(data, datagramPacket.getLength());
+          FromClientMessage message = messageTypes.get(messageType).getDeclaredConstructor(FalconnectClientConnection.class, byte[].class).newInstance(clientConnection, packetData);
           message.ProcessMessage();
 
         } catch (SocketTimeoutException e) {

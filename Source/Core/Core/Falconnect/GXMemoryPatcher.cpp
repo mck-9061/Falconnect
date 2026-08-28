@@ -41,6 +41,12 @@ std::vector<uint32_t> stringToUint32Array(const std::string& str)
     return result;
 }
 
+void ScheduleInvalidateCacheRange(const u32 address, const u32 size)
+{
+    for (u32 offset = 0; offset < size; offset += sizeof(u32))
+        Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address + offset);
+}
+
 void GXMemoryPatcher::Initialise() {
     INFO_LOG_FMT(FALCONNECT, "Loading reference pointer...");
 
@@ -64,7 +70,7 @@ void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address
         i++;
     }
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, i, true);
+    ScheduleInvalidateCacheRange(address, i);
 }
 
 void GXMemoryPatcher::DisableOptionsMenuControl() const {
@@ -73,19 +79,19 @@ void GXMemoryPatcher::DisableOptionsMenuControl() const {
     manager.Write_U32(0x60000000, menuControlAddress + 4);
     manager.Write_U32(0x88630000, menuControlAddress + 8);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(menuControlAddress, 12, true);
+    ScheduleInvalidateCacheRange(menuControlAddress, 12);
 }
 
 void GXMemoryPatcher::FullyDisableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
     manager.Write_U32(0x60000000, address);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address);
 }
 
 void GXMemoryPatcher::ReEnableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
     manager.Write_U32(0x480056d1, address);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address);
 }
 
 void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
@@ -119,12 +125,12 @@ void GXMemoryPatcher::DisableAIControl() const {
     manager.Write_U32(0x7de803a6, freeAddress + 20);
     manager.Write_U32(0x4e800020, freeAddress + 24);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(freeAddress, 28, true);
+    ScheduleInvalidateCacheRange(freeAddress, 28);
 
     const u32 aiMoveAddress = referencePointer + 0x839a0;
 
     manager.Write_U32(0x48149801, aiMoveAddress);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(aiMoveAddress, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(aiMoveAddress);
 }
 
 void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
@@ -153,7 +159,7 @@ void GXMemoryPatcher::DisableCountdown() const {
 
     manager.Write_U32(0x48000150, countdownAddress);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(countdownAddress, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(countdownAddress);
 }
 
 void GXMemoryPatcher::InitialiseText() const {
@@ -172,7 +178,7 @@ void GXMemoryPatcher::InitialiseText() const {
 
     manager.Write_U32(instruction, entryPointAddress);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(entryPointAddress, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(entryPointAddress);
 
     // // Add text
     // for (int offset = 0; offset < 11; offset++) {
@@ -206,13 +212,13 @@ void GXMemoryPatcher::SetBoostLap(const u8 lap) const {
     manager.Write_U32(0x281e0000 + lap, referencePointer + 0x32938); // Set lap check for announcement
 
     // Invalidations
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x3294c, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x34b68, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x33300, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0xc91ec, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x3330C, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0xc91d8, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x32938, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x3294c);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x34b68);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x33300);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0xc91ec);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x3330C);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0xc91d8);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x32938);
 }
 
 void GXMemoryPatcher::StartRaceFromPracticeOptions() const {
@@ -223,7 +229,7 @@ void GXMemoryPatcher::StartCountdown() const {
     const u32 countdownAddress = referencePointer + 0x34a30;
 
     manager.Write_U32(0x40820150, countdownAddress);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(countdownAddress, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(countdownAddress);
 }
 
 void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
@@ -262,11 +268,11 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
     manager.Write_U32(0x7df17b78, functionAddress + 40);
     manager.Write_U32(0x4e800020, functionAddress + 44);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(functionAddress, 48, true);
+    ScheduleInvalidateCacheRange(functionAddress, 48);
 
     // Set jump instruction
     manager.Write_U32(0x48000001 + (functionAddress - idLoadAddress), idLoadAddress);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(idLoadAddress, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(idLoadAddress);
 
     const u32 racer_check_address = idLoadAddress + 60;
 
@@ -274,7 +280,7 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
     manager.Write_U32(0x60000000, racer_check_address);
     manager.Write_U32(0x60000000, racer_check_address + 8);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(racer_check_address, 12, true);
+    ScheduleInvalidateCacheRange(racer_check_address, 12);
 }
 
 void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
@@ -481,17 +487,17 @@ void GXMemoryPatcher::SetGrid() const {
         manager.Write_U32(loadInstruction, 0x80376a00 + (i * 8));
         manager.Write_U32(storeInstruction, 0x80376a00 + (i * 8) + 4);
 
-        Core::System::GetInstance().GetJitInterface().InvalidateICache(0x80376a00 + (i * 8), 8, true);
+        ScheduleInvalidateCacheRange(0x80376a00 + (i * 8), 8);
     }
 
     manager.Write_U32(0x39c00000, 0x80376a00 + (30 * 8)); // Reset r14
     manager.Write_U32(0x4e800020, 0x80376a00 + (30 * 8) + 4); // Return
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(0x80376a00 + (30 * 8), 8, true);
+    ScheduleInvalidateCacheRange(0x80376a00 + (30 * 8), 8);
 
     manager.Write_U32(jumpInstruction, address);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(address, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address);
 }
 
 void GXMemoryPatcher::SetCourse(const u8 courseID) const {
@@ -513,7 +519,7 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
 
     // Force all drivers to be rivals
     manager.Write_U32(0x3ae00001, referencePointer + 0x129bc4);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129bc4, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x129bc4);
 
     // Branch to new code to load pointer
     manager.Write_U32(0x48092d65, referencePointer + 0x129c3c);
@@ -521,10 +527,10 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
     manager.Write_U32(0x48092cbd, referencePointer + 0x129ce4);
     manager.Write_U32(0x48092c91, referencePointer + 0x129d10);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129c3c, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129c88, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129ce4, 4, true);
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x129d10, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x129c3c);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x129c88);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x129ce4);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x129d10);
 
     // New code: Load pointer into r5
     // pointer = base pointer + (0x20 * r27)
@@ -544,7 +550,7 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
     manager.Write_U32(0x39000000, codeAddress + 16);
     manager.Write_U32(0x4e800020, codeAddress + 20);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(codeAddress, 24, true);
+    ScheduleInvalidateCacheRange(codeAddress, 24);
 
     // Set names
     for (int i = 0; i < 30; i++) {
@@ -574,7 +580,7 @@ void GXMemoryPatcher::EnablePositionAnnouncementsInPractice() const {
     manager.Write_U32(0x3b80012c, referencePointer + 0x15c81c);
     manager.Write_U32(0x3b80012c, referencePointer + 0x15c82c);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x15c81c, 0x14, true);
+    ScheduleInvalidateCacheRange(referencePointer + 0x15c81c, 0x14);
 }
 
 void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
@@ -597,10 +603,10 @@ void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
     manager.Write_U32(0x7de803a6, codeAddress + 52);
     manager.Write_U32(0x4e800020, codeAddress + 56);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(codeAddress, 60, true);
+    ScheduleInvalidateCacheRange(codeAddress, 60);
 
     // Branch to this
     manager.Write_U32(0x48152661,referencePointer + 0x83d40);
 
-    Core::System::GetInstance().GetJitInterface().InvalidateICache(referencePointer + 0x83d40, 4, true);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x83d40);
 }

@@ -1,12 +1,12 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #include <cstddef>
+#include <mutex>
 #include <queue>
 #include <thread>
 #include <variant>
 #include <netinet/in.h>
 
-#include "OperationType.h"
 #include "RacerMemoryBlock.h"
 #include "Common/CommonTypes.h"
 
@@ -34,6 +34,8 @@ public:
     void MemoryThread() const;
     void SendDataThread();
     void SendFrame(RacerMemoryBlock *frame, u8 index);
+    std::vector<u8> GetCpuRacerIndices() const;
+    void SetCpuRacerIndices(std::vector<u8> indices);
 
     bool hasConnected = false;
     bool hasProperlyConnected = false;
@@ -64,13 +66,14 @@ public:
     //std::queue<OperationType> operationQueue;
     //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
 
-    RacerMemoryBlock* allBlocks[30];
-    RacerMemoryBlock* ourLastKnownData;
-    u8 usedIndices[30];
-    bool updated[30];
+    RacerMemoryBlock* allBlocks[30] = {};
+    RacerMemoryBlock* ourLastKnownData = nullptr;
+    u8 usedIndices[30] = {};
+    bool updated[30] = {};
 
 private:
     void Start();
+    void HandleConnectionLost();
 
     RacerMemoryBlock* framesToSend[30] = {};
 
@@ -84,6 +87,10 @@ private:
     bool shouldRunDataThread = true;
 
     u32 timeBeforePing = 0;
+
+    bool OwnsCpuRacer(u8 racer) const;
+    mutable std::mutex m_cpu_assignment_mutex;
+    std::vector<u8> m_cpu_racer_indices;
 };
 
 

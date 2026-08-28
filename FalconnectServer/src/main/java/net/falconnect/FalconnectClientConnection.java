@@ -32,6 +32,17 @@ public class FalconnectClientConnection {
 
   public volatile int lastReceivedUdpPort;
   public int lastReceivedCount;
+  public volatile long lastUdpPacketReceivedAt;
+  public volatile boolean cpuReallocationNeeded;
+  public volatile boolean cpuRestorationNeeded;
+  public volatile boolean hasReceivedRaceData;
+  public volatile boolean cpuHandoffActive;
+  public volatile boolean duplicateRaceDataDetected;
+  private List<Byte> cpuRacerIndices = new ArrayList<>();
+  private List<Byte> previousCpuRacerIndices = new ArrayList<>();
+  private List<Byte> homeCpuRacerIndices = new ArrayList<>();
+  private byte[] lastPlayerRacerData;
+  private int consecutiveDuplicatePlayerDataPackets;
 
   public boolean hasUpdated = false;
   public boolean disconnected = false;
@@ -41,6 +52,7 @@ public class FalconnectClientConnection {
   private final UDPHandlerThread udpHandlerThread;
 
   private List<byte[]> lastReceivedData;
+  private List<Byte> lastReceivedCpuRacerIndices = new ArrayList<>();
   public byte[] dataToSend;
 
   public FalconnectClientConnection(Socket socket) throws IOException {
@@ -111,6 +123,49 @@ public class FalconnectClientConnection {
 
   public synchronized void setLastReceivedData(List<byte[]> data) {
     this.lastReceivedData = data;
+  }
+
+  public synchronized void setLastReceivedCpuRacerIndices(List<Byte> indices) {
+    lastReceivedCpuRacerIndices = new ArrayList<>(indices);
+  }
+
+  public synchronized List<Byte> getLastReceivedCpuRacerIndices() {
+    return new ArrayList<>(lastReceivedCpuRacerIndices);
+  }
+
+  public synchronized List<Byte> getCpuRacerIndices() { return new ArrayList<>(cpuRacerIndices); }
+  public synchronized List<Byte> getPreviousCpuRacerIndices() { return new ArrayList<>(previousCpuRacerIndices); }
+  public synchronized List<Byte> getHomeCpuRacerIndices() { return new ArrayList<>(homeCpuRacerIndices); }
+
+  public synchronized void setCpuRacerIndices(List<Byte> indices) {
+    previousCpuRacerIndices = cpuRacerIndices;
+    cpuRacerIndices = new ArrayList<>(indices);
+    numCpus = (byte) indices.size();
+  }
+
+  public synchronized void setHomeCpuRacerIndices(List<Byte> indices) {
+    homeCpuRacerIndices = new ArrayList<>(indices);
+    setCpuRacerIndices(indices);
+  }
+
+  public synchronized void recordPlayerRacerData(byte[] racerData, int duplicateLimit) {
+    if (java.util.Arrays.equals(lastPlayerRacerData, racerData)) {
+      consecutiveDuplicatePlayerDataPackets++;
+    } else {
+      consecutiveDuplicatePlayerDataPackets = 0;
+    }
+    lastPlayerRacerData = racerData.clone();
+    duplicateRaceDataDetected = consecutiveDuplicatePlayerDataPackets >= duplicateLimit;
+  }
+
+  public synchronized void resetRaceDataTracking() {
+    lastPlayerRacerData = null;
+    consecutiveDuplicatePlayerDataPackets = 0;
+    duplicateRaceDataDetected = false;
+    hasReceivedRaceData = false;
+    cpuReallocationNeeded = false;
+    cpuRestorationNeeded = false;
+    cpuHandoffActive = false;
   }
 
   @Override

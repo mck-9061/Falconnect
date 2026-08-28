@@ -10,7 +10,7 @@ import net.falconnect.messages.toclient.ToClientMessage;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.net.SocketException;
+import java.io.EOFException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Queue;
@@ -37,18 +37,17 @@ public class MessageHandlerThread extends Thread {
 
   public void run() {
     while (true) {
-      byte[] data = new byte[RaceDataFormat.packetBytesForRacers(clientConnection.numCpus + 1)];
+      // TCP carries control messages and must retain one stable frame size across CPU reassignment.
+      byte[] data = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
 
       try {
-        if (clientConnection.fromClientStream.available() > 0) {
-          // System.out.println("Receiving message...");
-          clientConnection.fromClientStream.readFully(data);
-          // System.out.println("Message received");
+        clientConnection.fromClientStream.readFully(data);
 
-          byte messageType = data[0];
-          FromClientMessage message = messageTypes.get(messageType).getDeclaredConstructor(FalconnectClientConnection.class, byte[].class).newInstance(clientConnection, data);
-          message.ProcessMessage();
-        }
+        byte messageType = data[0];
+        FromClientMessage message = messageTypes.get(messageType)
+            .getDeclaredConstructor(FalconnectClientConnection.class, byte[].class)
+            .newInstance(clientConnection, data);
+        message.ProcessMessage();
 
         if (clientConnection.disconnected) {
           System.out.println("Client disconnected gracefully: " + clientConnection.playerNum);
@@ -58,18 +57,17 @@ public class MessageHandlerThread extends Thread {
           return;
         }
 
-      } catch (SocketException e) {
+      } catch (EOFException e) {
         System.out.println("Client disconnected ungracefully: " + clientConnection.playerNum);
         clientConnection.disconnected = true;
-
-        try {
-          clientConnection.socket.close();
-        } catch (IOException ex) {
-          throw new RuntimeException(ex);
-        }
+        clientConnection.CloseUdpSocket();
         return;
-      }
-      catch (IOException | InvocationTargetException | InstantiationException |
+      } catch (IOException e) {
+        System.out.println("Client connection error: " + clientConnection.playerNum + ": " + e.getMessage());
+        clientConnection.disconnected = true;
+        clientConnection.CloseUdpSocket();
+        return;
+      } catch (InvocationTargetException | InstantiationException |
                IllegalAccessException | NoSuchMethodException e) {
         throw new RuntimeException(e);
       }

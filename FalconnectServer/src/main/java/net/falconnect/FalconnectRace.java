@@ -3,7 +3,6 @@ package net.falconnect;
 import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
-import java.net.DatagramSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
@@ -11,17 +10,19 @@ import java.util.*;
 public class FalconnectRace extends Thread {
   private List<FalconnectClientConnection> clients;
   private FalconnectServer server;
+  private final int portBlockIndex;
 
   private byte[] fullDataPacket;
 
   public GameState gameState;
   public boolean isRunning;
 
-  public FalconnectRace(FalconnectServer server) throws IOException {
+  public FalconnectRace(FalconnectServer server, int portBlockIndex) throws IOException {
     clients = new ArrayList<>();
     gameState = GameState.WAITING_FOR_READY;
 
     this.server = server;
+    this.portBlockIndex = portBlockIndex;
     isRunning = true;
 
     //HackyAssSoftlockPreventionThread hackyAssSoftlockPreventionThread = new HackyAssSoftlockPreventionThread(this);
@@ -29,7 +30,17 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized boolean HasSpace() {
-    return clients.size() < 6;
+    return clients.size() < FalconnectServer.MAX_CLIENTS_PER_RACE;
+  }
+
+  public int getPortBlockIndex() {
+    return portBlockIndex;
+  }
+
+  public int getUdpPort(byte playerNum) {
+    return FalconnectServer.UDP_PORT_BASE
+        - (portBlockIndex * FalconnectServer.MAX_CLIENTS_PER_RACE)
+        - playerNum;
   }
 
   public synchronized boolean IsClientsEmpty() {
@@ -41,10 +52,13 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized void AddClient(FalconnectClientConnection client) {
+    client.udpPort = getUdpPort(client.playerNum);
     clients.add(client);
   }
 
   public synchronized void RemoveClient(FalconnectClientConnection client) {
+    client.CloseUdpSocket();
+
     // Recreate list without dead client
     List<FalconnectClientConnection> newList = new ArrayList<>();
 
@@ -121,10 +135,9 @@ public class FalconnectRace extends Thread {
 
               client.cpuStartIndex = (byte) (getClients().size() + aaa);
               aaa += client.numCpus;
+              client.udpPort = getUdpPort(client.playerNum);
 
-              if (client.udpSocket != null) client.udpSocket.close();
-
-              client.udpSocket = new DatagramSocket(9000 - client.playerNum); // listens
+              client.RebindUdpSocket();
 
               ConnectedMessage connectedMessage = new ConnectedMessage(client);
               connectedMessage.Send();
@@ -222,7 +235,7 @@ public class FalconnectRace extends Thread {
   private long packetNum = 0;
 
   public void ConstructFullDataPacket() {
-    byte[] packet = new byte[3844];
+    byte[] packet = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
     packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
     packetNum++;
 
@@ -243,8 +256,10 @@ public class FalconnectRace extends Thread {
       for (byte[] racerData : client.getLastReceivedData()) {
         if (i == 0) {
           // Player's data
-          cursor = ((client.playerNum - 1) * 124) + 5;
-          System.arraycopy(racerData, 0, packet, cursor, 124);
+          cursor =
+              ((client.playerNum - 1) * RaceDataFormat.RACER_DATA_BYTES)
+                  + RaceDataFormat.PACKET_HEADER_BYTES;
+          System.arraycopy(racerData, 0, packet, cursor, RaceDataFormat.RACER_DATA_BYTES);
 
           //playerPositions.put(client.playerNum - 1, new HashSet<>());
           // Get racer's position from received data
@@ -261,8 +276,10 @@ public class FalconnectRace extends Thread {
 
         } else {
           // CPU data
-          cursor = ((client.cpuStartIndex + i - 1) * 124) + 5;
-          System.arraycopy(racerData, 0, packet, cursor, 124);
+          cursor =
+              ((client.cpuStartIndex + i - 1) * RaceDataFormat.RACER_DATA_BYTES)
+                  + RaceDataFormat.PACKET_HEADER_BYTES;
+          System.arraycopy(racerData, 0, packet, cursor, RaceDataFormat.RACER_DATA_BYTES);
 
           //playerPositions.put(client.cpuStartIndex + i - 1, new HashSet<>());
           // Get racer's position from received data
@@ -284,8 +301,8 @@ public class FalconnectRace extends Thread {
 
     // Calculate offsets for each racer's position
 //    for (FalconnectClientConnection client : getClients()) {
-//      byte[] toSend = new byte[3844];
-//      System.arraycopy(packet, 0, toSend, 0, 3844);
+//      byte[] toSend = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
+//      System.arraycopy(packet, 0, toSend, 0, RaceDataFormat.FULL_RACE_PACKET_BYTES);
 //
 //      for (Integer racer : playerPositions.keySet()) {
 //

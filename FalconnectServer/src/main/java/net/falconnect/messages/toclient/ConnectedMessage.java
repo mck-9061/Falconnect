@@ -11,5 +11,7 @@ public class ConnectedMessage extends ToClientMessage {
     data[1] = destination.playerNum;
     data[2] = destination.numCpus;
     data[3] = destination.cpuStartIndex;
+    data[4] = (byte) (destination.udpPort >>> 8);
+    data[5] = (byte) destination.udpPort;
   }
 }

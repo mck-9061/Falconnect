@@ -4,6 +4,7 @@ import net.falconnect.ClientState;
 import net.falconnect.FalconnectClientConnection;
 import net.falconnect.GameState;
 import net.falconnect.Main;
+import net.falconnect.RaceDataFormat;
 import net.falconnect.messages.fromclient.*;
 import net.falconnect.messages.toclient.ToClientMessage;
 
@@ -36,7 +37,7 @@ public class MessageHandlerThread extends Thread {
 
   public void run() {
     while (true) {
-      byte[] data = new byte[(124 * (clientConnection.numCpus + 1)) + 5];
+      byte[] data = new byte[RaceDataFormat.packetBytesForRacers(clientConnection.numCpus + 1)];
 
       try {
         if (clientConnection.fromClientStream.available() > 0) {

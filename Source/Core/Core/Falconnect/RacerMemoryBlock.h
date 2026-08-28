@@ -1,11 +1,27 @@
 #ifndef DOLPHIN_EMU_RACERMEMORYBLOCK_H
 #define DOLPHIN_EMU_RACERMEMORYBLOCK_H
 #include "Common/CommonTypes.h"
+#include <cstddef>
 #include <vector>
 
 
 class RacerMemoryBlock {
 public:
+    // Keep this list in lockstep with GetSocketData(). Every serialized field is a u32.
+    static constexpr std::size_t SOCKET_FIELD_COUNT =
+        1 +  // state
+        3 +  // centerPosition
+        3 +  // velocityWorld
+        3 +  // orientationWorld
+        3 +  // upVector
+        3 +  // orientationGravity
+        3 +  // speed, arialTilt, energy
+        7 +  // inputs
+        1 +  // sideAttack
+        4 +  // maxSpeedKmh, acceleration, baseSpeed, maxSpeed
+        1;   // restoreFlag
+    static constexpr std::size_t SOCKET_DATA_SIZE = SOCKET_FIELD_COUNT * sizeof(u32);
+
     static RacerMemoryBlock* CreateFromDolphinData(const std::vector<u32> &data);
 
     static RacerMemoryBlock* CreateFromSocketData(const std::vector<u8> &data);

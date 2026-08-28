@@ -16,7 +16,7 @@ import java.util.List;
 
 public class FalconnectClientConnection {
   public Socket socket;
-  public DatagramSocket udpSocket;
+  public volatile DatagramSocket udpSocket;
   public DataInputStream fromClientStream;
   private final DataOutputStream toClientStream;
   public ClientState state;
@@ -28,8 +28,9 @@ public class FalconnectClientConnection {
   public byte[] name;
   public byte numCpus;
   public byte cpuStartIndex;
+  public int udpPort;
 
-  public int lastReceivedUdpPort;
+  public volatile int lastReceivedUdpPort;
   public int lastReceivedCount;
 
   public boolean hasUpdated = false;
@@ -74,9 +75,10 @@ public class FalconnectClientConnection {
     //Thread.sleep(4);
 
     if (packet[0] == ToClientPacketType.FULL_DATA.ordinal()) {
-      if (lastReceivedUdpPort != 0) {
+      DatagramSocket currentUdpSocket = udpSocket;
+      if (lastReceivedUdpPort != 0 && currentUdpSocket != null && !currentUdpSocket.isClosed()) {
         DatagramPacket dPacket = new DatagramPacket(packet, packet.length, socket.getInetAddress(), lastReceivedUdpPort);
-        udpSocket.send(dPacket);
+        currentUdpSocket.send(dPacket);
       } else {
         //System.out.println("No port!");
       }
@@ -88,6 +90,19 @@ public class FalconnectClientConnection {
 
   public void SendMessage(ToClientMessage message) throws InterruptedException {
     sendMessageThread.messagesToSend.put(message);
+  }
+
+  public synchronized void RebindUdpSocket() throws IOException {
+    CloseUdpSocket();
+    udpSocket = new DatagramSocket(udpPort);
+  }
+
+  public synchronized void CloseUdpSocket() {
+    DatagramSocket currentUdpSocket = udpSocket;
+    udpSocket = null;
+    lastReceivedUdpPort = 0;
+
+    if (currentUdpSocket != null) currentUdpSocket.close();
   }
 
   public synchronized List<byte[]> getLastReceivedData() {

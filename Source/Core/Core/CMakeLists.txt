@@ -601,7 +601,6 @@ add_library(core
         Falconnect/FalconnectSocketManager.cpp
         Falconnect/FalconnectSocketManager.h
         Falconnect/PacketType.h
-        Falconnect/OperationType.h
         Falconnect/ClientState.h
 )
 

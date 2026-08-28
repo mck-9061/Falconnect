@@ -1,6 +1,7 @@
 package net.falconnect.messages.fromclient;
 
 import net.falconnect.FalconnectClientConnection;
+import net.falconnect.RaceDataFormat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,8 +23,13 @@ public class FullDataMessage extends FromClientMessage {
     if (count > origin.lastReceivedCount) {
       origin.lastReceivedCount = count;
       for (int i = 0; i < 1 + origin.numCpus; i++) {
-        byte[] racerData = new byte[124];
-        System.arraycopy(data, 5 + (i * 124), racerData, 0, 124);
+        byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
+        System.arraycopy(
+            data,
+            RaceDataFormat.PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
+            racerData,
+            0,
+            RaceDataFormat.RACER_DATA_BYTES);
         allData.add(racerData);
       }
 

@@ -4,12 +4,14 @@ import net.falconnect.ClientState;
 import net.falconnect.FalconnectClientConnection;
 import net.falconnect.GameState;
 import net.falconnect.Main;
+import net.falconnect.RaceDataFormat;
 import net.falconnect.messages.fromclient.*;
 import net.falconnect.messages.toclient.ToClientMessage;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.ArrayDeque;
@@ -37,14 +39,15 @@ public class UDPHandlerThread extends Thread {
 
   public void run() {
     while (!clientConnection.disconnected) {
-      if (clientConnection.udpSocket != null) {
-        byte[] data = new byte[124 * (clientConnection.numCpus + 1) + 5];
+      DatagramSocket udpSocket = clientConnection.udpSocket;
+      if (udpSocket != null) {
+        byte[] data = new byte[RaceDataFormat.packetBytesForRacers(clientConnection.numCpus + 1)];
 
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
         try {
-          clientConnection.udpSocket.setSoTimeout(5000);
-          clientConnection.udpSocket.receive(datagramPacket);
+          udpSocket.setSoTimeout(5000);
+          udpSocket.receive(datagramPacket);
 
           clientConnection.lastReceivedUdpPort = datagramPacket.getPort();
 
@@ -54,6 +57,9 @@ public class UDPHandlerThread extends Thread {
 
         } catch (SocketTimeoutException e) {
           //System.out.println("Timeout");
+        } catch (SocketException e) {
+          // An intentional close wakes receive() so this long-lived thread can use the next socket.
+          if (clientConnection.disconnected) return;
         } catch (IOException | InstantiationException | InvocationTargetException |
                  IllegalAccessException | NoSuchMethodException e) {
           throw new RuntimeException(e);

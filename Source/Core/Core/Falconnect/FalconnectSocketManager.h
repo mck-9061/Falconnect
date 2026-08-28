@@ -1,5 +1,6 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
+#include <cstddef>
 #include <queue>
 #include <thread>
 #include <variant>
@@ -13,6 +14,16 @@
 class FalconnectSocketManager {
 public:
     static FalconnectSocketManager* instance;
+
+    static constexpr std::size_t RACE_PACKET_HEADER_SIZE = 5;
+    static constexpr std::size_t MAX_RACERS = 30;
+    static constexpr std::size_t FULL_RACE_PACKET_SIZE =
+        RACE_PACKET_HEADER_SIZE + (MAX_RACERS * RacerMemoryBlock::SOCKET_DATA_SIZE);
+
+    static constexpr std::size_t RacePacketSize(const std::size_t racer_count)
+    {
+      return RACE_PACKET_HEADER_SIZE + (racer_count * RacerMemoryBlock::SOCKET_DATA_SIZE);
+    }
 
     std::thread socketThread[1];
 
@@ -35,6 +46,8 @@ public:
     bool canLoad = false;
     bool shouldDisconnect = false;
     bool hasReceived = false;
+    bool shouldSendData = false;
+    bool hasReceivedAnyDataEver = false;
 
     u16 ping = 0;
     u8 playerNumber = 0;
@@ -63,7 +76,7 @@ private:
 
     int localSocket = 0;
     int serverSocket = 0;
-    int serverUdpSocket = 0;
+    int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
     bool hasStarted = false;
     bool doneFirst = false;

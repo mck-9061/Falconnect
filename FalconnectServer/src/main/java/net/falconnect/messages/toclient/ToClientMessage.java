@@ -1,6 +1,7 @@
 package net.falconnect.messages.toclient;
 
 import net.falconnect.FalconnectClientConnection;
+import net.falconnect.RaceDataFormat;
 
 import java.io.IOException;
 
@@ -10,7 +11,7 @@ public abstract class ToClientMessage {
 
   protected ToClientMessage(FalconnectClientConnection destination) {
     this.destination = destination;
-    data = new byte[3844];
+    data = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
   }
 
   public void SendDataFromThread() throws IOException, InterruptedException {

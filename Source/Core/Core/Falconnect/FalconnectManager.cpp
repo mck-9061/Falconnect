@@ -230,12 +230,12 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Process operation queue and keep frame to send updated
         patcher->EnableAIControlFor(FalconnectSocketManager::instance->cpuStartIndex, FalconnectSocketManager::instance->ourCpus);
-         // FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-         //
-         // for (int i = 0; i < FalconnectSocketManager::instance->ourCpus; i++) {
-         //     //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
-         //     FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(FalconnectSocketManager::instance->cpuStartIndex + i), i + 1);
-         // }
+         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
+
+         for (int i = 0; i < FalconnectSocketManager::instance->ourCpus; i++) {
+             //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
+             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(FalconnectSocketManager::instance->cpuStartIndex + i), i + 1);
+         }
         //INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
         u16 ping = FalconnectSocketManager::instance->ping - 4;
@@ -251,6 +251,7 @@ void FalconnectManager::Update() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         FalconnectSocketManager::instance->hasReceived = false;
+        FalconnectSocketManager::instance->shouldSendData = true;
 
         frameCount++;
         for (int i = 0; i < 30; i++) {

@@ -39,6 +39,10 @@ public:
     void EnablePositionAnnouncementsInPractice() const;
     void EnableAIControlFor(u8 start, u8 count);
     void StopPhysicsOnReceivedMachines() const;
+    void SetPlayersReadyText(u8 ready, u8 total) const;
+    void SetupCustomMachines() const;
+    void SetCustomMachineData(const std::vector<u8>& machine_data) const;
+    void SetSelectedRacerId(u8 racer_id) const;
 
     u32 referencePointer{};
     bool isReady{};

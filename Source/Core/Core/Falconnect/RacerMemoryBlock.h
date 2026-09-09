@@ -9,6 +9,7 @@ class RacerMemoryBlock {
 public:
     // Keep this list in lockstep with GetSocketData(). Every serialized field is a u32.
     static constexpr std::size_t SOCKET_FIELD_COUNT =
+        1 +  // magic
         1 +  // state
         3 +  // centerPosition
         3 +  // velocityWorld
@@ -38,9 +39,11 @@ public:
             velocityWorld[2] == all_block.velocityWorld[2] &&
             orientationWorld[0] == all_block.orientationWorld[0] &&
             orientationWorld[1] == all_block.orientationWorld[1] &&
-            orientationWorld[2] == all_block.orientationWorld[2];
+            orientationWorld[2] == all_block.orientationWorld[2] &&
+                magic == all_block.magic;
     }
 
+    u32 magic;
     u32 state;
     u32 centerPosition[3];
     u32 lastCenterPosition[3];

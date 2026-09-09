@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FullDataMessage extends FromClientMessage {
-  private static final int MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS = 2_000;
+  private static final int MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS = 5000;
   public FullDataMessage(FalconnectClientConnection origin, byte[] data) {
     super(origin, data);
   }
@@ -42,7 +42,7 @@ public class FullDataMessage extends FromClientMessage {
 
       origin.setLastReceivedData(allData);
       origin.setLastReceivedCpuRacerIndices(cpuIndices);
-      origin.recordPlayerRacerData(allData.get(0), MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS);
+      origin.recordPlayerRacerData(allData.getFirst(), MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS);
       origin.hasUpdated = true;
       origin.lastUdpPacketReceivedAt = System.currentTimeMillis();
       origin.hasReceivedRaceData = true;

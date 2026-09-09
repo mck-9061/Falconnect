@@ -1,5 +1,6 @@
 #include "FalconnectManager.h"
 
+#include <chrono>
 #include <iostream>
 #include <thread>
 
@@ -26,11 +27,6 @@ void FalconnectManager::log(const std::string& message) {
 }
 
 void FalconnectManager::Update() {
-    if (shouldDisplayDisconnectedAlert) {
-        shouldDisplayDisconnectedAlert = false;
-        SuccessAlertFmt("Lost connection to the Falconnect server.");
-    }
-
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
@@ -86,6 +82,17 @@ void FalconnectManager::Update() {
         currentState = GameState::IN_PRACTICE;
 
       if (currentState == GameState::FAILED_TO_CONNECT) return;
+
+      if (currentState == GameState::IN_PRACTICE &&
+          FalconnectSocketManager::instance != nullptr &&
+          FalconnectSocketManager::instance->hasProperlyConnected &&
+          (displayedReadyPlayerCount != FalconnectSocketManager::instance->readyPlayerCount ||
+           displayedTotalPlayerCount != FalconnectSocketManager::instance->totalPlayerCount)) {
+          patcher->SetPlayersReadyText(FalconnectSocketManager::instance->readyPlayerCount,
+                                       FalconnectSocketManager::instance->totalPlayerCount);
+          displayedReadyPlayerCount = FalconnectSocketManager::instance->readyPlayerCount;
+          displayedTotalPlayerCount = FalconnectSocketManager::instance->totalPlayerCount;
+      }
 
       if (!patcher->memoryReader->ReadSettingsSelectedFlag())
       {
@@ -170,6 +177,13 @@ void FalconnectManager::Update() {
         // Get our racer ID
         FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
         FalconnectSocketManager::instance->selectedCourse = patcher->memoryReader->ReadSelectedCourse();
+        FalconnectSocketManager::instance->SetSelectedCustomMachineData(
+            patcher->memoryReader->ReadSelectedCustomMachine());
+        if (FalconnectSocketManager::instance->UsesSelectedCustomMachine()) {
+            constexpr u8 custom_machine_racer_id = 0x32;
+            FalconnectSocketManager::instance->racerId = custom_machine_racer_id;
+            patcher->SetSelectedRacerId(custom_machine_racer_id);
+        }
 
         currentState = GameState::READY_TO_LOAD;
         if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
@@ -191,6 +205,12 @@ void FalconnectManager::Update() {
         patcher->SetCourse(FalconnectSocketManager::instance->usedCourseId);
         patcher->SetCpuCount(FalconnectSocketManager::instance->cpuCount);
         patcher->SetGrid();
+        const std::vector<u8> custom_machine_data =
+            FalconnectSocketManager::instance->GetCustomMachineDataForRace();
+        if (!custom_machine_data.empty()) {
+            patcher->SetCustomMachineData(custom_machine_data);
+            patcher->SetupCustomMachines();
+        }
         //patcher->StopPhysicsOnReceivedMachines();
 
         patcher->StartRaceFromPracticeOptions();
@@ -216,6 +236,8 @@ void FalconnectManager::Update() {
             FalconnectSocketManager::instance->hasGridded = true;
             for (const u8 cpuRacer : cpu_racer_indices)
                 patcher->EnableAIControlFor(cpuRacer, 1);
+
+            //patcher->EnableAIControlFor(0, 1);
         }
     }
 
@@ -236,6 +258,8 @@ void FalconnectManager::Update() {
         const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
         for (const u8 cpuRacer : cpu_racer_indices)
             patcher->EnableAIControlFor(cpuRacer, 1);
+
+        //patcher->EnableAIControlFor(0, 1);
          FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
 
          for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
@@ -254,10 +278,15 @@ void FalconnectManager::Update() {
         patcher->ConstrainMenu();
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
+        const auto data_wait_started = std::chrono::steady_clock::now();
         while (!FalconnectSocketManager::instance->hasReceived &&
                !FalconnectSocketManager::instance->shouldDisconnect) {
+            if (std::chrono::steady_clock::now() - data_wait_started >= std::chrono::seconds(5)) {
+                INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
+                FalconnectSocketManager::instance->HandleConnectionLost();
+                return;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
-
         }
         if (FalconnectSocketManager::instance->shouldDisconnect) return;
         FalconnectSocketManager::instance->hasReceived = false;

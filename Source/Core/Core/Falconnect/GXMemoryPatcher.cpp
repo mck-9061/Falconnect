@@ -114,6 +114,22 @@ void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
     manager.Write_U32(textPosition, pointerAddress);
 }
 
+void GXMemoryPatcher::SetPlayersReadyText(const u8 ready, const u8 total) const {
+    const u32 textPosition = referencePointer + 0x1ae8b8;
+    std::vector<u32> ascii = stringToUint32Array(std::to_string(ready) + "/" + std::to_string(total) + " players ready  ");
+    ascii.append_range(ascii);
+    ascii.append_range(ascii);
+
+    while (ascii.size() < 65) {
+        ascii.push_back(32);
+    }
+
+    for (u8 offset = 0; offset < ascii.size(); offset++) {
+        const u32 address = textPosition + (offset * 4);
+        manager.Write_U32(ascii[offset], address);
+    }
+}
+
 void GXMemoryPatcher::DisableAIControl() const {
     // Set code to set AI movement per CPU
     const u32 freeAddress = referencePointer + 0x1cd1a0;
@@ -609,4 +625,33 @@ void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
     manager.Write_U32(0x48152661,referencePointer + 0x83d40);
 
     Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x83d40);
+}
+
+void GXMemoryPatcher::SetupCustomMachines() const {
+    manager.Write_U32(0x3c60801b, referencePointer + 0x14f49c);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f49c);
+    manager.Write_U32(0x7c0380ae, referencePointer + 0x14f4a4);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f4a4);
+    manager.Write_U32(0x3a100001, referencePointer + 0x14f518);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f518);
+    manager.Write_U32(0x281b0003, referencePointer + 0x14f51c);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f51c);
+    manager.Write_U32(0x60000000, referencePointer + 0x31aa4);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x31aa4);
+    manager.Write_U32(0x60000000, referencePointer + 0x14f498);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f498);
+
+    const u32 current = manager.Read_U32(referencePointer + 0x31a04);
+    manager.Write_U32(current - 0x2c, referencePointer + 0x31a04);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x31a04);
+}
+
+void GXMemoryPatcher::SetCustomMachineData(const std::vector<u8>& machine_data) const {
+    constexpr u32 custom_machine_data_address = 0x801b0000;
+    for (std::size_t offset = 0; offset < machine_data.size(); offset++)
+        manager.Write_U8(machine_data[offset], custom_machine_data_address + static_cast<u32>(offset));
+}
+
+void GXMemoryPatcher::SetSelectedRacerId(const u8 racer_id) const {
+    manager.Write_U8(racer_id, referencePointer + 0x2453ef);
 }

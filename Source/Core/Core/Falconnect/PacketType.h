@@ -11,7 +11,9 @@ enum class FromServerPacketType : char {
     COURSE,
     NAMES,
     DISCONNECT,
-    CPU_ASSIGNMENT
+    CPU_ASSIGNMENT,
+    LOBBY_STATUS,
+    CUSTOM_MACHINE_DATA
 };
 
 enum class ToServerPacketType : char {

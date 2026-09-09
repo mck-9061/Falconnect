@@ -7,6 +7,7 @@ public final class RaceDataFormat {
   public static final int PACKET_HEADER_BYTES = 5;
   public static final int MAX_RACERS = 30;
   public static final int RACER_FIELD_COUNT =
+      1 +  // magic
       1 +  // state
       3 +  // center position
       3 +  // world velocity

@@ -31,11 +31,15 @@ public:
 
     void SocketThread();
     void DataThread();
-    void MemoryThread() const;
     void SendDataThread();
     void SendFrame(RacerMemoryBlock *frame, u8 index);
     std::vector<u8> GetCpuRacerIndices() const;
     void SetCpuRacerIndices(std::vector<u8> indices);
+    void SetSelectedCustomMachineData(std::vector<u8> machine_data);
+    bool UsesSelectedCustomMachine() const;
+    void SetRemoteCustomMachineData(std::vector<u8> machine_data);
+    std::vector<u8> GetCustomMachineDataForRace() const;
+    void HandleConnectionLost();
 
     bool hasConnected = false;
     bool hasProperlyConnected = false;
@@ -58,6 +62,8 @@ public:
     u8 usedCourseId = 1;
     u8 cpuCount = 29;
     u8 ourCpus = 0;
+    u8 readyPlayerCount = 0;
+    u8 totalPlayerCount = 0;
     u8 cpuStartIndex = 1;
     std::vector<u8> name;
     std::vector<std::vector<u8>> names;
@@ -73,7 +79,8 @@ public:
 
 private:
     void Start();
-    void HandleConnectionLost();
+    void NotifyServerWhenGridded();
+    void NotifyServerWhenReadyToLoad();
 
     RacerMemoryBlock* framesToSend[30] = {};
 
@@ -91,6 +98,9 @@ private:
     bool OwnsCpuRacer(u8 racer) const;
     mutable std::mutex m_cpu_assignment_mutex;
     std::vector<u8> m_cpu_racer_indices;
+    mutable std::mutex m_custom_machine_data_mutex;
+    std::vector<u8> m_selected_custom_machine_data;
+    std::vector<u8> m_remote_custom_machine_data;
 };
 
 

@@ -15,6 +15,9 @@ public class FalconnectRace extends Thread {
   private final int portBlockIndex;
 
   private byte[] fullDataPacket;
+  private byte[][] cpuCustomMachineData;
+  private int lastLobbyPlayerCount = -1;
+  private int lastLobbyReadyCount = -1;
 
   public GameState gameState;
   public boolean isRunning;
@@ -51,6 +54,20 @@ public class FalconnectRace extends Thread {
 
   public synchronized List<FalconnectClientConnection> getClients() {
     return clients;
+  }
+
+  public synchronized void GenerateCpuCustomMachineData() {
+    cpuCustomMachineData = new byte[RaceDataFormat.MAX_RACERS][3];
+    Random random = new Random();
+    for (int racerIndex = 0; racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
+      cpuCustomMachineData[racerIndex][0] = (byte) random.nextInt(0x19);
+      cpuCustomMachineData[racerIndex][1] = (byte) random.nextInt(0x19, 0x32);
+      cpuCustomMachineData[racerIndex][2] = (byte) random.nextInt(0x32, 0x4b);
+    }
+  }
+
+  public synchronized byte[] getCpuCustomMachineData(int racerIndex) {
+    return cpuCustomMachineData[racerIndex];
   }
 
   public synchronized void AddClient(FalconnectClientConnection client) {
@@ -92,6 +109,7 @@ public class FalconnectRace extends Thread {
 
         if (gameState == GameState.WAITING_FOR_READY) {
           RemoveDisconnectedClients();
+          BroadcastLobbyStatusIfChanged();
           boolean allReady = true;
           for (FalconnectClientConnection client : getClients()) {
             // System.out.println(client.playerNum + " " + client.state);
@@ -132,9 +150,6 @@ public class FalconnectRace extends Thread {
               client.playerNum = num;
               num++;
 
-              //client.numCpus = (byte) (int) Math.floor((30.0 - getClients().size()) / getClients().size());
-              //client.numCpus = 5;
-
               int cpuCount = baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
               List<Byte> cpuIndices = new ArrayList<>();
               for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
@@ -150,7 +165,7 @@ public class FalconnectRace extends Thread {
 
             Thread.sleep(1000);
 
-            RacerIdsMessage.shouldRandomise = true;
+            GenerateCpuCustomMachineData();
 
             for (FalconnectClientConnection client : getClients()) {
               new CpuAssignmentMessage(client).Send();
@@ -160,6 +175,10 @@ public class FalconnectRace extends Thread {
               RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
               Thread.sleep(20);
               racerIdsMessage.Send();
+              CustomMachineDataMessage customMachineDataMessage =
+                  new CustomMachineDataMessage(client, getClients(), this);
+              Thread.sleep(20);
+              customMachineDataMessage.Send();
               NamesMessage namesMessage = new NamesMessage(client, getClients());
               Thread.sleep(20);
               namesMessage.Send();
@@ -248,6 +267,25 @@ public class FalconnectRace extends Thread {
     }
   }
 
+  private void BroadcastLobbyStatusIfChanged() throws InterruptedException {
+    int playerCount = 0;
+    int readyCount = 0;
+    for (FalconnectClientConnection client : getClients()) {
+      if (client.disconnected) continue;
+      playerCount++;
+      if (client.state == ClientState.READY) readyCount++;
+    }
+
+    if (playerCount == lastLobbyPlayerCount && readyCount == lastLobbyReadyCount) return;
+
+    lastLobbyPlayerCount = playerCount;
+    lastLobbyReadyCount = readyCount;
+    for (FalconnectClientConnection client : getClients()) {
+      if (!client.disconnected)
+        new LobbyStatusMessage(client, readyCount, playerCount).Send();
+    }
+  }
+
   private void DisconnectTimedOutClients() {
     long now = System.currentTimeMillis();
     for (FalconnectClientConnection client : getClients()) {
@@ -287,10 +325,8 @@ public class FalconnectRace extends Thread {
       throws InterruptedException {
     long now = System.currentTimeMillis();
     FalconnectClientConnection recipient = getClients().stream()
-        // TCP state changes can lag behind the race transition. Only give simulation work to a
-        // client which is demonstrably still participating by delivering fresh UDP race data.
-        .filter(other -> other != source && !other.disconnected && other.hasReceivedRaceData &&
-            now - other.lastUdpPacketReceivedAt <= CPU_HANDOFF_TIMEOUT_MILLIS)
+        .filter(other -> other != source && !other.disconnected &&
+            CanReceiveCpuAssignment(other, now))
         .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
         .orElse(null);
     if (recipient == null) {
@@ -312,13 +348,26 @@ public class FalconnectRace extends Thread {
     try {
       // These are state-changing control messages, not lossy race data. Send them immediately so
       // the recipient begins producing frames before the next server broadcast.
-      if (notifySource) new CpuAssignmentMessage(source).SendDataFromThread();
-      new CpuAssignmentMessage(recipient).SendDataFromThread();
-    } catch (IOException e) {
+      if (notifySource) new CpuAssignmentMessage(source).Send();
+      new CpuAssignmentMessage(recipient).Send();
+    } catch (Exception e) {
       System.out.println("Unable to deliver CPU assignment to player " + recipient.playerNum);
       recipient.disconnected = true;
       recipient.CloseUdpSocket();
     }
+  }
+
+  private boolean CanReceiveCpuAssignment(FalconnectClientConnection client, long now) {
+    if (gameState == GameState.WAITING_FOR_GRID) {
+      // UDP has not started yet. A connected client which has not returned to the menus is the
+      // only available liveness signal while the race is loading.
+      return client.state != ClientState.IN_MENUS;
+    }
+
+    // Once the race is running, UDP is the authoritative liveness signal; TCP state changes can
+    // lag behind the transition to Course Select.
+    return client.hasReceivedRaceData &&
+        now - client.lastUdpPacketReceivedAt <= CPU_HANDOFF_TIMEOUT_MILLIS;
   }
 
   private void RestoreHomeCpuAssignment(FalconnectClientConnection recoveringClient) throws InterruptedException {
@@ -359,8 +408,10 @@ public class FalconnectRace extends Thread {
     }
 
     try {
+      // The queued sender stops as soon as disconnected becomes true. A disconnect notice must
+      // therefore be written before changing that flag or closing the TCP socket.
       new DisconnectMessage(client, reason).SendDataFromThread();
-    } catch (IOException | InterruptedException e) {
+    } catch (Exception e) {
       System.out.println("Unable to send disconnect notice to client " + client.playerNum);
     }
     client.disconnected = true;

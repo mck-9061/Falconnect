@@ -25,6 +25,7 @@ public class FalconnectClientConnection {
   public byte playerNum;
   public byte racerId;
   public byte selectedCourse;
+  public byte[] customMachineData;
   public byte[] name;
   public byte numCpus;
   public byte cpuStartIndex;
@@ -66,6 +67,7 @@ public class FalconnectClientConnection {
     playerNum = 1;
     racerId = 6;
     selectedCourse = 1;
+    customMachineData = new byte[3];
     name = new byte[32];
     name[0] = 0x46;
     numCpus = 0;
@@ -146,6 +148,13 @@ public class FalconnectClientConnection {
   public synchronized void setHomeCpuRacerIndices(List<Byte> indices) {
     homeCpuRacerIndices = new ArrayList<>(indices);
     setCpuRacerIndices(indices);
+  }
+
+  public boolean usesCustomMachine() {
+    for (byte component : customMachineData) {
+      if (component != 0) return true;
+    }
+    return false;
   }
 
   public synchronized void recordPlayerRacerData(byte[] racerData, int duplicateLimit) {

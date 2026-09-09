@@ -62,6 +62,8 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
 
     block->restoreFlag = data[12];
 
+    block->magic = data[40];
+
     // block->centerPosOscX = data[0x158/4];
     // block->centerPosOscY = data[0x168/4];
     // block->centerPosOscZ = data[0x178/4];
@@ -145,6 +147,8 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &
 
     block->restoreFlag = usedData[31];
 
+    block->magic = usedData[32];
+
     // block->centerPosOscX = usedData[44];
     // block->centerPosOscY = usedData[45];
     // block->centerPosOscZ = usedData[46];
@@ -213,6 +217,8 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     data.push_back(maxSpeed);
 
     data.push_back(restoreFlag);
+
+    data.push_back(magic);
 
     // data.push_back(centerPosOscX);
     // data.push_back(centerPosOscY);

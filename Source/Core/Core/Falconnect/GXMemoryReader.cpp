@@ -133,12 +133,22 @@ u8 GXMemoryReader::ReadSelectedCourse() const {
     return id;
 }
 
+std::vector<u8> GXMemoryReader::ReadSelectedCustomMachine() const {
+    std::vector<u8> data;
+
+    data.push_back(manager.Read_U8(referencePointer + 0x1c7664)); // body
+    data.push_back(manager.Read_U8(referencePointer + 0x1c766c)); // cockpit
+    data.push_back(manager.Read_U8(referencePointer + 0x1c7674)); // booster
+
+    return data;
+}
+
 std::vector<u8> GXMemoryReader::ReadName() const {
     std::vector<u8> name;
 
     name.reserve(32);
     for (int i = 0; i < 32; i++) {
-        name.push_back(manager.Read_U8(referencePointer + 0x230e41 + i));
+        name.push_back(manager.Read_U8(referencePointer + 0x230e42 + i));
     }
 
     return name;

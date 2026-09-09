@@ -30,7 +30,6 @@ public:
     GameState currentState;
     bool shouldStart;
     bool shouldReset = false;
-    bool shouldDisplayDisconnectedAlert = false;
 
     RacerMemoryBlock* lastWrittenBlocks[29];
 
@@ -40,6 +39,8 @@ private:
 
     u8 readCounter = 0;
     u8 frameCount = 0;
+    u8 displayedReadyPlayerCount = 0;
+    u8 displayedTotalPlayerCount = 0;
 };
 
 

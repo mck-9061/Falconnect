@@ -41,8 +41,8 @@ void FalconnectSocketManager::Start() {
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        //inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
-        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
+        inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
+        //inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -307,8 +307,8 @@ void FalconnectSocketManager::SocketThread() {
                 serverUdpAddress.sin_family = AF_INET;
                 serverUdpAddress.sin_port = htons(serverUdpPort);
 
-                inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
-                //inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
+                //inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
+                inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
 
                 // Send our name
                 char data1[FULL_RACE_PACKET_SIZE] = { 0 };

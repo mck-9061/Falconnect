@@ -10,12 +10,14 @@ import java.util.*;
 public class FalconnectRace extends Thread {
   private static final long UDP_TIMEOUT_MILLIS = 5_000;
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
+  private static final int MAX_CPUS_PER_CLIENT = 3;
+  private static final int REGULAR_MACHINE_COUNT = 30;
   private List<FalconnectClientConnection> clients;
   private FalconnectServer server;
   private final int portBlockIndex;
 
   private byte[] fullDataPacket;
-  private byte[][] cpuCustomMachineData;
+  private byte[] cpuRacerIds;
   private int lastLobbyPlayerCount = -1;
   private int lastLobbyReadyCount = -1;
 
@@ -56,18 +58,18 @@ public class FalconnectRace extends Thread {
     return clients;
   }
 
-  public synchronized void GenerateCpuCustomMachineData() {
-    cpuCustomMachineData = new byte[RaceDataFormat.MAX_RACERS][3];
+  public synchronized void GenerateCpuRacerIds() {
+    cpuRacerIds = new byte[RaceDataFormat.MAX_RACERS];
     Random random = new Random();
     for (int racerIndex = 0; racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
-      cpuCustomMachineData[racerIndex][0] = (byte) random.nextInt(0x19);
-      cpuCustomMachineData[racerIndex][1] = (byte) random.nextInt(0x19, 0x32);
-      cpuCustomMachineData[racerIndex][2] = (byte) random.nextInt(0x32, 0x4b);
+      // Zero is treated as an unset racer ID by the client patcher, so standard machines are
+      // represented by the regular IDs 1 through 30.
+      cpuRacerIds[racerIndex] = (byte) (random.nextInt(REGULAR_MACHINE_COUNT) + 1);
     }
   }
 
-  public synchronized byte[] getCpuCustomMachineData(int racerIndex) {
-    return cpuCustomMachineData[racerIndex];
+  public synchronized byte getCpuRacerId(int racerIndex) {
+    return cpuRacerIds[racerIndex];
   }
 
   public synchronized void AddClient(FalconnectClientConnection client) {
@@ -92,9 +94,9 @@ public class FalconnectRace extends Thread {
   public void run() {
     long time = System.nanoTime();
     while (true) {
-      // wait for a frame to pass
+      // wait for half a frame to pass
       long currentTime = System.nanoTime();
-      if (currentTime - time < 16666666) continue;
+      if (currentTime - time < 8333333) continue;
 
       time = currentTime;
 
@@ -142,7 +144,8 @@ public class FalconnectRace extends Thread {
 
             RemoveDisconnectedClients();
             int nextCpuIndex = getClients().size();
-            int totalCpus = RaceDataFormat.MAX_RACERS - getClients().size();
+            int totalCpus = Math.min(MAX_CPUS_PER_CLIENT * getClients().size(),
+                RaceDataFormat.MAX_RACERS - getClients().size());
             int baseCpuCount = totalCpus / getClients().size();
             int remainder = totalCpus % getClients().size();
             for (FalconnectClientConnection client : getClients()) {
@@ -165,18 +168,18 @@ public class FalconnectRace extends Thread {
 
             Thread.sleep(1000);
 
-            GenerateCpuCustomMachineData();
+            GenerateCpuRacerIds();
 
             for (FalconnectClientConnection client : getClients()) {
               new CpuAssignmentMessage(client).Send();
               CourseMessage courseMessage = new CourseMessage(client, usedCourse, (byte) (getClients().size() - 1));
               Thread.sleep(20);
               courseMessage.Send();
-              RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients());
+              RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients(), this);
               Thread.sleep(20);
               racerIdsMessage.Send();
               CustomMachineDataMessage customMachineDataMessage =
-                  new CustomMachineDataMessage(client, getClients(), this);
+                  new CustomMachineDataMessage(client, getClients());
               Thread.sleep(20);
               customMachineDataMessage.Send();
               NamesMessage namesMessage = new NamesMessage(client, getClients());
@@ -324,36 +327,44 @@ public class FalconnectRace extends Thread {
   private void TransferCpuAssignments(FalconnectClientConnection source, boolean notifySource)
       throws InterruptedException {
     long now = System.currentTimeMillis();
-    FalconnectClientConnection recipient = getClients().stream()
-        .filter(other -> other != source && !other.disconnected &&
-            CanReceiveCpuAssignment(other, now))
-        .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
-        .orElse(null);
-    if (recipient == null) {
-      System.out.println("No active client is available to receive CPUs from player " + source.playerNum);
-      return;
-    }
-
     List<Byte> sourceCpuIndices = source.getCpuRacerIndices();
     if (sourceCpuIndices.isEmpty()) return;
 
-    List<Byte> recipientCpuIndices = recipient.getCpuRacerIndices();
-    recipientCpuIndices.addAll(sourceCpuIndices);
-    sourceCpuIndices.clear();
-    source.setCpuRacerIndices(sourceCpuIndices);
-    recipient.setCpuRacerIndices(recipientCpuIndices);
+    // A recipient can never be assigned more than its initial maximum of three CPUs. If a
+    // player disappears after every remaining client reaches that limit, the surplus racers
+    // deliberately remain unowned rather than making a client produce an oversized packet.
+    List<Byte> pendingCpuIndices = new ArrayList<>(sourceCpuIndices);
+    source.setCpuRacerIndices(new ArrayList<>());
     source.cpuHandoffActive = notifySource;
 
-    System.out.println("Transferred CPUs " + recipientCpuIndices + " to player " + recipient.playerNum);
+    Set<FalconnectClientConnection> changedRecipients = new HashSet<>();
+    while (!pendingCpuIndices.isEmpty()) {
+      FalconnectClientConnection recipient = getClients().stream()
+          .filter(other -> other != source && !other.disconnected &&
+              other.getCpuRacerIndices().size() < MAX_CPUS_PER_CLIENT &&
+              CanReceiveCpuAssignment(other, now))
+          .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
+          .orElse(null);
+      if (recipient == null) break;
+
+      List<Byte> recipientCpuIndices = recipient.getCpuRacerIndices();
+      recipientCpuIndices.add(pendingCpuIndices.remove(0));
+      recipient.setCpuRacerIndices(recipientCpuIndices);
+      changedRecipients.add(recipient);
+    }
+
+    if (!pendingCpuIndices.isEmpty()) {
+      System.out.println("No CPU capacity remains for " + pendingCpuIndices + " from player "
+          + source.playerNum);
+    }
     try {
       // These are state-changing control messages, not lossy race data. Send them immediately so
       // the recipient begins producing frames before the next server broadcast.
       if (notifySource) new CpuAssignmentMessage(source).Send();
-      new CpuAssignmentMessage(recipient).Send();
+      for (FalconnectClientConnection recipient : changedRecipients)
+        new CpuAssignmentMessage(recipient).Send();
     } catch (Exception e) {
-      System.out.println("Unable to deliver CPU assignment to player " + recipient.playerNum);
-      recipient.disconnected = true;
-      recipient.CloseUdpSocket();
+      System.out.println("Unable to deliver a CPU assignment");
     }
   }
 

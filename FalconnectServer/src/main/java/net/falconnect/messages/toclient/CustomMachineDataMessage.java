@@ -1,8 +1,6 @@
 package net.falconnect.messages.toclient;
 
 import net.falconnect.FalconnectClientConnection;
-import net.falconnect.FalconnectRace;
-import net.falconnect.RaceDataFormat;
 import net.falconnect.ToClientPacketType;
 
 import java.util.List;
@@ -11,8 +9,7 @@ public class CustomMachineDataMessage extends ToClientMessage {
   private static final int COMPONENTS_PER_MACHINE = 3;
 
   public CustomMachineDataMessage(FalconnectClientConnection destination,
-                                  List<FalconnectClientConnection> clients,
-                                  FalconnectRace race) {
+                                  List<FalconnectClientConnection> clients) {
     super(destination);
     data[0] = (byte) ToClientPacketType.CUSTOM_MACHINE_DATA.ordinal();
 
@@ -36,13 +33,6 @@ public class CustomMachineDataMessage extends ToClientMessage {
       cursor += COMPONENTS_PER_MACHINE;
     }
 
-    // Every CPU is advertised as racer ID 0x32 for this test, so append one compact custom
-    // definition for each CPU racer in the same order as the CPU racer IDs.
-    for (int racerIndex = clients.size(); racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
-      System.arraycopy(race.getCpuCustomMachineData(racerIndex), 0, data, cursor,
-          COMPONENTS_PER_MACHINE);
-      cursor += COMPONENTS_PER_MACHINE;
-    }
     data[1] = (byte) ((cursor - 2) / COMPONENTS_PER_MACHINE);
   }
 }

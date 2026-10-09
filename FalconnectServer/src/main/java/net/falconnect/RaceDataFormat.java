@@ -20,12 +20,20 @@ public final class RaceDataFormat {
       4 +  // speed/acceleration values
       1;   // restore flag
   public static final int RACER_DATA_BYTES = RACER_FIELD_COUNT * Integer.BYTES;
-  public static final int FULL_RACE_PACKET_BYTES =
+  public static final int RACER_SEQUENCE_BYTES = Integer.BYTES;
+  public static final int SERVER_RACER_RECORD_BYTES = RACER_DATA_BYTES + RACER_SEQUENCE_BYTES;
+  public static final int CLIENT_FULL_RACE_PACKET_BYTES =
       PACKET_HEADER_BYTES + (MAX_RACERS * RACER_DATA_BYTES);
+  public static final int FULL_RACE_PACKET_BYTES =
+      PACKET_HEADER_BYTES + (MAX_RACERS * SERVER_RACER_RECORD_BYTES);
 
   private RaceDataFormat() {}
 
   public static int packetBytesForRacers(int racerCount) {
     return PACKET_HEADER_BYTES + (racerCount * RACER_DATA_BYTES);
+  }
+
+  public static int serverRecordOffset(int racerIndex) {
+    return PACKET_HEADER_BYTES + (racerIndex * SERVER_RACER_RECORD_BYTES);
   }
 }

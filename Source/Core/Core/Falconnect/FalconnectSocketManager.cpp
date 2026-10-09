@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <memory>
 #include <utility>
 #include "ClientState.h"
 #include "Common/Assert.h"
@@ -71,6 +72,19 @@ bool FalconnectSocketManager::OwnsCpuRacer(const u8 racer) const
     return std::find(cpu_racer_indices.begin(), cpu_racer_indices.end(), racer) != cpu_racer_indices.end();
 }
 
+bool FalconnectSocketManager::ConsumeReceivedRaceData(ReceivedRaceData* received_data)
+{
+    const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
+    if (!m_received_race_data_ready)
+        return false;
+
+    *received_data = m_received_race_data;
+    for (ReceivedRacerData& received_racer : m_received_race_data.racers)
+        received_racer.position_updated = false;
+    m_received_race_data_ready = false;
+    return true;
+}
+
 std::vector<u8> FalconnectSocketManager::GetCpuRacerIndices() const
 {
     const std::lock_guard<std::mutex> lock(m_cpu_assignment_mutex);
@@ -93,12 +107,13 @@ void FalconnectSocketManager::SetCpuRacerIndices(std::vector<u8> indices)
             continue;
         }
 
-        for (std::size_t i = 0; i < std::size(usedIndices); i++)
+        const std::lock_guard<std::mutex> received_data_lock(m_received_race_data_mutex);
+        for (ReceivedRacerData& received_racer : m_received_race_data.racers)
         {
-            if (usedIndices[i] == racer)
+            if (received_racer.valid && received_racer.racer_index == racer)
             {
-                usedIndices[i] = 0;
-                updated[i] = false;
+                received_racer.valid = false;
+                received_racer.position_updated = false;
             }
         }
     }
@@ -425,9 +440,13 @@ void FalconnectSocketManager::SocketThread() {
                 start = true;
 
                 lastPacketNum = 0;
-                hasReceived = false;
                 hasReceivedAnyDataEver = false;
                 timeBeforePing = 0;
+                {
+                    const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
+                    m_received_race_data = {};
+                    m_received_race_data_ready = false;
+                }
 
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -463,7 +482,7 @@ void FalconnectSocketManager::SendDataThread() {
         // while ((!shouldSendData) && hasReceivedAnyDataEver) {
         //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
         // }
-        // shouldSendData = false;
+        shouldSendData = false;
 
         int sendPing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforeUpdate;
         //INFO_LOG_FMT(FALCONNECT, "Send delay: {}", sendPing);
@@ -490,7 +509,7 @@ void FalconnectSocketManager::SendDataThread() {
         // Send frame to be sent to remote
         lockFrameToSend = true;
 
-        char data[FULL_RACE_PACKET_SIZE] = { 0 };
+        char data[CLIENT_FULL_RACE_PACKET_SIZE] = { 0 };
         data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
 
         data[1] = static_cast<char>((sentCount >> 24) & 0xff);
@@ -530,7 +549,7 @@ void FalconnectSocketManager::SendDataThread() {
 
         sendto(serverUdpSocket,
             data,
-            RacePacketSize(racer_count),
+            ClientRacePacketSize(racer_count),
             0,
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));
@@ -538,7 +557,11 @@ void FalconnectSocketManager::SendDataThread() {
         //INFO_LOG_FMT(FALCONNECT, "Sent");
 
         //if (!hasReceivedAnyDataEver) std::this_thread::sleep_for(std::chrono::milliseconds(4));
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(3));
+
+        while (!shouldSendData) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
     }
 }
 
@@ -594,7 +617,7 @@ void FalconnectSocketManager::DataThread() {
                     ((buffer[3] & 0xff) << 8) |
                         (buffer[4] & 0xff);
 
-        if (packetNum < lastPacketNum) {
+        if (packetNum <= lastPacketNum) {
             //INFO_LOG_FMT(FALCONNECT, "Skipping old packet {}", packetNum);
             continue;
         }
@@ -602,55 +625,76 @@ void FalconnectSocketManager::DataThread() {
         lastPacketNum = packetNum;
         INFO_LOG_FMT(FALCONNECT, "Packet {}", packetNum);
 
+        const auto cpu_racer_indices = GetCpuRacerIndices();
+        const std::lock_guard<std::mutex> received_data_lock(m_received_race_data_mutex);
         for (u8 i = 0; i < 30; i++) {
             u8 usedIndex = i;
             if (i == 0) usedIndex = playerNumber - 1;
+            const std::size_t record_offset =
+                RACE_PACKET_HEADER_SIZE + (i * SERVER_RACER_RECORD_SIZE);
+            const u32 source_sequence =
+                (static_cast<u32>(static_cast<u8>(buffer[record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE])) << 24) |
+                (static_cast<u32>(static_cast<u8>(buffer[record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE + 1])) << 16) |
+                (static_cast<u32>(static_cast<u8>(buffer[record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE + 2])) << 8) |
+                static_cast<u32>(static_cast<u8>(buffer[record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE + 3]));
             if (i == playerNumber - 1) {
               INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
 
                 // Store the server's last known position of us
                 const std::vector<u8> racerData(
-                    buffer + RACE_PACKET_HEADER_SIZE + (i * RacerMemoryBlock::SOCKET_DATA_SIZE),
-                    buffer + RACE_PACKET_HEADER_SIZE + ((i + 1) * RacerMemoryBlock::SOCKET_DATA_SIZE));
+                    buffer + record_offset,
+                    buffer + record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE);
                 ourLastKnownData = RacerMemoryBlock::CreateFromSocketData(racerData);
 
                 continue; // Skip our data
             }
 
-            if (OwnsCpuRacer(usedIndex)) {
+            if (std::find(cpu_racer_indices.begin(), cpu_racer_indices.end(), usedIndex) !=
+                cpu_racer_indices.end()) {
                 INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our CPU", i);
+                m_received_race_data.racers[i].valid = false;
                 continue;
             }
 
             INFO_LOG_FMT(FALCONNECT, "Storing racer at index {} in slot {}", i, usedIndex);
 
             if (const std::vector<u8> racerData(
-                    buffer + RACE_PACKET_HEADER_SIZE + (i * RacerMemoryBlock::SOCKET_DATA_SIZE),
-                    buffer + RACE_PACKET_HEADER_SIZE + ((i + 1) * RacerMemoryBlock::SOCKET_DATA_SIZE));
+                    buffer + record_offset,
+                    buffer + record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE);
                 std::all_of(racerData.begin(), racerData.end(),
                             [](const u8 value) { return value == 0; })) {
                 INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Invalid data", i);
+                m_received_race_data.racers[i].valid = false;
             } else {
-                RacerMemoryBlock* block = RacerMemoryBlock::CreateFromSocketData(racerData);
-                // operationQueue.push(OperationType::SET_RACER_BLOCK);
-                // operationArgumentsQueue.emplace(usedIndex);
-                // operationArgumentsQueue.emplace(*block);
+                const std::unique_ptr<RacerMemoryBlock> block(
+                    RacerMemoryBlock::CreateFromSocketData(racerData));
+                ReceivedRacerData& received_racer = m_received_race_data.racers[i];
+                const u8 source_player = static_cast<u8>(source_sequence >> 24);
+                const u32 source_packet_sequence = source_sequence & 0x00ffffff;
+                if (received_racer.valid) {
+                    const u8 previous_source_player =
+                        static_cast<u8>(received_racer.source_sequence >> 24);
+                    const u32 previous_source_packet_sequence =
+                        received_racer.source_sequence & 0x00ffffff;
+                    if (source_player == previous_source_player &&
+                        source_packet_sequence <= previous_source_packet_sequence) {
+                        continue;
+                    }
+                }
 
-                if (allBlocks[i] != nullptr) updated[i] = *block != *allBlocks[i];
-                else updated[i] = true;
-
-                allBlocks[i] = block;
-                usedIndices[i] = usedIndex;
-
-                // if (updated[i]) {
-                //     FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, true);
-                // } else {
-                //     FalconnectManager::instance->patcher->SetRacerData(usedIndex, *block, false);
-                // }
+                const bool position_changed = !received_racer.valid ||
+                    block->centerPosition[0] != received_racer.block.centerPosition[0] ||
+                    block->centerPosition[1] != received_racer.block.centerPosition[1] ||
+                    block->centerPosition[2] != received_racer.block.centerPosition[2];
+                received_racer.block = *block;
+                received_racer.racer_index = usedIndex;
+                received_racer.source_sequence = source_sequence;
+                received_racer.valid = true;
+                received_racer.position_updated = received_racer.position_updated || position_changed;
             }
         }
 
-        hasReceived = true;
+        m_received_race_data_ready = true;
         hasReceivedAnyDataEver = true;
 
         // std::this_thread::sleep_for(std::chrono::milliseconds(16));

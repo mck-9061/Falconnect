@@ -454,8 +454,6 @@ public class FalconnectRace extends Thread {
 
     //HashMap<Integer, Set<Float>> playerPositions = new HashMap<>();
 
-    int cursor;
-
     for (FalconnectClientConnection client : getClients()) {
       int i = 0;
       List<Byte> cpuIndices = client.getLastReceivedCpuRacerIndices();
@@ -464,10 +462,8 @@ public class FalconnectRace extends Thread {
       for (byte[] racerData : client.getLastReceivedData()) {
         if (i == 0) {
           // Player's data
-          cursor =
-              ((client.playerNum - 1) * RaceDataFormat.RACER_DATA_BYTES)
-                  + RaceDataFormat.PACKET_HEADER_BYTES;
-          System.arraycopy(racerData, 0, packet, cursor, RaceDataFormat.RACER_DATA_BYTES);
+          int racerIndex = client.playerNum - 1;
+          writeRacerRecord(packet, racerIndex, racerData, sourceMetadata(client));
 
           //playerPositions.put(client.playerNum - 1, new HashSet<>());
           // Get racer's position from received data
@@ -492,10 +488,8 @@ public class FalconnectRace extends Thread {
           }
 
           // CPU data
-          cursor =
-              (cpuIndices.get(i - 1) * RaceDataFormat.RACER_DATA_BYTES)
-                  + RaceDataFormat.PACKET_HEADER_BYTES;
-          System.arraycopy(racerData, 0, packet, cursor, RaceDataFormat.RACER_DATA_BYTES);
+          int racerIndex = cpuIndices.get(i - 1);
+          writeRacerRecord(packet, racerIndex, racerData, sourceMetadata(client));
 
           //playerPositions.put(client.cpuStartIndex + i - 1, new HashSet<>());
           // Get racer's position from received data
@@ -527,6 +521,24 @@ public class FalconnectRace extends Thread {
 
     fullDataPacket = packet;
     // System.out.println("Packet constructed");
+  }
+
+  private static void writeRacerRecord(byte[] packet, int racerIndex, byte[] racerData,
+                                       int sourceSequence) {
+    int offset = RaceDataFormat.serverRecordOffset(racerIndex);
+    System.arraycopy(racerData, 0, packet, offset, RaceDataFormat.RACER_DATA_BYTES);
+    int sequenceOffset = offset + RaceDataFormat.RACER_DATA_BYTES;
+    packet[sequenceOffset] = (byte) (sourceSequence >>> 24);
+    packet[sequenceOffset + 1] = (byte) (sourceSequence >>> 16);
+    packet[sequenceOffset + 2] = (byte) (sourceSequence >>> 8);
+    packet[sequenceOffset + 3] = (byte) sourceSequence;
+  }
+
+  private static int sourceMetadata(FalconnectClientConnection client) {
+    // Player ownership is part of the metadata so a CPU handoff starts a new sequence domain.
+    // The remaining 24 bits are ample for one race and preserve packet ordering per source.
+    return ((client.playerNum & 0xff) << 24) |
+        (client.lastReceivedRacePacketSequence & 0x00ff_ffff);
   }
 
   public void SendFullDataPacket() throws IOException, InterruptedException {

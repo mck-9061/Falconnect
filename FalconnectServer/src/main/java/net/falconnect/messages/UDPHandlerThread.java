@@ -41,7 +41,7 @@ public class UDPHandlerThread extends Thread {
     while (!clientConnection.disconnected) {
       DatagramSocket udpSocket = clientConnection.udpSocket;
       if (udpSocket != null) {
-        byte[] data = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
+        byte[] data = new byte[RaceDataFormat.CLIENT_FULL_RACE_PACKET_BYTES];
 
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);

@@ -29,6 +29,7 @@ public class FullDataMessage extends FromClientMessage {
     if (count > origin.lastReceivedCount) {
       int missedPackets = count - origin.lastReceivedCount - 1;
       origin.lastReceivedCount = count;
+      origin.lastReceivedRacePacketSequence = count;
       for (int i = 0; i < 1 + cpuCount; i++) {
         byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
         System.arraycopy(

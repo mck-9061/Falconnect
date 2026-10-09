@@ -33,6 +33,7 @@ public class FalconnectClientConnection {
 
   public volatile int lastReceivedUdpPort;
   public int lastReceivedCount;
+  public volatile int lastReceivedRacePacketSequence;
   public volatile long lastUdpPacketReceivedAt;
   public volatile boolean cpuReallocationNeeded;
   public volatile boolean cpuRestorationNeeded;
@@ -168,6 +169,10 @@ public class FalconnectClientConnection {
   }
 
   public synchronized void resetRaceDataTracking() {
+    lastReceivedData = new ArrayList<>();
+    lastReceivedCpuRacerIndices = new ArrayList<>();
+    lastReceivedCount = 0;
+    lastReceivedRacePacketSequence = 0;
     lastPlayerRacerData = null;
     consecutiveDuplicatePlayerDataPackets = 0;
     duplicateRaceDataDetected = false;

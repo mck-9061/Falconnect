@@ -172,7 +172,11 @@ public class FalconnectRace extends Thread {
 
             for (FalconnectClientConnection client : getClients()) {
               new CpuAssignmentMessage(client).Send();
-              CourseMessage courseMessage = new CourseMessage(client, usedCourse, (byte) (getClients().size() - 1));
+              // GX's course setting is the number of opponent slots to initialise. That includes
+              // remote players as well as CPUs, but excludes this client's local racer.
+              int opponentCount = getClients().size() + totalCpus - 1;
+              CourseMessage courseMessage = new CourseMessage(client, usedCourse,
+                  (byte) opponentCount);
               Thread.sleep(20);
               courseMessage.Send();
               RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients(), this);

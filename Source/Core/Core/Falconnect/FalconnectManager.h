@@ -1,5 +1,7 @@
 #ifndef DOLPHIN_EMU_FALCONNECTMANAGER_H
 #define DOLPHIN_EMU_FALCONNECTMANAGER_H
+#include <array>
+
 #include "GXMemoryPatcher.h"
 #include "Core/Core.h"
 
@@ -41,6 +43,8 @@ private:
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
+    std::array<std::array<float, 3>, 30> m_remote_position_offsets{};
+    std::array<bool, 30> m_has_remote_position_offset{};
 };
 
 

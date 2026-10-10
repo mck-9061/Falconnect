@@ -28,8 +28,6 @@ public class FullDataMessage extends FromClientMessage {
 
     if (count > origin.lastReceivedCount) {
       int missedPackets = count - origin.lastReceivedCount - 1;
-      origin.lastReceivedCount = count;
-      origin.lastReceivedRacePacketSequence = count;
       for (int i = 0; i < 1 + cpuCount; i++) {
         byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
         System.arraycopy(
@@ -41,8 +39,10 @@ public class FullDataMessage extends FromClientMessage {
         allData.add(racerData);
       }
 
-      origin.setLastReceivedData(allData);
-      origin.setLastReceivedCpuRacerIndices(cpuIndices);
+      // Publish data, CPU ownership, and sequence together. The race broadcaster must never
+      // label an older payload with this packet's newer sequence number.
+      origin.publishReceivedRaceData(allData, cpuIndices, count);
+      origin.lastReceivedCount = count;
       origin.recordPlayerRacerData(allData.getFirst(), MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS);
       origin.hasUpdated = true;
       origin.lastUdpPacketReceivedAt = System.currentTimeMillis();

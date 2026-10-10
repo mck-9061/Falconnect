@@ -33,7 +33,6 @@ public class FalconnectClientConnection {
 
   public volatile int lastReceivedUdpPort;
   public int lastReceivedCount;
-  public volatile int lastReceivedRacePacketSequence;
   public volatile long lastUdpPacketReceivedAt;
   public volatile boolean cpuReallocationNeeded;
   public volatile boolean cpuRestorationNeeded;
@@ -53,14 +52,11 @@ public class FalconnectClientConnection {
   private final MessageSenderThread sendMessageThread;
   private final UDPHandlerThread udpHandlerThread;
 
-  private List<byte[]> lastReceivedData;
-  private List<Byte> lastReceivedCpuRacerIndices = new ArrayList<>();
+  private ReceivedRaceData latestReceivedRaceData = ReceivedRaceData.empty();
   public byte[] dataToSend;
 
   public FalconnectClientConnection(Socket socket) throws IOException {
     this.socket = socket;
-    lastReceivedData = new ArrayList<>();
-
     fromClientStream = new DataInputStream(socket.getInputStream());
     toClientStream = new DataOutputStream(socket.getOutputStream());
 
@@ -120,20 +116,44 @@ public class FalconnectClientConnection {
     if (currentUdpSocket != null) currentUdpSocket.close();
   }
 
-  public synchronized List<byte[]> getLastReceivedData() {
-    return lastReceivedData;
+  public static final class ReceivedRaceData {
+    private final List<byte[]> racerData;
+    private final List<Byte> cpuRacerIndices;
+    private final int sourceSequence;
+
+    private ReceivedRaceData(List<byte[]> racerData, List<Byte> cpuRacerIndices,
+                             int sourceSequence) {
+      this.racerData = racerData;
+      this.cpuRacerIndices = cpuRacerIndices;
+      this.sourceSequence = sourceSequence;
+    }
+
+    public static ReceivedRaceData empty() {
+      return new ReceivedRaceData(List.of(), List.of(), 0);
+    }
+
+    public List<byte[]> getRacerData() {
+      return racerData;
+    }
+
+    public List<Byte> getCpuRacerIndices() {
+      return cpuRacerIndices;
+    }
+
+    public int getSourceSequence() {
+      return sourceSequence;
+    }
   }
 
-  public synchronized void setLastReceivedData(List<byte[]> data) {
-    this.lastReceivedData = data;
+  public synchronized void publishReceivedRaceData(List<byte[]> racerData,
+                                                    List<Byte> cpuRacerIndices,
+                                                    int sourceSequence) {
+    latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
+        List.copyOf(cpuRacerIndices), sourceSequence);
   }
 
-  public synchronized void setLastReceivedCpuRacerIndices(List<Byte> indices) {
-    lastReceivedCpuRacerIndices = new ArrayList<>(indices);
-  }
-
-  public synchronized List<Byte> getLastReceivedCpuRacerIndices() {
-    return new ArrayList<>(lastReceivedCpuRacerIndices);
+  public synchronized ReceivedRaceData getLatestReceivedRaceData() {
+    return latestReceivedRaceData;
   }
 
   public synchronized List<Byte> getCpuRacerIndices() { return new ArrayList<>(cpuRacerIndices); }
@@ -169,10 +189,8 @@ public class FalconnectClientConnection {
   }
 
   public synchronized void resetRaceDataTracking() {
-    lastReceivedData = new ArrayList<>();
-    lastReceivedCpuRacerIndices = new ArrayList<>();
+    latestReceivedRaceData = ReceivedRaceData.empty();
     lastReceivedCount = 0;
-    lastReceivedRacePacketSequence = 0;
     lastPlayerRacerData = null;
     consecutiveDuplicatePlayerDataPackets = 0;
     duplicateRaceDataDetected = false;

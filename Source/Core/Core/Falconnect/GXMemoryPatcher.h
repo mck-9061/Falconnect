@@ -1,5 +1,7 @@
 #ifndef DOLPHIN_EMU_GXMEMORYPATCHER_H
 #define DOLPHIN_EMU_GXMEMORYPATCHER_H
+#include <array>
+
 #include "GXMemoryReader.h"
 #include "Core/Core.h"
 #include "Core/Debugger/PPCDebugInterface.h"
@@ -28,7 +30,8 @@ public:
     void SetOpponentRacerIds(const u8 racerIDs[]) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
-    void SetRacerData(u8 racerNum, const RacerMemoryBlock &patchData, bool full);
+    void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
+                      const std::array<u32, 3>& center_position);
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;

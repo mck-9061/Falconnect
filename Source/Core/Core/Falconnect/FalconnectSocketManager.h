@@ -1,5 +1,6 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
+#include <array>
 #include <cstddef>
 #include <mutex>
 #include <queue>
@@ -17,13 +18,31 @@ public:
 
     static constexpr std::size_t RACE_PACKET_HEADER_SIZE = 5;
     static constexpr std::size_t MAX_RACERS = 30;
+    static constexpr std::size_t SERVER_RACER_RECORD_SIZE =
+        RacerMemoryBlock::SOCKET_DATA_SIZE + sizeof(u32);
     static constexpr std::size_t FULL_RACE_PACKET_SIZE =
+        RACE_PACKET_HEADER_SIZE + (MAX_RACERS * SERVER_RACER_RECORD_SIZE);
+    static constexpr std::size_t CLIENT_FULL_RACE_PACKET_SIZE =
         RACE_PACKET_HEADER_SIZE + (MAX_RACERS * RacerMemoryBlock::SOCKET_DATA_SIZE);
 
-    static constexpr std::size_t RacePacketSize(const std::size_t racer_count)
+    static constexpr std::size_t ClientRacePacketSize(const std::size_t racer_count)
     {
       return RACE_PACKET_HEADER_SIZE + (racer_count * RacerMemoryBlock::SOCKET_DATA_SIZE);
     }
+
+    struct ReceivedRacerData
+    {
+        RacerMemoryBlock block{};
+        u8 racer_index = 0;
+        u32 source_sequence = 0;
+        bool valid = false;
+        bool position_updated = false;
+    };
+
+    struct ReceivedRaceData
+    {
+        std::array<ReceivedRacerData, MAX_RACERS> racers{};
+    };
 
     std::thread socketThread[1];
 
@@ -40,6 +59,8 @@ public:
     void SetRemoteCustomMachineData(std::vector<u8> machine_data);
     std::vector<u8> GetCustomMachineDataForRace() const;
     void HandleConnectionLost();
+    bool OwnsCpuRacer(u8 racer) const;
+    bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
 
     bool hasConnected = false;
     bool hasProperlyConnected = false;
@@ -51,7 +72,6 @@ public:
     bool exited = false;
     bool canLoad = false;
     bool shouldDisconnect = false;
-    bool hasReceived = false;
     bool shouldSendData = false;
     bool hasReceivedAnyDataEver = false;
 
@@ -72,10 +92,7 @@ public:
     //std::queue<OperationType> operationQueue;
     //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
 
-    RacerMemoryBlock* allBlocks[30] = {};
     RacerMemoryBlock* ourLastKnownData = nullptr;
-    u8 usedIndices[30] = {};
-    bool updated[30] = {};
 
 private:
     void Start();
@@ -94,10 +111,11 @@ private:
     bool shouldRunDataThread = true;
 
     u32 timeBeforePing = 0;
-
-    bool OwnsCpuRacer(u8 racer) const;
     mutable std::mutex m_cpu_assignment_mutex;
     std::vector<u8> m_cpu_racer_indices;
+    mutable std::mutex m_received_race_data_mutex;
+    ReceivedRaceData m_received_race_data;
+    bool m_received_race_data_ready = false;
     mutable std::mutex m_custom_machine_data_mutex;
     std::vector<u8> m_selected_custom_machine_data;
     std::vector<u8> m_remote_custom_machine_data;

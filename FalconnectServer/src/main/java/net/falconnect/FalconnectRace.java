@@ -455,15 +455,18 @@ public class FalconnectRace extends Thread {
     //HashMap<Integer, Set<Float>> playerPositions = new HashMap<>();
 
     for (FalconnectClientConnection client : getClients()) {
+      FalconnectClientConnection.ReceivedRaceData receivedRaceData =
+          client.getLatestReceivedRaceData();
       int i = 0;
-      List<Byte> cpuIndices = client.getLastReceivedCpuRacerIndices();
+      List<Byte> cpuIndices = receivedRaceData.getCpuRacerIndices();
       List<Byte> ownedCpuIndices = client.getCpuRacerIndices();
 
-      for (byte[] racerData : client.getLastReceivedData()) {
+      for (byte[] racerData : receivedRaceData.getRacerData()) {
         if (i == 0) {
           // Player's data
           int racerIndex = client.playerNum - 1;
-          writeRacerRecord(packet, racerIndex, racerData, sourceMetadata(client));
+          writeRacerRecord(packet, racerIndex, racerData,
+              sourceMetadata(client, receivedRaceData.getSourceSequence()));
 
           //playerPositions.put(client.playerNum - 1, new HashSet<>());
           // Get racer's position from received data
@@ -489,7 +492,8 @@ public class FalconnectRace extends Thread {
 
           // CPU data
           int racerIndex = cpuIndices.get(i - 1);
-          writeRacerRecord(packet, racerIndex, racerData, sourceMetadata(client));
+          writeRacerRecord(packet, racerIndex, racerData,
+              sourceMetadata(client, receivedRaceData.getSourceSequence()));
 
           //playerPositions.put(client.cpuStartIndex + i - 1, new HashSet<>());
           // Get racer's position from received data
@@ -534,11 +538,11 @@ public class FalconnectRace extends Thread {
     packet[sequenceOffset + 3] = (byte) sourceSequence;
   }
 
-  private static int sourceMetadata(FalconnectClientConnection client) {
+  private static int sourceMetadata(FalconnectClientConnection client, int sourceSequence) {
     // Player ownership is part of the metadata so a CPU handoff starts a new sequence domain.
     // The remaining 24 bits are ample for one race and preserve packet ordering per source.
     return ((client.playerNum & 0xff) << 24) |
-        (client.lastReceivedRacePacketSequence & 0x00ff_ffff);
+        (sourceSequence & 0x00ff_ffff);
   }
 
   public void SendFullDataPacket() throws IOException, InterruptedException {

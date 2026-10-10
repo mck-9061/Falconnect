@@ -557,11 +557,11 @@ void FalconnectSocketManager::SendDataThread() {
         //INFO_LOG_FMT(FALCONNECT, "Sent");
 
         //if (!hasReceivedAnyDataEver) std::this_thread::sleep_for(std::chrono::milliseconds(4));
-        //std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
 
-        while (!shouldSendData) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
+        // while (!shouldSendData) {
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // }
     }
 }
 

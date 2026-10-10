@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 
 #include "RacerMemoryBlock.h"
+#include "Core/Falconnect/CourseSettings.h"
 #include "Common/CommonTypes.h"
 
 
@@ -61,6 +62,7 @@ public:
     void HandleConnectionLost();
     bool OwnsCpuRacer(u8 racer) const;
     bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
+    Falconnect::CourseSettings GetCourseSettings() const;
 
     bool hasConnected = false;
     bool hasProperlyConnected = false;
@@ -79,8 +81,6 @@ public:
     u8 playerNumber = 0;
     u8 racerId = 6;
     u8 selectedCourse = 1;
-    u8 usedCourseId = 1;
-    u8 cpuCount = 29;
     u8 ourCpus = 0;
     u8 readyPlayerCount = 0;
     u8 totalPlayerCount = 0;
@@ -107,6 +107,9 @@ private:
     sockaddr_in serverUdpAddress{};
     bool hasStarted = false;
     bool doneFirst = false;
+
+    mutable std::mutex m_course_settings_mutex;
+    Falconnect::CourseSettings m_course_settings;
 
     bool shouldRunDataThread = true;
 

@@ -44,7 +44,9 @@ public class ConsoleCommandHandlerThread extends Thread {
             Integer track = race.getTrackOverride();
             output.println("Game " + race.getPortBlockIndex() + ": " + race.getClients().size()
                 + " players. State: " + race.gameState + ". Track override: "
-                + (track == null ? "none" : track));
+                + (track == null ? "none" : track)
+                + ". Lap count override: " + formatOverride(race.getLapCountOverride())
+                + ". Boost lap override: " + formatOverride(race.getBoostLapOverride()));
             for (FalconnectClientConnection client : race.getClients()) {
               output.println(client.uid + ". IP:" + client.socket.getRemoteSocketAddress()
                   + ". Name: " + new String(client.name) + ". State: " + client.state
@@ -82,7 +84,7 @@ public class ConsoleCommandHandlerThread extends Thread {
           output.println("Maximum CPUs per client set to " + server.getMaxCpusPerClient()
               + ". Applies to races that have not started loading yet.");
           break;
-        case "track":
+        case "track": {
           requireArguments(args, 2, "track <game-id> <track-id|clear>");
           int gameId = Integer.parseInt(args[1]);
           Integer trackId = args[2].equalsIgnoreCase("clear") ? null : parseTrackId(args[2]);
@@ -90,6 +92,19 @@ public class ConsoleCommandHandlerThread extends Thread {
           output.println(trackId == null ? "Track override cleared for game " + gameId + "."
               : "Game " + gameId + " will use track ID " + trackId + ".");
           break;
+        }
+        case "laps":
+        case "boostlap": {
+          requireArguments(args, 2, opcode + " <game-id> <" + (opcode.equals("laps") ? "count" : "lap") + "|clear>");
+          int gameId = Integer.parseInt(args[1]);
+          Integer value = args[2].equalsIgnoreCase("clear") ? null : Integer.parseInt(args[2]);
+          if (opcode.equals("laps")) server.setLapCountOverride(gameId, value);
+          else server.setBoostLapOverride(gameId, value);
+          String setting = opcode.equals("laps") ? "Lap count" : "Boost lap";
+          output.println(value == null ? setting + " override cleared for game " + gameId + "."
+              : setting + " override for game " + gameId + " set to " + value + ".");
+          break;
+        }
         default:
           output.println("Unknown command. Type help for commands and arguments.");
       }
@@ -105,6 +120,10 @@ public class ConsoleCommandHandlerThread extends Thread {
         ? Integer.parseInt(value.substring(2), 16) : Integer.parseInt(value);
   }
 
+  private static String formatOverride(Integer value) {
+    return value == null ? "track default" : value.toString();
+  }
+
   private static void requireArguments(String[] args, int count, String usage) {
     if (args.length != count + 1) throw new IllegalArgumentException("Usage: " + usage);
   }
@@ -118,6 +137,10 @@ public class ConsoleCommandHandlerThread extends Thread {
     output.println("kickall                           Kick every player and close every game; server stays online.");
     output.println("track <game-id> <track-id|clear>   Override a waiting game's track, or restore voting.");
     output.println("                                  Track IDs: 0-255, decimal or 0x-prefixed hexadecimal.");
+    output.println("laps <game-id> <count|clear>       Override a waiting game's lap count (1-255), or use the track default.");
+    output.println("boostlap <game-id> <lap|clear>     Override its boost lap (0-255, zero-based), or use the track default.");
+    output.println("                                  0 grants boost from the start; boost lap cannot exceed the lap count.");
+    output.println("                                  Incompatible track votes keep the game waiting until settings are corrected.");
     output.println("maxcpus <count>                   Set CPUs per client (0-29) for races not yet loading.");
     output.println("help                              List commands and arguments.");
     output.println("Settings last until server restart. Game IDs come from list and may be reused after closure.");

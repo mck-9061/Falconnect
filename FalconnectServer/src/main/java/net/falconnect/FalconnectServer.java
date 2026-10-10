@@ -23,7 +23,8 @@ public class FalconnectServer {
   private ConsoleCommandHandlerThread consoleCommandHandlerThread;
 
   public FalconnectServer() throws IOException {
-    this(new ServerSocket(8000));
+    this(null);
+    socket = new ServerSocket(8000);
     System.out.println("Server socket created");
 
     acceptClientConnectionThread = new AcceptClientConnectionThread(this);
@@ -35,12 +36,16 @@ public class FalconnectServer {
 
   // Separate construction from listener startup for embedded use and command tests.
   FalconnectServer(ServerSocket socket) {
+    // Validate every editable table row before starting any network threads.
+    TrackTable.get(0);
     this.socket = socket;
   }
 
   public int getMaxClientsPerRace() { return maxClientsPerRace; }
   public int getMaxConcurrentRaces() { return maxConcurrentRaces; }
   public int getMaxCpusPerClient() { return maxCpusPerClient; }
+
+  public TrackSettings getTrackSettings(int trackId) { return TrackTable.get(trackId); }
 
   public synchronized void setMaxClientsPerRace(int value) {
     requireRange(value, 2, RaceDataFormat.MAX_RACERS, "Maximum players per game");
@@ -67,11 +72,20 @@ public class FalconnectServer {
   }
 
   public synchronized void setTrackOverride(int gameId, Integer trackId) {
+    findGame(gameId).setTrackOverride(trackId);
+  }
+
+  public synchronized void setLapCountOverride(int gameId, Integer lapCount) {
+    findGame(gameId).setLapCountOverride(lapCount);
+  }
+
+  public synchronized void setBoostLapOverride(int gameId, Integer boostLap) {
+    findGame(gameId).setBoostLapOverride(boostLap);
+  }
+
+  private FalconnectRace findGame(int gameId) {
     for (FalconnectRace race : currentRaces) {
-      if (race.getPortBlockIndex() == gameId) {
-        race.setTrackOverride(trackId);
-        return;
-      }
+      if (race.getPortBlockIndex() == gameId) return race;
     }
     throw new IllegalArgumentException("No game with ID " + gameId + ". Use list to see game IDs.");
   }

@@ -321,13 +321,17 @@ void GXMemoryPatcher::SetRenderedText(const std::string &text) const {
 void GXMemoryPatcher::SetDefaultRaceSettings() const {
     manager.Write_U8(0x04, referencePointer + 0x24550d); // 4 CPU
     manager.Write_U8(0x01, referencePointer + 0x245517); // Allow restore
-    manager.Write_U8(0x03, referencePointer + 0x24551b); // 3 laps
+    SetLapCount(3); // Replaced with the server's track setting before loading.
     manager.Write_U8(0x03, referencePointer + 0x2453e9); // Master
     manager.Write_U8(0x03, referencePointer + 0x2453eb); // Master
 }
 
 void GXMemoryPatcher::SetCpuCount(const u8 cpuCount) const {
     manager.Write_U8(cpuCount, referencePointer + 0x24550d);
+}
+
+void GXMemoryPatcher::SetLapCount(const u8 lapCount) const {
+    manager.Write_U8(lapCount, referencePointer + 0x24551b);
 }
 
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& patchData,

@@ -1,6 +1,7 @@
 #ifndef DOLPHIN_EMU_FALCONNECTMANAGER_H
 #define DOLPHIN_EMU_FALCONNECTMANAGER_H
 #include <array>
+#include <atomic>
 
 #include "GXMemoryPatcher.h"
 #include "Core/Core.h"
@@ -30,7 +31,7 @@ public:
 
     u8 racerIDs[256];
     GameState currentState;
-    bool shouldStart;
+    std::atomic<bool> shouldStart{false};
     bool shouldReset = false;
 
     RacerMemoryBlock* lastWrittenBlocks[29];

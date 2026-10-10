@@ -168,7 +168,6 @@ void FalconnectManager::Update() {
 
         // Set up waiting text
         patcher->InitialiseText();
-        patcher->SetBoostLap(1);
 
         patcher->SetDefaultRaceSettings();
         patcher->EnablePositionAnnouncementsInPractice();
@@ -192,8 +191,7 @@ void FalconnectManager::Update() {
     }
 
     // Initial setup done, wait for the race to start
-    if (shouldStart) {
-        shouldStart = false;
+    if (shouldStart.exchange(false)) {
         currentState = GameState::RACE_LOADED;
         m_has_remote_position_offset.fill(false);
         m_remote_position_offset_history = {};
@@ -205,8 +203,12 @@ void FalconnectManager::Update() {
         //u8 racerIds[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
         //patcher->SetDefaultRaceSettings();
         patcher->SetOpponentRacerIds(racerIDs);
-        patcher->SetCourse(FalconnectSocketManager::instance->usedCourseId);
-        patcher->SetCpuCount(FalconnectSocketManager::instance->cpuCount);
+        // Apply one complete server snapshot before GX starts loading the selected course.
+        const auto course = FalconnectSocketManager::instance->GetCourseSettings();
+        patcher->SetCourse(course.track_id);
+        patcher->SetCpuCount(course.opponent_count);
+        patcher->SetLapCount(course.lap_count);
+        patcher->SetBoostLap(course.boost_lap);
         patcher->SetGrid();
         const std::vector<u8> custom_machine_data =
             FalconnectSocketManager::instance->GetCustomMachineDataForRace();

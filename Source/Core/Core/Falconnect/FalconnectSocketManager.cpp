@@ -72,6 +72,12 @@ bool FalconnectSocketManager::OwnsCpuRacer(const u8 racer) const
     return std::find(cpu_racer_indices.begin(), cpu_racer_indices.end(), racer) != cpu_racer_indices.end();
 }
 
+Falconnect::CourseSettings FalconnectSocketManager::GetCourseSettings() const
+{
+    const std::lock_guard<std::mutex> lock(m_course_settings_mutex);
+    return m_course_settings;
+}
+
 bool FalconnectSocketManager::ConsumeReceivedRaceData(ReceivedRaceData* received_data)
 {
     const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
@@ -348,10 +354,23 @@ void FalconnectSocketManager::SocketThread() {
 
             default:
                 invalidPacketCount = 0;
+                break;
 
             case FromServerPacketType::COURSE: {
-                usedCourseId = buffer[1];
-                cpuCount = buffer[2];
+                const auto settings = Falconnect::CourseSettings::Decode(
+                    {reinterpret_cast<const u8*>(buffer), sizeof(buffer)});
+                if (!settings) {
+                    ERROR_LOG_FMT(FALCONNECT, "Server sent invalid course settings");
+                    HandleConnectionLost();
+                    break;
+                }
+                {
+                    const std::lock_guard<std::mutex> lock(m_course_settings_mutex);
+                    m_course_settings = *settings;
+                }
+                INFO_LOG_FMT(FALCONNECT, "Track {} ({}): {} laps, boost on lap {}",
+                             settings->track_id, settings->track_name, settings->lap_count,
+                             settings->boost_lap);
 
                 break;
             }

@@ -10,6 +10,10 @@ public class FalconnectRace extends Thread {
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
   private int maxCpusPerClient;
   private Integer trackOverride;
+  private Integer lapCountOverride;
+  private Integer boostLapOverride;
+  private String lastSettingsError;
+  private TrackSettings selectedTrackSettings;
   private static final int REGULAR_MACHINE_COUNT = 30;
   private List<FalconnectClientConnection> clients;
   private FalconnectServer server;
@@ -58,13 +62,52 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized void setTrackOverride(Integer trackId) {
-    if (!isRunning || gameState != GameState.WAITING_FOR_READY)
-      throw new IllegalArgumentException("Track selection can only be changed while the game is waiting for players to ready up.");
+    requireWaitingForReady();
     if (trackId != null) FalconnectServer.requireRange(trackId, 0, 255, "Track ID");
+    validateOverrides(trackId, lapCountOverride, boostLapOverride);
     trackOverride = trackId;
   }
 
   public synchronized Integer getTrackOverride() { return trackOverride; }
+  public synchronized Integer getLapCountOverride() { return lapCountOverride; }
+  public synchronized Integer getBoostLapOverride() { return boostLapOverride; }
+
+  public synchronized void setLapCountOverride(Integer lapCount) {
+    requireWaitingForReady();
+    if (lapCount != null) FalconnectServer.requireRange(lapCount, 1, 255, "Lap count");
+    validateOverrides(trackOverride, lapCount, boostLapOverride);
+    lapCountOverride = lapCount;
+  }
+
+  public synchronized void setBoostLapOverride(Integer boostLap) {
+    requireWaitingForReady();
+    if (boostLap != null) FalconnectServer.requireRange(boostLap, 0, 255, "Boost lap");
+    validateOverrides(trackOverride, lapCountOverride, boostLap);
+    boostLapOverride = boostLap;
+  }
+
+  private void requireWaitingForReady() {
+    if (!isRunning || gameState != GameState.WAITING_FOR_READY)
+      throw new IllegalArgumentException("Race settings can only be changed while the game is waiting for players to ready up.");
+  }
+
+  private void validateOverrides(Integer trackId, Integer laps, Integer boost) {
+    if (trackId != null) resolveTrackSettings(trackId, laps, boost);
+    else if (laps != null && boost != null)
+      FalconnectServer.requireRange(boost, 0, laps, "Boost lap");
+  }
+
+  private TrackSettings resolveTrackSettings(int trackId, Integer laps, Integer boost) {
+    TrackSettings track = server.getTrackSettings(trackId);
+    int lapCount = laps == null ? track.lapCount() : laps;
+    int boostLap = boost == null ? track.boostLap() : boost;
+    if (boostLap > lapCount)
+      throw new IllegalArgumentException("Boost lap " + boostLap + " exceeds lap count "
+          + lapCount + " for track " + trackId + ".");
+    return new TrackSettings(trackId, track.name(), lapCount, boostLap);
+  }
+
+  public synchronized TrackSettings getSelectedTrackSettings() { return selectedTrackSettings; }
 
   public synchronized void Close() {
     isRunning = false;
@@ -78,9 +121,26 @@ public class FalconnectRace extends Thread {
         clients.stream().anyMatch(client -> client.disconnected || client.state != ClientState.READY))
       return null;
 
-    byte usedCourse = trackOverride == null
-        ? clients.get(new Random().nextInt(clients.size())).selectedCourse
-        : (byte) (int) trackOverride;
+    try {
+      List<TrackSettings> courses = new ArrayList<>();
+      if (trackOverride != null) {
+        courses.add(resolveTrackSettings(trackOverride, lapCountOverride, boostLapOverride));
+      } else {
+        // Votes may change after a command. Validate every candidate before choosing so an
+        // invalid combination neither kills the race thread nor silently changes the vote odds.
+        for (FalconnectClientConnection client : clients)
+          courses.add(resolveTrackSettings(Byte.toUnsignedInt(client.selectedCourse),
+              lapCountOverride, boostLapOverride));
+      }
+      selectedTrackSettings = courses.get(new Random().nextInt(courses.size()));
+      lastSettingsError = null;
+    } catch (IllegalArgumentException e) {
+      String error = "Cannot start game " + portBlockIndex + ": " + e.getMessage()
+          + " Adjust laps/boostlap overrides or the track vote.";
+      if (!error.equals(lastSettingsError)) System.out.println(error);
+      lastSettingsError = error;
+      return null;
+    }
     maxCpusPerClient = server.getMaxCpusPerClient();
     int totalCpus = Math.min(maxCpusPerClient * clients.size(),
         RaceDataFormat.MAX_RACERS - clients.size());
@@ -98,7 +158,7 @@ public class FalconnectRace extends Thread {
       client.udpPort = getUdpPort(client.playerNum);
     }
     gameState = GameState.WAITING_FOR_GRID;
-    return usedCourse;
+    return (byte) selectedTrackSettings.trackId();
   }
 
   public synchronized void GenerateCpuRacerIds() {
@@ -164,7 +224,9 @@ public class FalconnectRace extends Thread {
             BroadcastLobbyStatusIfChanged();
             Byte usedCourse = PrepareRaceStart();
             if (usedCourse != null) {
-              System.out.println("Starting!");
+              System.out.println("Starting " + selectedTrackSettings.name() + " (track "
+                  + selectedTrackSettings.trackId() + "): " + selectedTrackSettings.lapCount()
+                  + " laps, boost on lap " + selectedTrackSettings.boostLap());
               int totalCpus = getClients().stream().mapToInt(client -> client.numCpus).sum();
               for (FalconnectClientConnection client : getClients()) {
                 client.RebindUdpSocket();
@@ -180,7 +242,7 @@ public class FalconnectRace extends Thread {
                 // GX's course setting is the number of opponent slots to initialise. That includes
                 // remote players as well as CPUs, but excludes this client's local racer.
                 int opponentCount = getClients().size() + totalCpus - 1;
-                CourseMessage courseMessage = new CourseMessage(client, usedCourse,
+                CourseMessage courseMessage = new CourseMessage(client, selectedTrackSettings,
                     (byte) opponentCount);
                 Thread.sleep(20);
                 courseMessage.Send();

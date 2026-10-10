@@ -37,6 +37,7 @@ public:
     void SetGrid() const;
     void SetCourse(u8 courseID) const;
     void SetCpuCount(u8 cpuCount) const;
+    void SetLapCount(u8 lapCount) const;
     void ConstrainMenu() const;
     void InitialiseNameLabels() const;
     void ResetToTitle() const;

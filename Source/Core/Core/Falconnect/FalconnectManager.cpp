@@ -196,6 +196,7 @@ void FalconnectManager::Update() {
         shouldStart = false;
         currentState = GameState::RACE_LOADED;
         m_has_remote_position_offset.fill(false);
+        m_remote_position_offset_history = {};
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -221,18 +222,18 @@ void FalconnectManager::Update() {
     // Wait for the machine to grid, then let the socket manager know we've gridded
     if (currentState == GameState::RACE_LOADED) {
         if (patcher->memoryReader->HasGridded()) {
-            INFO_LOG_FMT(FALCONNECT, "Sending initial frames");
+            // INFO_LOG_FMT(FALCONNECT, "Sending initial frames");
 
             const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
 
             for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
                 const u8 cpuRacer = cpu_racer_indices[i];
                 FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
-                INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
+                // INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
             }
 
             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-            INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
+            // INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
 
             currentState = GameState::RACE_GRIDDED;
             FalconnectSocketManager::instance->hasGridded = true;
@@ -246,10 +247,10 @@ void FalconnectManager::Update() {
     // Wait for the signal to start
     if (currentState == GameState::RACE_GRIDDED) {
         if (FalconnectSocketManager::instance->start) {
-            INFO_LOG_FMT(FALCONNECT, "Starting");
+            // INFO_LOG_FMT(FALCONNECT, "Starting");
             patcher->StartCountdown();
             patcher->InitialiseNameLabels();
-            INFO_LOG_FMT(FALCONNECT, "Countdown started");
+            // INFO_LOG_FMT(FALCONNECT, "Countdown started");
             currentState = GameState::RACING;
         }
     }
@@ -285,7 +286,7 @@ void FalconnectManager::Update() {
         while (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data) &&
                !FalconnectSocketManager::instance->shouldDisconnect) {
             if (std::chrono::steady_clock::now() - data_wait_started >= std::chrono::seconds(5)) {
-                INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
+                // INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
                 FalconnectSocketManager::instance->HandleConnectionLost();
                 return;
             }
@@ -310,25 +311,45 @@ void FalconnectManager::Update() {
                     continue;
                 }
 
-                auto& position_offset = m_remote_position_offsets[i];
+                auto& position_offset_history = m_remote_position_offset_history[i];
                 if (received_racer.position_updated ||
                     !m_has_remote_position_offset[i]) {
-                    for (std::size_t axis = 0; axis < position_offset.size(); axis++) {
-                        position_offset[axis] =
+                    if (m_has_remote_position_offset[i]) {
+                        for (std::size_t sample = 0;
+                             sample + 1 < position_offset_history.size(); sample++) {
+                            position_offset_history[sample] = position_offset_history[sample + 1];
+                        }
+                    }
+
+                    auto& latest_position_offset = position_offset_history.back();
+                    for (std::size_t axis = 0; axis < latest_position_offset.size(); axis++) {
+                        latest_position_offset[axis] =
                             std::bit_cast<float>(racer_block.centerPosition[axis]) -
                             std::bit_cast<float>(our_actual_data->centerPosition[axis]);
+                    }
+
+                    // There is no history for a newly seen racer, so seed every sample with
+                    // its first received offset rather than blending toward the origin.
+                    if (!m_has_remote_position_offset[i]) {
+                        position_offset_history.fill(latest_position_offset);
                     }
                     m_has_remote_position_offset[i] = true;
                 }
 
                 std::array<u32, 3> center_position{};
                 for (std::size_t axis = 0; axis < center_position.size(); axis++) {
+                    float interpolated_position_offset = 0.0f;
+                    for (const auto& position_offset : position_offset_history) {
+                        interpolated_position_offset += position_offset[axis];
+                    }
+                    interpolated_position_offset /=
+                        static_cast<float>(position_offset_history.size());
                     center_position[axis] = std::bit_cast<u32>(
                         std::bit_cast<float>(our_actual_data->centerPosition[axis]) +
-                        position_offset[axis]);
+                        interpolated_position_offset);
                 }
 
-                patcher->SetRacerData(racer_num, racer_block, true, center_position);
+                patcher->SetRacerData(racer_num, racer_block, received_racer.position_updated, center_position);
             }
         }
         //if (frameCount >= 1) frameCount = 0;
@@ -338,7 +359,7 @@ void FalconnectManager::Update() {
             readCounter++;
 
             if (readCounter > 3) {
-                INFO_LOG_FMT(FALCONNECT, "Exited race!");
+                // INFO_LOG_FMT(FALCONNECT, "Exited race!");
                 FalconnectSocketManager::instance->exited = true;
 
                 // Check that we're still in practice mode; if not, disconnect

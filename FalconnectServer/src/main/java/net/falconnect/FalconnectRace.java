@@ -3,14 +3,13 @@ package net.falconnect;
 import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.*;
 
 public class FalconnectRace extends Thread {
   private static final long UDP_TIMEOUT_MILLIS = 5_000;
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
-  private static final int MAX_CPUS_PER_CLIENT = 3;
+  private int maxCpusPerClient;
+  private Integer trackOverride;
   private static final int REGULAR_MACHINE_COUNT = 30;
   private List<FalconnectClientConnection> clients;
   private FalconnectServer server;
@@ -21,8 +20,8 @@ public class FalconnectRace extends Thread {
   private int lastLobbyPlayerCount = -1;
   private int lastLobbyReadyCount = -1;
 
-  public GameState gameState;
-  public boolean isRunning;
+  public volatile GameState gameState;
+  public volatile boolean isRunning;
 
   public FalconnectRace(FalconnectServer server, int portBlockIndex) throws IOException {
     clients = new ArrayList<>();
@@ -37,7 +36,7 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized boolean HasSpace() {
-    return clients.size() < FalconnectServer.MAX_CLIENTS_PER_RACE;
+    return isRunning && clients.size() < server.getMaxClientsPerRace();
   }
 
   public int getPortBlockIndex() {
@@ -46,7 +45,7 @@ public class FalconnectRace extends Thread {
 
   public int getUdpPort(byte playerNum) {
     return FalconnectServer.UDP_PORT_BASE
-        - (portBlockIndex * FalconnectServer.MAX_CLIENTS_PER_RACE)
+        - (portBlockIndex * FalconnectServer.UDP_PORTS_PER_RACE)
         - playerNum;
   }
 
@@ -55,7 +54,51 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized List<FalconnectClientConnection> getClients() {
-    return clients;
+    return List.copyOf(clients);
+  }
+
+  public synchronized void setTrackOverride(Integer trackId) {
+    if (!isRunning || gameState != GameState.WAITING_FOR_READY)
+      throw new IllegalArgumentException("Track selection can only be changed while the game is waiting for players to ready up.");
+    if (trackId != null) FalconnectServer.requireRange(trackId, 0, 255, "Track ID");
+    trackOverride = trackId;
+  }
+
+  public synchronized Integer getTrackOverride() { return trackOverride; }
+
+  public synchronized void Close() {
+    isRunning = false;
+    interrupt();
+  }
+
+  // Capture settings and select the course under the same lock as console track overrides.
+  // This limit is retained through CPU handoff/restoration for the whole race.
+  synchronized Byte PrepareRaceStart() {
+    if (!isRunning || gameState != GameState.WAITING_FOR_READY || clients.size() < 2 ||
+        clients.stream().anyMatch(client -> client.disconnected || client.state != ClientState.READY))
+      return null;
+
+    byte usedCourse = trackOverride == null
+        ? clients.get(new Random().nextInt(clients.size())).selectedCourse
+        : (byte) (int) trackOverride;
+    maxCpusPerClient = server.getMaxCpusPerClient();
+    int totalCpus = Math.min(maxCpusPerClient * clients.size(),
+        RaceDataFormat.MAX_RACERS - clients.size());
+    int baseCpuCount = totalCpus / clients.size();
+    int remainder = totalCpus % clients.size();
+    int nextCpuIndex = clients.size();
+    byte playerNum = 1;
+    for (FalconnectClientConnection client : clients) {
+      client.playerNum = playerNum++;
+      int cpuCount = baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
+      List<Byte> cpuIndices = new ArrayList<>();
+      for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
+      client.setHomeCpuRacerIndices(cpuIndices);
+      client.cpuStartIndex = cpuIndices.isEmpty() ? 0 : cpuIndices.get(0);
+      client.udpPort = getUdpPort(client.playerNum);
+    }
+    gameState = GameState.WAITING_FOR_GRID;
+    return usedCourse;
   }
 
   public synchronized void GenerateCpuRacerIds() {
@@ -77,6 +120,12 @@ public class FalconnectRace extends Thread {
     clients.add(client);
   }
 
+  public synchronized boolean TryAddClient(FalconnectClientConnection client) {
+    if (!HasSpace() || gameState != GameState.WAITING_FOR_READY) return false;
+    AddClient(client);
+    return true;
+  }
+
   public synchronized void RemoveClient(FalconnectClientConnection client) {
     client.CloseUdpSocket();
 
@@ -93,171 +142,132 @@ public class FalconnectRace extends Thread {
 
   public void run() {
     long time = System.nanoTime();
-    while (true) {
-      // wait for half a frame to pass
-      long currentTime = System.nanoTime();
-      if (currentTime - time < 8333333) continue;
+    try {
+      while (isRunning) {
+        // wait for half a frame to pass
+        long currentTime = System.nanoTime();
+        if (currentTime - time < 8333333) continue;
 
-      time = currentTime;
+        time = currentTime;
 
 
-      try {
-        // Wait for all players to be ready
-        // System.out.println("???");
+        try {
+          // Wait for all players to be ready
+          // System.out.println("???");
 
-        if (IsClientsEmpty()) return;
+          if (IsClientsEmpty() && server.RemoveRaceIfEmpty(this)) return;
 
-        // System.out.println(gameState);
+          // System.out.println(gameState);
 
-        if (gameState == GameState.WAITING_FOR_READY) {
-          RemoveDisconnectedClients();
-          BroadcastLobbyStatusIfChanged();
-          boolean allReady = true;
-          for (FalconnectClientConnection client : getClients()) {
-            // System.out.println(client.playerNum + " " + client.state);
-            if (client.state != ClientState.READY) {
-              allReady = false;
-              break;
+          if (gameState == GameState.WAITING_FOR_READY) {
+            RemoveDisconnectedClients();
+            BroadcastLobbyStatusIfChanged();
+            Byte usedCourse = PrepareRaceStart();
+            if (usedCourse != null) {
+              System.out.println("Starting!");
+              int totalCpus = getClients().stream().mapToInt(client -> client.numCpus).sum();
+              for (FalconnectClientConnection client : getClients()) {
+                client.RebindUdpSocket();
+                new ConnectedMessage(client).Send();
+              }
+
+              Thread.sleep(1000);
+
+              GenerateCpuRacerIds();
+
+              for (FalconnectClientConnection client : getClients()) {
+                new CpuAssignmentMessage(client).Send();
+                // GX's course setting is the number of opponent slots to initialise. That includes
+                // remote players as well as CPUs, but excludes this client's local racer.
+                int opponentCount = getClients().size() + totalCpus - 1;
+                CourseMessage courseMessage = new CourseMessage(client, usedCourse,
+                    (byte) opponentCount);
+                Thread.sleep(20);
+                courseMessage.Send();
+                RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients(), this);
+                Thread.sleep(20);
+                racerIdsMessage.Send();
+                CustomMachineDataMessage customMachineDataMessage =
+                    new CustomMachineDataMessage(client, getClients());
+                Thread.sleep(20);
+                customMachineDataMessage.Send();
+                NamesMessage namesMessage = new NamesMessage(client, getClients());
+                Thread.sleep(20);
+                namesMessage.Send();
+                StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
+                Thread.sleep(20);
+                message.Send();
+
+                client.lastReceivedCount = 0;
+              }
             }
           }
 
-          if (allReady && getClients().size() > 1) {
-            System.out.println("Starting!");
-            gameState = GameState.WAITING_FOR_GRID;
+          // Wait for all players to be gridded
+          if (gameState == GameState.WAITING_FOR_GRID) {
+            RemoveDisconnectedClients();
+            boolean allGridded = true;
+            for (FalconnectClientConnection client : getClients()) {
+              // System.out.printf("Client %s - %s", client.playerNum, client.state);
+              if (client.state != ClientState.GRIDDED) {
+                allGridded = false;
+                break;
+              }
+            }
 
-            if (IsClientsEmpty()) {
-              System.out.println("Nevermind all the players left");
+            if (allGridded) {
+              System.out.println("All clients gridded; sending START_RACE to " + getClients().size() + " clients");
+              gameState = GameState.RACING;
+              for (FalconnectClientConnection client : getClients()) {
+                client.lastUdpPacketReceivedAt = System.currentTimeMillis();
+                client.resetRaceDataTracking();
+                System.out.println("Sending START_RACE to player " + client.playerNum);
+                StatusMessage message = new StatusMessage(client, ToClientPacketType.START_RACE);
+                message.Send();
+              }
+            }
+          }
+
+          // Send machine data
+          if (gameState == GameState.RACING) {
+            RebalanceCpuAssignments();
+            DisconnectClientsWithRepeatedRaceData();
+            DisconnectTimedOutClients();
+            RemoveDisconnectedClients();
+
+            //System.out.println("Sending data...");
+            SendFullDataPacket();
+            //System.out.println("Done");
+
+            // If all players finished, end race
+            boolean allDone = true;
+            for (FalconnectClientConnection client : getClients()) {
+              if ((client.state == ClientState.RACING ||
+                client.state == ClientState.GRIDDED) && !client.disconnected) {
+                allDone = false;
+                break;
+              }
+            }
+
+            if (allDone) {
+              System.out.println("Resetting!");
+              // Players move to a new lobby; this finished game must not accept joins or overrides.
+              isRunning = false;
 
               RemoveDisconnectedClients();
 
               server.EndRace(this);
               return;
             }
-
-            // Select a course from those voted for
-            List<Byte> courses = new ArrayList<>();
-            for (FalconnectClientConnection client : getClients())
-              courses.add(client.selectedCourse);
-            byte usedCourse = courses.get((new Random()).nextInt(courses.size()));
-
-            byte num = 1;
-
-            RemoveDisconnectedClients();
-            int nextCpuIndex = getClients().size();
-            int totalCpus = Math.min(MAX_CPUS_PER_CLIENT * getClients().size(),
-                RaceDataFormat.MAX_RACERS - getClients().size());
-            int baseCpuCount = totalCpus / getClients().size();
-            int remainder = totalCpus % getClients().size();
-            for (FalconnectClientConnection client : getClients()) {
-              // Re-assign player numbers
-              client.playerNum = num;
-              num++;
-
-              int cpuCount = baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
-              List<Byte> cpuIndices = new ArrayList<>();
-              for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
-              client.setHomeCpuRacerIndices(cpuIndices);
-              client.cpuStartIndex = cpuIndices.isEmpty() ? 0 : cpuIndices.get(0);
-              client.udpPort = getUdpPort(client.playerNum);
-
-              client.RebindUdpSocket();
-
-              ConnectedMessage connectedMessage = new ConnectedMessage(client);
-              connectedMessage.Send();
-            }
-
-            Thread.sleep(1000);
-
-            GenerateCpuRacerIds();
-
-            for (FalconnectClientConnection client : getClients()) {
-              new CpuAssignmentMessage(client).Send();
-              // GX's course setting is the number of opponent slots to initialise. That includes
-              // remote players as well as CPUs, but excludes this client's local racer.
-              int opponentCount = getClients().size() + totalCpus - 1;
-              CourseMessage courseMessage = new CourseMessage(client, usedCourse,
-                  (byte) opponentCount);
-              Thread.sleep(20);
-              courseMessage.Send();
-              RacerIdsMessage racerIdsMessage = new RacerIdsMessage(client, getClients(), this);
-              Thread.sleep(20);
-              racerIdsMessage.Send();
-              CustomMachineDataMessage customMachineDataMessage =
-                  new CustomMachineDataMessage(client, getClients());
-              Thread.sleep(20);
-              customMachineDataMessage.Send();
-              NamesMessage namesMessage = new NamesMessage(client, getClients());
-              Thread.sleep(20);
-              namesMessage.Send();
-              StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
-              Thread.sleep(20);
-              message.Send();
-
-              client.lastReceivedCount = 0;
-            }
           }
+        } catch (InterruptedException | IOException e) {
+          if (!isRunning) return;
+          throw new RuntimeException(e);
         }
-
-        // Wait for all players to be gridded
-        if (gameState == GameState.WAITING_FOR_GRID) {
-          RemoveDisconnectedClients();
-          boolean allGridded = true;
-          for (FalconnectClientConnection client : getClients()) {
-            // System.out.printf("Client %s - %s", client.playerNum, client.state);
-            if (client.state != ClientState.GRIDDED) {
-              allGridded = false;
-              break;
-            }
-          }
-
-          if (allGridded) {
-            System.out.println("All clients gridded; sending START_RACE to " + getClients().size() + " clients");
-            gameState = GameState.RACING;
-            for (FalconnectClientConnection client : getClients()) {
-              client.lastUdpPacketReceivedAt = System.currentTimeMillis();
-              client.resetRaceDataTracking();
-              System.out.println("Sending START_RACE to player " + client.playerNum);
-              StatusMessage message = new StatusMessage(client, ToClientPacketType.START_RACE);
-              message.Send();
-            }
-          }
-        }
-
-        // Send machine data
-        if (gameState == GameState.RACING) {
-          RebalanceCpuAssignments();
-          DisconnectClientsWithRepeatedRaceData();
-          DisconnectTimedOutClients();
-          RemoveDisconnectedClients();
-
-          //System.out.println("Sending data...");
-          SendFullDataPacket();
-          //System.out.println("Done");
-
-          // If all players finished, end race
-          boolean allDone = true;
-          for (FalconnectClientConnection client : getClients()) {
-            if ((client.state == ClientState.RACING ||
-              client.state == ClientState.GRIDDED) && !client.disconnected) {
-              allDone = false;
-              break;
-            }
-          }
-
-          if (allDone) {
-            System.out.println("Resetting!");
-            gameState = GameState.WAITING_FOR_READY;
-
-            RemoveDisconnectedClients();
-
-            server.EndRace(this);
-            isRunning = false;
-            return;
-          }
-        }
-      } catch (InterruptedException | IOException e) {
-        throw new RuntimeException(e);
       }
+    } finally {
+      isRunning = false;
+      server.RemoveRace(this);
     }
   }
 
@@ -334,7 +344,7 @@ public class FalconnectRace extends Thread {
     List<Byte> sourceCpuIndices = source.getCpuRacerIndices();
     if (sourceCpuIndices.isEmpty()) return;
 
-    // A recipient can never be assigned more than its initial maximum of three CPUs. If a
+    // A recipient can never be assigned more than this race's configured CPU limit. If a
     // player disappears after every remaining client reaches that limit, the surplus racers
     // deliberately remain unowned rather than making a client produce an oversized packet.
     List<Byte> pendingCpuIndices = new ArrayList<>(sourceCpuIndices);
@@ -345,7 +355,7 @@ public class FalconnectRace extends Thread {
     while (!pendingCpuIndices.isEmpty()) {
       FalconnectClientConnection recipient = getClients().stream()
           .filter(other -> other != source && !other.disconnected &&
-              other.getCpuRacerIndices().size() < MAX_CPUS_PER_CLIENT &&
+              other.getCpuRacerIndices().size() < maxCpusPerClient &&
               CanReceiveCpuAssignment(other, now))
           .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
           .orElse(null);
@@ -388,6 +398,7 @@ public class FalconnectRace extends Thread {
   private void RestoreHomeCpuAssignment(FalconnectClientConnection recoveringClient) throws InterruptedException {
     List<Byte> restored = recoveringClient.getCpuRacerIndices();
     for (Byte cpuIndex : recoveringClient.getHomeCpuRacerIndices()) {
+      if (restored.size() >= maxCpusPerClient) break;
       if (restored.contains(cpuIndex)) continue;
       for (FalconnectClientConnection owner : getClients()) {
         if (owner == recoveringClient) continue;
@@ -422,20 +433,7 @@ public class FalconnectRace extends Thread {
       Thread.currentThread().interrupt();
     }
 
-    try {
-      // The queued sender stops as soon as disconnected becomes true. A disconnect notice must
-      // therefore be written before changing that flag or closing the TCP socket.
-      new DisconnectMessage(client, reason).SendDataFromThread();
-    } catch (Exception e) {
-      System.out.println("Unable to send disconnect notice to client " + client.playerNum);
-    }
-    client.disconnected = true;
-    client.CloseUdpSocket();
-    try {
-      client.socket.close();
-    } catch (IOException e) {
-      System.out.println("Unable to close TCP connection for player " + client.playerNum);
-    }
+    client.Disconnect(reason);
   }
 
   private long packetNum = 0;

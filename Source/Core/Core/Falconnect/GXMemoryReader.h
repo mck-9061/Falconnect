@@ -1,5 +1,7 @@
 #ifndef DOLPHIN_EMU_GXMEMORYREADER_H
 #define DOLPHIN_EMU_GXMEMORYREADER_H
+#include <array>
+#include <chrono>
 #include "RacerMemoryBlock.h"
 #include "Common/CommonTypes.h"
 #include "Core/Core.h"
@@ -32,6 +34,7 @@ public:
 
 private:
     Memory::MemoryManager& manager;
+    mutable std::array<std::chrono::steady_clock::time_point, 30> m_last_timing_log{};
 
     u32 lastTime = 0;
     u32 gridTimer = 0;

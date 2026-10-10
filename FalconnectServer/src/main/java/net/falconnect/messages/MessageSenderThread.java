@@ -53,6 +53,7 @@ public class MessageSenderThread extends Thread {
         }
 
       } catch (IOException | InterruptedException e) {
+        if (clientConnection.disconnected) return;
         throw new RuntimeException(e);
       }
     }

@@ -4,6 +4,7 @@ import net.falconnect.messages.MessageHandlerThread;
 import net.falconnect.messages.MessageSenderThread;
 import net.falconnect.messages.UDPHandlerThread;
 import net.falconnect.messages.toclient.ToClientMessage;
+import net.falconnect.messages.toclient.DisconnectMessage;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -19,7 +20,7 @@ public class FalconnectClientConnection {
   public volatile DatagramSocket udpSocket;
   public DataInputStream fromClientStream;
   private final DataOutputStream toClientStream;
-  public ClientState state;
+  public volatile ClientState state;
 
   public int uid;
   public byte playerNum;
@@ -46,7 +47,7 @@ public class FalconnectClientConnection {
   private int consecutiveDuplicatePlayerDataPackets;
 
   public boolean hasUpdated = false;
-  public boolean disconnected = false;
+  public volatile boolean disconnected = false;
 
   private final MessageHandlerThread receiveMessageThread;
   private final MessageSenderThread sendMessageThread;
@@ -56,6 +57,10 @@ public class FalconnectClientConnection {
   public byte[] dataToSend;
 
   public FalconnectClientConnection(Socket socket) throws IOException {
+    this(socket, true);
+  }
+
+  FalconnectClientConnection(Socket socket, boolean startThreads) throws IOException {
     this.socket = socket;
     fromClientStream = new DataInputStream(socket.getInputStream());
     toClientStream = new DataOutputStream(socket.getOutputStream());
@@ -72,17 +77,18 @@ public class FalconnectClientConnection {
     lastReceivedCount = 0;
 
     receiveMessageThread = new MessageHandlerThread(this);
-    receiveMessageThread.start();
-
     sendMessageThread = new MessageSenderThread(this);
-    sendMessageThread.start();
-
     udpHandlerThread = new UDPHandlerThread(this);
-    udpHandlerThread.start();
-    System.out.println("Message receiver thread started");
+    if (startThreads) {
+      receiveMessageThread.start();
+      sendMessageThread.start();
+      udpHandlerThread.start();
+      System.out.println("Message receiver thread started");
+    }
   }
 
   public void SendPacket(byte[] packet) throws IOException, InterruptedException {
+    if (disconnected) return;
     //Thread.sleep(4);
 
     if (packet[0] == ToClientPacketType.FULL_DATA.ordinal()) {
@@ -96,15 +102,39 @@ public class FalconnectClientConnection {
 
       return;
     }
-    toClientStream.write(packet);
+    synchronized (toClientStream) {
+      if (!disconnected) toClientStream.write(packet);
+    }
   }
 
   public void SendMessage(ToClientMessage message) throws InterruptedException {
-    sendMessageThread.messagesToSend.put(message);
+    if (!disconnected) sendMessageThread.messagesToSend.put(message);
+  }
+
+  public void Disconnect(String reason) {
+    synchronized (toClientStream) {
+      try {
+        // Deliver the notice before stopping the queued sender. Serialize it with TCP frames.
+        if (!disconnected) new DisconnectMessage(this, reason).SendDataFromThread();
+      } catch (IOException e) {
+        System.out.println("Unable to send disconnect notice to player " + uid);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        disconnected = true;
+      }
+    }
+    CloseUdpSocket();
+    try {
+      socket.close();
+    } catch (IOException e) {
+      System.out.println("Unable to close TCP connection for player " + uid);
+    }
   }
 
   public synchronized void RebindUdpSocket() throws IOException {
     CloseUdpSocket();
+    if (disconnected) return;
     udpSocket = new DatagramSocket(udpPort);
   }
 

@@ -154,10 +154,10 @@ void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
 
     u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
     if (baseAddress < 0x80000000) {
-        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
         baseAddress = racerBaseAddress;
         if (baseAddress < 0x80000000) {
-            INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+            // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
             return;
         }
     }
@@ -334,31 +334,32 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
                                    const bool full, const std::array<u32, 3>& center_position) {
     if (racerNum == 0) return;
 
-  u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
+  u32 blockBaseAddress = manager.Read_U32(referencePointer + 0x227878);
 
     //INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
-    if (baseAddress < 0x80000000) {
-        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
-        baseAddress = racerBaseAddress;
-        if (baseAddress < 0x80000000) {
-            INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+    if (blockBaseAddress < 0x80000000) {
+        // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        blockBaseAddress = racerBaseAddress;
+        if (blockBaseAddress < 0x80000000) {
+            // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
             return;
         }
     }
 
-    racerBaseAddress = baseAddress;
+    racerBaseAddress = blockBaseAddress;
 
-    baseAddress += (racerNum * 0x620);
+    const u32 baseAddress = blockBaseAddress + (racerNum * 0x620);
 
   manager.Write_U32(patchData.state, baseAddress);
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
     manager.Write_U8(0x04, baseAddress);
 
+    manager.Write_U32(center_position[0], baseAddress + (31 * 4));
+    manager.Write_U32(center_position[1], baseAddress + (32 * 4));
+    manager.Write_U32(center_position[2], baseAddress + (33 * 4));
+
     if (full) {
-        manager.Write_U32(center_position[0], baseAddress + (31 * 4));
-        manager.Write_U32(center_position[1], baseAddress + (32 * 4));
-        manager.Write_U32(center_position[2], baseAddress + (33 * 4));
 
         // manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
         // manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
@@ -434,11 +435,45 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 
-    if (const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum)) {
+    const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
+    const auto now = std::chrono::steady_clock::now();
+    const bool log_timing = racerNum < m_last_timing_log.size() &&
+        now - m_last_timing_log[racerNum] >= std::chrono::seconds(1);
+    std::array<u32, 3> timing_before{};
+    if (log_timing && secondaryAddress != 0) {
+        for (std::size_t i = 0; i < timing_before.size(); i++)
+            timing_before[i] = manager.Read_U32(
+                secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
+    }
+    if (secondaryAddress != 0) {
         for (std::size_t i = 0; i < patchData.timingData.size(); i++)
             manager.Write_U32(patchData.timingData[i],
                               secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
     }
+    if (log_timing) {
+        m_last_timing_log[racerNum] = now;
+        std::array<u32, 3> timing_after{};
+        if (secondaryAddress != 0) {
+            for (std::size_t i = 0; i < timing_after.size(); i++)
+                timing_after[i] = manager.Read_U32(
+                    secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
+        }
+        INFO_LOG_FMT(FALCONNECT,
+                     "TIMING APPLY local_racer={} secondary={:08x} action={} "
+                     "before=[{:08x},{:08x},{:08x}] received=[{:08x},{:08x},{:08x}] "
+                     "after=[{:08x},{:08x},{:08x}] changed_since_last_write={}",
+                     racerNum, secondaryAddress, secondaryAddress != 0 ? "written" : "invalid-chain",
+                     timing_before[0], timing_before[1], timing_before[2], patchData.timingData[0],
+                     patchData.timingData[1], patchData.timingData[2], timing_after[0], timing_after[1],
+                     timing_after[2], m_has_written_timing[racerNum] &&
+                         timing_before != m_last_written_timing[racerNum]);
+    }
+    if (secondaryAddress != 0 && racerNum < m_last_written_timing.size()) {
+        m_last_written_timing[racerNum] = patchData.timingData;
+        m_has_written_timing[racerNum] = true;
+    }
+
+    ScheduleInvalidateCacheRange(baseAddress, 388);
 }
 
 void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {
@@ -447,7 +482,7 @@ void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u
     //INFO_LOG_FMT(FALCONNECT, "Base racer address: 0x{}", std::format("{:x}", baseAddress));
 
     if (baseAddress < 0x80000000) {
-        INFO_LOG_FMT(FALCONNECT, "Invalid address!");
+        // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
         return;
     }
 
@@ -571,7 +606,7 @@ void GXMemoryPatcher::InitialiseNameLabels() const {
         u8 usedIndex = i;
         if (i == 0) usedIndex = FalconnectSocketManager::instance->playerNumber - 1;
         if (i == FalconnectSocketManager::instance->playerNumber - 1) {
-            INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+            // INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
             // Do want to put our own name in though
             SetRacerMachineName(0, FalconnectSocketManager::instance->names[i]);
 

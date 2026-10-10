@@ -60,10 +60,21 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     }
 
     RacerMemoryBlock* block = RacerMemoryBlock::CreateFromDolphinData(dolphinMemory);
-    if (const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum)) {
+    const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
+    if (secondaryAddress != 0) {
         for (std::size_t i = 0; i < block->timingData.size(); i++)
             block->timingData[i] =
                 manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (racerNum < m_last_timing_log.size() &&
+        now - m_last_timing_log[racerNum] >= std::chrono::seconds(1)) {
+        m_last_timing_log[racerNum] = now;
+        INFO_LOG_FMT(FALCONNECT,
+                     "TIMING READ local_racer={} primary={:08x} secondary={:08x} "
+                     "chain={} state={:08x} words=[{:08x},{:08x},{:08x}]",
+                     racerNum, address, secondaryAddress, secondaryAddress != 0 ? "ok" : "invalid",
+                     block->state, block->timingData[0], block->timingData[1], block->timingData[2]);
     }
     //INFO_LOG_FMT(FALCONNECT, "State: {}", block->state);
 
@@ -77,15 +88,19 @@ u32 GXMemoryReader::ReadSecondaryRacerAddress(const u8 racerNum) const {
     const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
     if (baseAddress < 0x80000020 || baseAddress > ramEnd) return 0;
 
-    // The pointer before the first primary block heads a linked list, not a flat array.
-    u32 address = manager.Read_U32(baseAddress - 0x20);
-    for (u8 i = 0; i <= racerNum; i++) {
-        if (address < 0x80000000 ||
-            static_cast<u64>(address) + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
-        if (i == racerNum) return address;
-        address = manager.Read_U32(address + 0x540);
-    }
-    return 0;
+    // The local human has a separate block; its +0x540 pointer heads the CPU array.
+    const u32 humanAddress = manager.Read_U32(baseAddress - 0x20);
+    if (humanAddress < 0x80000000 ||
+        static_cast<u64>(humanAddress) + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
+    if (racerNum == 0) return humanAddress;
+
+    const u32 cpuBaseAddress = manager.Read_U32(humanAddress + 0x540);
+    if (cpuBaseAddress < 0x80000000) return 0;
+
+    // Local racer 1 is the first CPU block. Use wide arithmetic before validating the range.
+    const u64 cpuAddress = static_cast<u64>(cpuBaseAddress) + (racerNum - 1) * 0x820;
+    if (cpuAddress + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
+    return static_cast<u32>(cpuAddress);
 }
 
 std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
@@ -93,7 +108,7 @@ std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
   const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
 
     if (baseAddress < 0x80000000 || baseAddress > 0x81000000) {
-        INFO_LOG_FMT(FALCONNECT, "Invalid racer pointer!");
+        // INFO_LOG_FMT(FALCONNECT, "Invalid racer pointer!");
         std::vector<u32> dolphinMemory;
         dolphinMemory.push_back(0);
         return dolphinMemory;
@@ -136,7 +151,7 @@ bool GXMemoryReader::HasGridded() {
 
     if (data[0] & 0x0000FF00) {
         gridTimer += (time(nullptr) - lastTime);
-        INFO_LOG_FMT(FALCONNECT, "{}", gridTimer);
+        // INFO_LOG_FMT(FALCONNECT, "{}", gridTimer);
     } else {
         gridTimer = 0;
     }

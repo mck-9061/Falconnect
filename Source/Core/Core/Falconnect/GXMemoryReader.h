@@ -24,6 +24,9 @@ public:
 
     RacerMemoryBlock *ReadRacerData(u8 racerNum) const;
     std::vector<u32> ReadRawRacerData(u8 racerNum) const;
+    // Returns zero when the secondary racer chain is not available.
+    u32 ReadSecondaryRacerAddress(u8 racerNum) const;
+    static constexpr u32 TIMING_DATA_OFFSET = 0x738;
 
     u32 referencePointer{};
 

@@ -149,6 +149,9 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &
 
     block->magic = usedData[32];
 
+    for (std::size_t i = 0; i < block->timingData.size(); i++)
+        block->timingData[i] = usedData[33 + i];
+
     // block->centerPosOscX = usedData[44];
     // block->centerPosOscY = usedData[45];
     // block->centerPosOscZ = usedData[46];
@@ -219,6 +222,8 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     data.push_back(restoreFlag);
 
     data.push_back(magic);
+
+    data.insert(data.end(), timingData.begin(), timingData.end());
 
     // data.push_back(centerPosOscX);
     // data.push_back(centerPosOscY);

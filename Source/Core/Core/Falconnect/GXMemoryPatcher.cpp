@@ -433,6 +433,12 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     manager.Write_U32(patchData.maxSpeed, baseAddress + (139 * 4));
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
+
+    if (const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum)) {
+        for (std::size_t i = 0; i < patchData.timingData.size(); i++)
+            manager.Write_U32(patchData.timingData[i],
+                              secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
+    }
 }
 
 void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {

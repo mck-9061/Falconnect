@@ -1,6 +1,7 @@
 #ifndef DOLPHIN_EMU_RACERMEMORYBLOCK_H
 #define DOLPHIN_EMU_RACERMEMORYBLOCK_H
 #include "Common/CommonTypes.h"
+#include <array>
 #include <cstddef>
 #include <vector>
 
@@ -20,7 +21,8 @@ public:
         7 +  // inputs
         1 +  // sideAttack
         4 +  // maxSpeedKmh, acceleration, baseSpeed, maxSpeed
-        1;   // restoreFlag
+        1 +  // restoreFlag
+        3;   // timingData (12 bytes from the secondary racer block)
     static constexpr std::size_t SOCKET_DATA_SIZE = SOCKET_FIELD_COUNT * sizeof(u32);
 
     static RacerMemoryBlock* CreateFromDolphinData(const std::vector<u32> &data);
@@ -64,6 +66,7 @@ public:
     u32 baseSpeed;
     u32 maxSpeed;
     u32 restoreFlag;
+    std::array<u32, 3> timingData{};
     u32 centerPosOscX;
     u32 centerPosOscY;
     u32 centerPosOscZ;

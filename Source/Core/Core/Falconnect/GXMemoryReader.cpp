@@ -60,9 +60,32 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     }
 
     RacerMemoryBlock* block = RacerMemoryBlock::CreateFromDolphinData(dolphinMemory);
+    if (const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum)) {
+        for (std::size_t i = 0; i < block->timingData.size(); i++)
+            block->timingData[i] =
+                manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));
+    }
     //INFO_LOG_FMT(FALCONNECT, "State: {}", block->state);
 
     return block;
+}
+
+u32 GXMemoryReader::ReadSecondaryRacerAddress(const u8 racerNum) const {
+    if (racerNum >= 30) return 0;
+
+    const u32 ramEnd = 0x80000000 + manager.GetRamSizeReal();
+    const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
+    if (baseAddress < 0x80000020 || baseAddress > ramEnd) return 0;
+
+    // The pointer before the first primary block heads a linked list, not a flat array.
+    u32 address = manager.Read_U32(baseAddress - 0x20);
+    for (u8 i = 0; i <= racerNum; i++) {
+        if (address < 0x80000000 ||
+            static_cast<u64>(address) + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
+        if (i == racerNum) return address;
+        address = manager.Read_U32(address + 0x540);
+    }
+    return 0;
 }
 
 std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const

@@ -18,7 +18,8 @@ public final class RaceDataFormat {
       7 +  // inputs
       1 +  // side attack
       4 +  // speed/acceleration values
-      1;   // restore flag
+      1 +  // restore flag
+      3;   // timing data (12 bytes from the secondary racer block)
   public static final int RACER_DATA_BYTES = RACER_FIELD_COUNT * Integer.BYTES;
   public static final int RACER_SEQUENCE_BYTES = Integer.BYTES;
   public static final int SERVER_RACER_RECORD_BYTES = RACER_DATA_BYTES + RACER_SEQUENCE_BYTES;

@@ -15,6 +15,7 @@ public final class RaceDataFormat {
       3 +  // up vector
       3 +  // gravity orientation
       3 +  // speed, aerial tilt, energy
+      3 +  // track orientation
       7 +  // inputs
       1 +  // side attack
       4 +  // speed/acceleration values

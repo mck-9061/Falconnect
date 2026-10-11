@@ -44,11 +44,14 @@ private:
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
-    static constexpr std::size_t REMOTE_POSITION_OFFSET_HISTORY_SIZE = 4;
-    // Each remote racer keeps four received positions relative to our local racer. Averaging
-    // those samples avoids applying every network position as an abrupt correction.
-    std::array<std::array<std::array<float, 3>, REMOTE_POSITION_OFFSET_HISTORY_SIZE>, 30>
-        m_remote_position_offset_history{};
+    static constexpr std::size_t REMOTE_POSITION_HISTORY_SIZE = 30;
+    // A remote racer only advances its rendered offset when its next received position is
+    // compatible with the direction established by these accepted world positions.
+    std::array<std::array<std::array<float, 3>, REMOTE_POSITION_HISTORY_SIZE>, 30>
+        m_remote_position_history{};
+    std::array<std::size_t, 30> m_remote_position_history_counts{};
+    std::array<std::array<float, 3>, 30> m_remote_position_offsets{};
+    std::array<u8, 30> m_remote_position_source_players{};
     std::array<bool, 30> m_has_remote_position_offset{};
 };
 

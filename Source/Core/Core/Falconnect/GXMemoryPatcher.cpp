@@ -410,9 +410,9 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
         manager.Write_U32(patchData.speed, baseAddress + (95 * 4));
         manager.Write_U32(patchData.arialTilt, baseAddress + (96 * 4));
         //
-        //manager.Write_U32(patchData.trackOrientation[0], baseAddress + (111 * 4));
-        //manager.Write_U32(patchData.trackOrientation[1], baseAddress + (112 * 4));
-        //manager.Write_U32(patchData.trackOrientation[2], baseAddress + (113 * 4));
+        manager.Write_U32(patchData.trackOrientation[0], baseAddress + (111 * 4));
+        manager.Write_U32(patchData.trackOrientation[1], baseAddress + (112 * 4));
+        manager.Write_U32(patchData.trackOrientation[2], baseAddress + (113 * 4));
 
         //manager.Write_U32(patchData.bottomPosition[0], baseAddress + (117 * 4));
         //manager.Write_U32(patchData.bottomPosition[1], baseAddress + (118 * 4));

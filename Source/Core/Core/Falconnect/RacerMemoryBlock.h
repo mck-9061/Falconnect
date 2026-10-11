@@ -18,6 +18,7 @@ public:
         3 +  // upVector
         3 +  // orientationGravity
         3 +  // speed, arialTilt, energy
+        3 +  // trackOrientation
         7 +  // inputs
         1 +  // sideAttack
         4 +  // maxSpeedKmh, acceleration, baseSpeed, maxSpeed

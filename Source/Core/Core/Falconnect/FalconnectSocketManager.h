@@ -103,8 +103,8 @@ public:
 
 private:
     void Start();
-    void NotifyServerWhenGridded();
-    void NotifyServerWhenReadyToLoad();
+    void NotifyServerWhenGridded() const;
+    void NotifyServerWhenReadyToLoad() const;
 
     RacerMemoryBlock* framesToSend[30] = {};
 

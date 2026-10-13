@@ -208,24 +208,21 @@ void FalconnectManager::Update() {
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
         // Set racer IDs
-        //patcher->SetOpponentRacerId(racerIDs[1]);
-        //u8 racerIds[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29};
-        //patcher->SetDefaultRaceSettings();
         patcher->SetOpponentRacerIds(racerIDs);
-        // Apply one complete server snapshot before GX starts loading the selected course.
+
         const auto course = FalconnectSocketManager::instance->GetCourseSettings();
         patcher->SetCourse(course.track_id);
         patcher->SetCpuCount(course.opponent_count);
         patcher->SetLapCount(course.lap_count);
         patcher->SetBoostLap(course.boost_lap);
         patcher->SetGrid();
+
         const std::vector<u8> custom_machine_data =
             FalconnectSocketManager::instance->GetCustomMachineDataForRace();
         if (!custom_machine_data.empty()) {
             patcher->SetCustomMachineData(custom_machine_data);
             patcher->SetupCustomMachines();
         }
-        //patcher->StopPhysicsOnReceivedMachines();
 
         patcher->StartRaceFromPracticeOptions();
     }
@@ -268,12 +265,11 @@ void FalconnectManager::Update() {
 
     if (currentState == GameState::RACING) {
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
-        // Process operation queue and keep frame to send updated
+        // Update frames to send
         const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
         for (const u8 cpuRacer : cpu_racer_indices)
             patcher->EnableAIControlFor(cpuRacer, 1);
 
-        //patcher->EnableAIControlFor(0, 1);
          FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
 
          for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
@@ -293,15 +289,17 @@ void FalconnectManager::Update() {
 
         FalconnectSocketManager::ReceivedRaceData received_race_data;
         const auto data_wait_started = std::chrono::steady_clock::now();
+
         while (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data) &&
                !FalconnectSocketManager::instance->shouldDisconnect) {
             if (std::chrono::steady_clock::now() - data_wait_started >= std::chrono::seconds(5)) {
-                // INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
+                INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
                 FalconnectSocketManager::instance->HandleConnectionLost();
                 return;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
         if (FalconnectSocketManager::instance->shouldDisconnect) return;
         FalconnectSocketManager::instance->shouldSendData = true;
 
@@ -316,7 +314,6 @@ void FalconnectManager::Update() {
         bool has_remote_frame_difference = false;
         s64 remote_frame_difference = 0;
 
-        //frameCount++;
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
             const auto& received_racer = received_race_data.racers[i];
@@ -356,6 +353,7 @@ void FalconnectManager::Update() {
                     frame_differences.emplace_back(received_snapshot_time, frame_difference);
                     auto& frame_difference_counts = m_remote_frame_difference_counts[i];
                     ++frame_difference_counts[frame_difference];
+
                     while (!frame_differences.empty() &&
                            received_snapshot_time - frame_differences.front().first >
                                FRAME_DIFFERENCE_WINDOW) {
@@ -439,8 +437,6 @@ void FalconnectManager::Update() {
         if (has_remote_frame_difference)
             race_status += " | FD: " + std::to_string(remote_frame_difference);
         patcher->SetRenderedText(race_status);
-
-        //if (frameCount >= 1) frameCount = 0;
 
         // Check if we've exited the race to the menu
         if (!patcher->memoryReader->ReadIsInRace()) {

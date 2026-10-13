@@ -362,6 +362,12 @@ void FalconnectManager::Update() {
                 const bool accepts_received_data =
                     frame_difference == modal_frame_difference;
 
+                const std::string frame_difference_label =
+                    "D:" + std::to_string(modal_frame_difference);
+                std::vector<u8> racer_name(32, 0);
+                std::copy_n(frame_difference_label.begin(), frame_difference_label.size(), racer_name.begin());
+                patcher->SetRacerMachineName(racer_num, racer_name);
+
                 auto& latest_position_offset = m_latest_remote_position_offsets[i];
                 if (accepts_received_data &&
                     (received_racer.position_updated || !m_has_remote_position_offset[i])) {

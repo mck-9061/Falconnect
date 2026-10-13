@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.util.*;
 
 public class FalconnectRace extends Thread {
+  // TEMPORARY: set false to restore balanced CPU ownership after protocol testing.
+  private static final boolean TEST_SECOND_PLAYER_OWNS_ALL_CPUS = true;
   private static final long UDP_TIMEOUT_MILLIS = 5_000;
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
   private int maxCpusPerClient;
@@ -150,7 +152,8 @@ public class FalconnectRace extends Thread {
     byte playerNum = 1;
     for (FalconnectClientConnection client : clients) {
       client.playerNum = playerNum++;
-      int cpuCount = baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
+      int cpuCount = TEST_SECOND_PLAYER_OWNS_ALL_CPUS ? (client.playerNum == 2 ? totalCpus : 0)
+          : baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
       List<Byte> cpuIndices = new ArrayList<>();
       for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
       client.setHomeCpuRacerIndices(cpuIndices);
@@ -409,13 +412,18 @@ public class FalconnectRace extends Thread {
     }
   }
 
+  private int CpuCapacity(FalconnectClientConnection client) {
+    // The test owner must also be able to reclaim its entire assignment after a handoff.
+    return Math.max(maxCpusPerClient, client.getHomeCpuRacerIndices().size());
+  }
+
   private void TransferCpuAssignments(FalconnectClientConnection source, boolean notifySource)
       throws InterruptedException {
     long now = System.currentTimeMillis();
     List<Byte> sourceCpuIndices = source.getCpuRacerIndices();
     if (sourceCpuIndices.isEmpty()) return;
 
-    // A recipient can never be assigned more than this race's configured CPU limit. If a
+    // A recipient stays within this race's configured limit or its larger test assignment. If a
     // player disappears after every remaining client reaches that limit, the surplus racers
     // deliberately remain unowned rather than making a client produce an oversized packet.
     List<Byte> pendingCpuIndices = new ArrayList<>(sourceCpuIndices);
@@ -426,7 +434,7 @@ public class FalconnectRace extends Thread {
     while (!pendingCpuIndices.isEmpty()) {
       FalconnectClientConnection recipient = getClients().stream()
           .filter(other -> other != source && !other.disconnected &&
-              other.getCpuRacerIndices().size() < maxCpusPerClient &&
+              other.getCpuRacerIndices().size() < CpuCapacity(other) &&
               CanReceiveCpuAssignment(other, now))
           .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
           .orElse(null);
@@ -469,7 +477,7 @@ public class FalconnectRace extends Thread {
   private void RestoreHomeCpuAssignment(FalconnectClientConnection recoveringClient) throws InterruptedException {
     List<Byte> restored = recoveringClient.getCpuRacerIndices();
     for (Byte cpuIndex : recoveringClient.getHomeCpuRacerIndices()) {
-      if (restored.size() >= maxCpusPerClient) break;
+      if (restored.size() >= CpuCapacity(recoveringClient)) break;
       if (restored.contains(cpuIndex)) continue;
       for (FalconnectClientConnection owner : getClients()) {
         if (owner == recoveringClient) continue;
@@ -477,10 +485,11 @@ public class FalconnectRace extends Thread {
         if (owned.remove(cpuIndex)) {
           owner.setCpuRacerIndices(owned);
           new CpuAssignmentMessage(owner).Send();
-          restored.add(cpuIndex);
           break;
         }
       }
+      // A CPU can be unowned if the remaining clients ran out of handoff capacity.
+      restored.add(cpuIndex);
     }
     recoveringClient.setCpuRacerIndices(restored);
     recoveringClient.cpuHandoffActive = false;

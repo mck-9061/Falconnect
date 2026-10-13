@@ -526,6 +526,8 @@ void FalconnectSocketManager::SendDataThread()
     constexpr auto interval = std::chrono::nanoseconds(1'000'000'000 / 360);
     auto deadline = SendClock::now();
     auto next_full = deadline;
+    constexpr auto full_interval = std::chrono::milliseconds(100);
+    auto last_timing_log = SendClock::time_point{};
     u32 sequence = 0;
     while (shouldRunDataThread)
     {
@@ -549,13 +551,16 @@ void FalconnectSocketManager::SendDataThread()
             if (!ready)
                 continue;
             full = m_force_full_update || now >= next_full;
+            const bool log_timing = full && now - last_timing_log >= std::chrono::seconds(1);
+            if (log_timing)
+                last_timing_log = now;
             const auto append = [&](u8 local_racer, u8 server_racer) {
                 data.push_back(server_racer);
                 data.push_back(full ? 1 : 0);
                 const auto& block = *m_frames_to_send[local_racer];
                 const auto payload = full ? block.GetSocketData() : block.GetInputSocketData();
                 data.insert(data.end(), payload.begin(), payload.end());
-                if (full)
+                if (log_timing)
                     INFO_LOG_FMT(FALCONNECT, "TIMING TX player={} seq={} local_racer={} server_racer={} words=[{:08x},{:08x},{:08x}]",
                                  playerNumber, sequence, local_racer, server_racer,
                                  block.timingData[0], block.timingData[1], block.timingData[2]);
@@ -567,8 +572,15 @@ void FalconnectSocketManager::SendDataThread()
         }
         const auto sent = sendto(serverUdpSocket, reinterpret_cast<const char*>(data.data()), data.size(), 0,
                                 reinterpret_cast<sockaddr*>(&serverUdpAddress), sizeof(serverUdpAddress));
-        if (full && sent == static_cast<decltype(sent)>(data.size()))
-            next_full = now + std::chrono::seconds(1);
+        if (full && sent == static_cast<decltype(sent)>(data.size())) {
+            // Keep 10 Hz deadlines independent of the 360 Hz sender's wake-up jitter.
+            // An extra ownership update does not postpone the next regular full snapshot.
+            if (now >= next_full) {
+                next_full += full_interval;
+                if (next_full <= now)
+                    next_full = now + full_interval;
+            }
+        }
     }
 }
 

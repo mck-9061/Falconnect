@@ -31,10 +31,10 @@ public class FullDataMessage extends FromClientMessage {
       origin.lastUdpPacketReceivedAt = System.currentTimeMillis();
       origin.hasReceivedRaceData = true;
       if (origin.cpuHandoffActive) origin.cpuRestorationNeeded = true;
-      // Holding the same controls is normal. Only compare the once-per-second full snapshots
+      // Holding the same controls is normal. Only compare the 10-per-second full snapshots
       // for the existing frozen-game watchdog (about 15 seconds of identical vehicle data).
       records.stream().filter(record -> record.racer() == origin.playerNum - 1 && record.full())
-          .findFirst().ifPresent(record -> origin.recordPlayerRacerData(record.payload(), 15));
+          .findFirst().ifPresent(record -> origin.recordPlayerRacerData(record.payload(), 150));
     }
   }
 }

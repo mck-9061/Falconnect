@@ -13,7 +13,8 @@ enum class FromServerPacketType : char {
     DISCONNECT,
     CPU_ASSIGNMENT,
     LOBBY_STATUS,
-    CUSTOM_MACHINE_DATA
+    CUSTOM_MACHINE_DATA,
+    UDP_PONG
 };
 
 enum class ToServerPacketType : char {
@@ -22,7 +23,8 @@ enum class ToServerPacketType : char {
     SETTINGS,
     RESET,
     DISCONNECT,
-    NAME
+    NAME,
+    UDP_PING
 };
 
 #endif //DOLPHIN_EMU_PACKETTYPE_H

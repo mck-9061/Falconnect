@@ -62,6 +62,14 @@ public class FalconnectClientConnection {
 
   FalconnectClientConnection(Socket socket, boolean startThreads) throws IOException {
     this.socket = socket;
+    if (startThreads) {
+      try {
+        ProtocolVersion.exchange(socket);
+      } catch (IOException e) {
+        socket.close();
+        throw e;
+      }
+    }
     fromClientStream = new DataInputStream(socket.getInputStream());
     toClientStream = new DataOutputStream(socket.getOutputStream());
 

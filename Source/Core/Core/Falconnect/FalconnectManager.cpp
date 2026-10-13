@@ -2,7 +2,6 @@
 
 #include <bit>
 #include <chrono>
-#include <cmath>
 #include <iostream>
 #include <thread>
 
@@ -137,7 +136,9 @@ void FalconnectManager::Update() {
                       FalconnectSocketManager::instance->shouldDisconnect = true;
                   }
 
-                  SuccessAlertFmt("Failed to connect to Falconnect server!");
+                  const auto& connection_error = FalconnectSocketManager::instance->connectionError;
+                  SuccessAlertFmt("Failed to connect to Falconnect server!{}{}",
+                                  connection_error.empty() ? "" : "\n", connection_error);
                   shouldReset = true;
 
                   return;
@@ -195,10 +196,7 @@ void FalconnectManager::Update() {
     if (shouldStart.exchange(false)) {
         currentState = GameState::RACE_LOADED;
         m_has_remote_position_offset.fill(false);
-        m_remote_position_history = {};
-        m_remote_position_history_counts.fill(0);
-        m_remote_position_offsets = {};
-        m_remote_position_source_players.fill(0);
+        m_remote_position_offset_history = {};
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -317,98 +315,45 @@ void FalconnectManager::Update() {
                     continue;
                 }
 
-                auto& position_history = m_remote_position_history[i];
-                auto& position_history_count = m_remote_position_history_counts[i];
-                auto& position_offset = m_remote_position_offsets[i];
-                const u8 source_player = static_cast<u8>(received_racer.source_sequence >> 24);
-                const bool source_changed =
-                    m_has_remote_position_offset[i] &&
-                    m_remote_position_source_players[i] != source_player;
-                if (source_changed) {
-                    // A CPU handoff changes the sender. Its history must not influence whether
-                    // the new owner's first positions are accepted.
-                    position_history = {};
-                    position_history_count = 0;
-                }
-
-                bool accepted_position = !received_racer.position_updated;
-                if (received_racer.position_updated || source_changed ||
+                auto& position_offset_history = m_remote_position_offset_history[i];
+                if (received_racer.position_updated ||
                     !m_has_remote_position_offset[i]) {
-                    std::array<float, 3> received_position{};
-                    for (std::size_t axis = 0; axis < received_position.size(); axis++) {
-                        received_position[axis] =
-                            std::bit_cast<float>(racer_block.centerPosition[axis]);
-                    }
-
-                    accepted_position = true;
-                    if (position_history_count >= 2) {
-                        const auto& oldest_position = position_history[0];
-                        const auto& last_accepted_position =
-                            position_history[position_history_count - 1];
-
-                        std::array<float, 3> overall_direction{};
-                        std::array<float, 3> received_direction{};
-                        float overall_direction_length_squared = 0.0f;
-                        float received_direction_length_squared = 0.0f;
-                        for (std::size_t axis = 0; axis < received_position.size(); axis++) {
-                            overall_direction[axis] =
-                                last_accepted_position[axis] - oldest_position[axis];
-                            received_direction[axis] =
-                                received_position[axis] - last_accepted_position[axis];
-                            overall_direction_length_squared +=
-                                overall_direction[axis] * overall_direction[axis];
-                            received_direction_length_squared +=
-                                received_direction[axis] * received_direction[axis];
-                        }
-
-                        constexpr float minimum_direction_length_squared = 0.0001f;
-                        if (overall_direction_length_squared > minimum_direction_length_squared &&
-                            received_direction_length_squared > minimum_direction_length_squared) {
-                            float direction_dot_product = 0.0f;
-                            for (std::size_t axis = 0; axis < received_position.size(); axis++) {
-                                direction_dot_product +=
-                                    overall_direction[axis] * received_direction[axis];
-                            }
-
-                            // Accept turns up to 120 degrees; reject a clear reversal caused
-                            // by a stale/jittering position.
-                            constexpr float minimum_accepted_direction_dot_product = -0.5f;
-                            const float normalized_dot_product = direction_dot_product /
-                                std::sqrt(overall_direction_length_squared *
-                                          received_direction_length_squared);
-                            accepted_position = normalized_dot_product >=
-                                minimum_accepted_direction_dot_product;
+                    if (m_has_remote_position_offset[i]) {
+                        for (std::size_t sample = 0;
+                             sample + 1 < position_offset_history.size(); sample++) {
+                            position_offset_history[sample] = position_offset_history[sample + 1];
                         }
                     }
 
-                    if (accepted_position) {
-                        if (position_history_count == position_history.size()) {
-                            for (std::size_t sample = 0;
-                                 sample + 1 < position_history.size(); sample++) {
-                                position_history[sample] = position_history[sample + 1];
-                            }
-                            position_history_count--;
-                        }
-                        position_history[position_history_count++] = received_position;
-                        for (std::size_t axis = 0; axis < position_offset.size(); axis++) {
-                            position_offset[axis] = received_position[axis] -
-                                std::bit_cast<float>(our_actual_data->centerPosition[axis]);
-                        }
+                    auto& latest_position_offset = position_offset_history.back();
+                    for (std::size_t axis = 0; axis < latest_position_offset.size(); axis++) {
+                        latest_position_offset[axis] =
+                            std::bit_cast<float>(racer_block.centerPosition[axis]) -
+                            std::bit_cast<float>(our_actual_data->centerPosition[axis]);
                     }
 
+                    // There is no history for a newly seen racer, so seed every sample with
+                    // its first received offset rather than blending toward the origin.
+                    if (!m_has_remote_position_offset[i]) {
+                        position_offset_history.fill(latest_position_offset);
+                    }
                     m_has_remote_position_offset[i] = true;
-                    m_remote_position_source_players[i] = source_player;
                 }
 
                 std::array<u32, 3> center_position{};
                 for (std::size_t axis = 0; axis < center_position.size(); axis++) {
+                    float averaged_position_offset = 0.0f;
+                    for (const auto& position_offset : position_offset_history) {
+                        averaged_position_offset += position_offset[axis];
+                    }
+                    averaged_position_offset /=
+                        static_cast<float>(position_offset_history.size());
                     center_position[axis] = std::bit_cast<u32>(
                         std::bit_cast<float>(our_actual_data->centerPosition[axis]) +
-                        position_offset[axis]);
+                        averaged_position_offset);
                 }
 
-                patcher->SetRacerData(racer_num, racer_block,
-                                      received_racer.position_updated && accepted_position,
+                patcher->SetRacerData(racer_num, racer_block, true,
                                       center_position);
             }
         }

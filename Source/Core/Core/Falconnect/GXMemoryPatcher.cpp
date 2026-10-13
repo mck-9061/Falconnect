@@ -335,7 +335,8 @@ void GXMemoryPatcher::SetLapCount(const u8 lapCount) const {
 }
 
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& patchData,
-                                   const bool full, const std::array<u32, 3>& center_position) {
+                                   const bool full,
+                                   const std::array<u32, 3>& resolved_center_position) {
     if (racerNum == 0) return;
 
   u32 blockBaseAddress = manager.Read_U32(referencePointer + 0x227878);
@@ -359,32 +360,15 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
     manager.Write_U8(0x04, baseAddress);
 
-    manager.Write_U32(center_position[0], baseAddress + (31 * 4));
-    manager.Write_U32(center_position[1], baseAddress + (32 * 4));
-    manager.Write_U32(center_position[2], baseAddress + (33 * 4));
+    manager.Write_U32(resolved_center_position[0], baseAddress + (31 * 4));
+    manager.Write_U32(resolved_center_position[1], baseAddress + (32 * 4));
+    manager.Write_U32(resolved_center_position[2], baseAddress + (33 * 4));
 
     if (full) {
-
-        // manager.Write_U32(patchData.centerPosition[0], baseAddress + (31 * 4));
-        // manager.Write_U32(patchData.centerPosition[1], baseAddress + (32 * 4));
-        // manager.Write_U32(patchData.centerPosition[2], baseAddress + (33 * 4));
-        //
-        //manager.Write_U32(patchData.lastCenterPosition[0], baseAddress + (34 * 4));
-        //manager.Write_U32(patchData.lastCenterPosition[1], baseAddress + (35 * 4));
-        //manager.Write_U32(patchData.lastCenterPosition[2], baseAddress + (36 * 4));
-        //
-        // manager.Write_U32(baseAddress + 0x1e0, patchData.lastCenterPosition[0]);
-        // manager.Write_U32(baseAddress + 0x1e4, patchData.lastCenterPosition[1]);
-        // manager.Write_U32(baseAddress + 0x1e8, patchData.lastCenterPosition[2]);
 
         //manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
         //manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
         //manager.Write_U32(patchData.centerPosOscZ, baseAddress + 0x178);
-
-        // set last center position to received center position?
-        // manager.Write_U32(baseAddress + (34 * 4), patchData.centerPosition[0]);
-        // manager.Write_U32(baseAddress + (35 * 4), patchData.centerPosition[1]);
-        // manager.Write_U32(baseAddress + (36 * 4), patchData.centerPosition[2]);
 
         manager.Write_U32(patchData.velocityWorld[0], baseAddress + (37 * 4));
         manager.Write_U32(patchData.velocityWorld[1], baseAddress + (38 * 4));

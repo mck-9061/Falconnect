@@ -3,6 +3,7 @@ add_dolphin_test(PageFaultTest PageFaultTest.cpp)
 add_dolphin_test(CoreTimingTest CoreTimingTest.cpp)
 add_dolphin_test(PatchAllowlistTest PatchAllowlistTest.cpp)
 add_dolphin_test(FalconnectTimingTest FalconnectTimingTest.cpp)
+add_dolphin_test(FalconnectProtocolVersionTest FalconnectProtocolVersionTest.cpp)
 add_dolphin_test(FalconnectCourseSettingsTest FalconnectCourseSettingsTest.cpp)
 
 add_dolphin_test(DSPAcceleratorTest DSP/DSPAcceleratorTest.cpp)

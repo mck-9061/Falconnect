@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
 #include <variant>
 #include <netinet/in.h>
@@ -65,6 +66,7 @@ public:
     Falconnect::CourseSettings GetCourseSettings() const;
 
     bool hasConnected = false;
+    std::string connectionError;
     bool hasProperlyConnected = false;
     bool isError = false;
     bool shouldRun = true;

@@ -25,6 +25,7 @@
 
 #include "FalconnectManager.h"
 #include "PacketType.h"
+#include "Core/Falconnect/ProtocolVersion.h"
 #include "Common/Logging/Log.h"
 
 FalconnectSocketManager* FalconnectSocketManager::instance = nullptr;
@@ -55,6 +56,19 @@ void FalconnectSocketManager::Start() {
     if (code < 0) {
         isError = true;
     } else {
+        connectionError = Falconnect::ExchangeProtocolVersion(serverSocket);
+        if (!connectionError.empty()) {
+            ERROR_LOG_FMT(FALCONNECT, "{}", connectionError);
+#ifdef _WIN32
+            closesocket(serverSocket);
+#else
+            close(serverSocket);
+#endif
+            shouldRun = false;
+            shouldDisconnect = true;
+            isError = true;
+            return;
+        }
         hasConnected = true;
     }
 
@@ -256,6 +270,9 @@ void FalconnectSocketManager::NotifyServerWhenReadyToLoad()
 
 void FalconnectSocketManager::SocketThread() {
     Start();
+    // The manager still needs this object's connection result to report a failed handshake.
+    if (isError)
+        return;
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 

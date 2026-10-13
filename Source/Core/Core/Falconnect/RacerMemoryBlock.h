@@ -23,7 +23,8 @@ public:
         1 +  // sideAttack
         4 +  // maxSpeedKmh, acceleration, baseSpeed, maxSpeed
         1 +  // restoreFlag
-        3;   // timingData (12 bytes from the secondary racer block)
+        3 +  // timingData (12 bytes at secondary offset 0x738, used for final order)
+        1;   // raceTimeFrameCount (first word of total time at secondary offset 0x744)
     static constexpr std::size_t SOCKET_DATA_SIZE = SOCKET_FIELD_COUNT * sizeof(u32);
 
     static RacerMemoryBlock* CreateFromDolphinData(const std::vector<u32> &data);
@@ -68,6 +69,7 @@ public:
     u32 maxSpeed;
     u32 restoreFlag;
     std::array<u32, 3> timingData{};
+    u32 raceTimeFrameCount{};
     u32 centerPosOscX;
     u32 centerPosOscY;
     u32 centerPosOscZ;

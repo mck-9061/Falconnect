@@ -196,14 +196,13 @@ void FalconnectManager::Update() {
     // Initial setup done, wait for the race to start
     if (shouldStart.exchange(false)) {
         currentState = GameState::RACE_LOADED;
-        m_has_remote_position_offset.fill(false);
         for (auto& frame_differences : m_remote_frame_differences)
             frame_differences.clear();
         for (auto& frame_difference_counts : m_remote_frame_difference_counts)
             frame_difference_counts.clear();
         m_has_modal_frame_difference.fill(false);
         m_modal_frame_differences.fill(0);
-        m_latest_remote_position_offsets = {};
+        m_deferred_newer_racer_data = {};
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -287,8 +286,6 @@ void FalconnectManager::Update() {
         if (ping > 1000) ping = 1; // overflow
         const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
 
-        patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " + std::to_string(packetRate) + "p/s");
-
         patcher->ConstrainMenu();
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
@@ -306,12 +303,16 @@ void FalconnectManager::Update() {
         if (FalconnectSocketManager::instance->shouldDisconnect) return;
         FalconnectSocketManager::instance->shouldSendData = true;
 
-        // Use one local sample for the whole received server snapshot. Remote offsets are only
-        // refreshed when a moved racer matches its expected frame delay; the rest retain their
-        // last accepted offset.
+        // Use one local sample for the whole received server snapshot to compare its timing data
+        // against each remote racer. Accepted racer positions are written as received.
         const RacerMemoryBlock* our_actual_data = patcher->memoryReader->ReadRacerData(0);
-        const u32 local_frame_count = our_actual_data->timingData[0];
+        const u32 local_frame_count = our_actual_data->raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
+
+        const bool is_two_player_race = FalconnectSocketManager::instance->totalPlayerCount == 2;
+        const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
+        bool has_remote_frame_difference = false;
+        s64 remote_frame_difference = 0;
 
         //frameCount++;
         for (int i = 0; i < 30; i++) {
@@ -322,75 +323,114 @@ void FalconnectManager::Update() {
                 const auto& racer_block = received_racer.block;
 
                 if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
+                    m_deferred_newer_racer_data[i].valid = false;
                     continue;
                 }
 
-                const s64 frame_difference = static_cast<s64>(racer_block.timingData[0]) -
+                const s64 frame_difference = static_cast<s64>(racer_block.raceTimeFrameCount) -
                     static_cast<s64>(local_frame_count);
-                auto& frame_differences = m_remote_frame_differences[i];
-                // Rejected snapshots enter the window before we calculate the mode. This
-                // lets a sustained change in ping become the new accepted delay.
-                frame_differences.emplace_back(received_snapshot_time, frame_difference);
-                auto& frame_difference_counts = m_remote_frame_difference_counts[i];
-                ++frame_difference_counts[frame_difference];
-                while (!frame_differences.empty() &&
-                       received_snapshot_time - frame_differences.front().first >
-                           FRAME_DIFFERENCE_WINDOW) {
-                    const s64 expired_difference = frame_differences.front().second;
-                    auto expired_count = frame_difference_counts.find(expired_difference);
-                    if (--expired_count->second == 0)
-                        frame_difference_counts.erase(expired_count);
-                    frame_differences.pop_front();
-                }
-
-                std::size_t maximum_count = 0;
-                for (const auto& [difference, count] : frame_difference_counts)
-                    maximum_count = std::max(maximum_count, count);
-
                 auto& modal_frame_difference = m_modal_frame_differences[i];
-                const auto modal_count = frame_difference_counts.find(modal_frame_difference);
-                if (!m_has_modal_frame_difference[i] || modal_count == frame_difference_counts.end() ||
-                    modal_count->second < maximum_count) {
-                    for (const auto& [difference, count] : frame_difference_counts) {
-                        if (count == maximum_count) {
-                            modal_frame_difference = difference;
-                            break;
+                const bool race_frame_count_started = local_frame_count > 0 &&
+                                                     racer_block.raceTimeFrameCount > 0;
+                bool accepts_received_data = true;
+                bool defers_received_data = false;
+                auto& deferred_data = m_deferred_newer_racer_data[i];
+                const DeferredRacerData previous_deferred_data = deferred_data;
+                const bool has_deferred_data = race_frame_count_started && previous_deferred_data.valid;
+
+                if (race_frame_count_started) {
+                    auto& frame_differences = m_remote_frame_differences[i];
+                    // Rejected snapshots enter the window before we calculate the mode. This
+                    // lets a sustained change in ping become the new accepted delay.
+                    frame_differences.emplace_back(received_snapshot_time, frame_difference);
+                    auto& frame_difference_counts = m_remote_frame_difference_counts[i];
+                    ++frame_difference_counts[frame_difference];
+                    while (!frame_differences.empty() &&
+                           received_snapshot_time - frame_differences.front().first >
+                               FRAME_DIFFERENCE_WINDOW) {
+                        const s64 expired_difference = frame_differences.front().second;
+                        auto expired_count = frame_difference_counts.find(expired_difference);
+                        if (--expired_count->second == 0)
+                            frame_difference_counts.erase(expired_count);
+                        frame_differences.pop_front();
+                    }
+
+                    std::size_t maximum_count = 0;
+                    for (const auto& [difference, count] : frame_difference_counts)
+                        maximum_count = std::max(maximum_count, count);
+
+                    const auto modal_count = frame_difference_counts.find(modal_frame_difference);
+                    if (!m_has_modal_frame_difference[i] ||
+                        modal_count == frame_difference_counts.end() ||
+                        modal_count->second < maximum_count) {
+                        for (const auto& [difference, count] : frame_difference_counts) {
+                            if (count == maximum_count) {
+                                modal_frame_difference = difference;
+                                break;
+                            }
                         }
+                        m_has_modal_frame_difference[i] = true;
                     }
-                    m_has_modal_frame_difference[i] = true;
-                }
-                const bool accepts_received_data =
-                    frame_difference == modal_frame_difference;
 
-                const std::string frame_difference_label =
-                    "D:" + std::to_string(modal_frame_difference);
-                std::vector<u8> racer_name(32, 0);
-                std::copy_n(frame_difference_label.begin(), frame_difference_label.size(), racer_name.begin());
-                patcher->SetRacerMachineName(racer_num, racer_name);
+                    accepts_received_data = frame_difference == modal_frame_difference;
 
-                auto& latest_position_offset = m_latest_remote_position_offsets[i];
-                if (accepts_received_data &&
-                    (received_racer.position_updated || !m_has_remote_position_offset[i])) {
-                    for (std::size_t axis = 0; axis < latest_position_offset.size(); axis++) {
-                        latest_position_offset[axis] =
-                            std::bit_cast<float>(racer_block.centerPosition[axis]) -
-                            std::bit_cast<float>(our_actual_data->centerPosition[axis]);
+                    // A smaller difference is a newer snapshot. Retain it for one update rather
+                    // than dropping it, so its position is applied at the same stable delay as the
+                    // modal snapshots. A later newer snapshot replaces an older deferred one.
+                    defers_received_data = frame_difference < modal_frame_difference;
+                    if (defers_received_data) {
+                        deferred_data.block = racer_block;
+                        deferred_data.racer_num = racer_num;
+                        deferred_data.valid = true;
+                    } else {
+                        deferred_data.valid = false;
                     }
-                    m_has_remote_position_offset[i] = true;
+                } else {
+                    deferred_data.valid = false;
                 }
 
-                std::array<u32, 3> center_position{};
-                for (std::size_t axis = 0; axis < center_position.size(); axis++) {
-                    center_position[axis] = std::bit_cast<u32>(
-                        std::bit_cast<float>(our_actual_data->centerPosition[axis]) +
-                        latest_position_offset[axis]);
+                // The first player-count slots are the human racers. In a two-player race,
+                // report the other player's modal difference rather than a CPU's value.
+                if (race_frame_count_started && is_two_player_race && static_cast<u8>(i) <
+                                              FalconnectSocketManager::instance->totalPlayerCount &&
+                    static_cast<u8>(i) != local_human_racer) {
+                    remote_frame_difference = modal_frame_difference;
+                    has_remote_frame_difference = true;
                 }
 
-                patcher->SetRacerData(racer_num, racer_block,
-                                      received_racer.position_updated && accepts_received_data,
-                                      center_position);
+                const std::array<u32, 3> center_position = {
+                    racer_block.centerPosition[0],
+                    racer_block.centerPosition[1],
+                    racer_block.centerPosition[2],
+                };
+
+                // Apply the prior deferred snapshot first. A current snapshot that is itself
+                // deferred is not written until the following update.
+                if (has_deferred_data) {
+                    const std::array<u32, 3> deferred_center_position = {
+                        previous_deferred_data.block.centerPosition[0],
+                        previous_deferred_data.block.centerPosition[1],
+                        previous_deferred_data.block.centerPosition[2],
+                    };
+                    patcher->SetRacerData(previous_deferred_data.racer_num,
+                                          previous_deferred_data.block, true,
+                                          deferred_center_position);
+                }
+
+                if (!defers_received_data) {
+                    patcher->SetRacerData(racer_num, racer_block,
+                                          !has_deferred_data && accepts_received_data,
+                                          center_position);
+                }
             }
         }
+
+        std::string race_status = "Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " +
+                                  std::to_string(packetRate) + "p/s";
+        if (has_remote_frame_difference)
+            race_status += " | FD: " + std::to_string(remote_frame_difference);
+        patcher->SetRenderedText(race_status);
+
         //if (frameCount >= 1) frameCount = 0;
 
         // Check if we've exited the race to the menu

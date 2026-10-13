@@ -31,10 +31,10 @@ public:
     void SetOpponentRacerIds(const u8 racerIDs[]) const;
     void SetRenderedText(const std::string &text) const;
     void SetDefaultRaceSettings() const;
-    // resolved_center_position is calculated by FalconnectManager from the local position and
-    // remote offset. Do not write patchData.centerPosition directly.
+    // received_center_position is written only for a timing-accepted snapshot. Rejected
+    // snapshots still update state and inputs, but leave position and rotation untouched.
     void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
-                      const std::array<u32, 3>& resolved_center_position);
+                      const std::array<u32, 3>& received_center_position);
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;

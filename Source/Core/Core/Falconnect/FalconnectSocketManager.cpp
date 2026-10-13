@@ -593,10 +593,10 @@ void FalconnectSocketManager::SendDataThread() {
                 const u8 server_racer = j == 1 ? playerNumber - 1 : local_racer;
                 INFO_LOG_FMT(FALCONNECT,
                              "TIMING TX player={} seq={} slot={} kind={} local_racer={} "
-                             "server_racer={} words=[{:08x},{:08x},{:08x}]",
+                             "server_racer={} lap_data=[{:08x},{:08x},{:08x}] total_time_frames={}",
                              playerNumber, sentCount, j - 1, j == 1 ? "human" : "cpu", local_racer,
                              server_racer, frame->timingData[0], frame->timingData[1],
-                             frame->timingData[2]);
+                             frame->timingData[2], frame->raceTimeFrameCount);
             }
 
             i += RacerMemoryBlock::SOCKET_DATA_SIZE;
@@ -711,10 +711,12 @@ void FalconnectSocketManager::DataThread() {
                                     buffer + record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE)));
                 INFO_LOG_FMT(FALCONNECT,
                              "TIMING RX player={} packet={} server_racer={} local_racer={} "
-                             "source_player={} source_seq={} action={} words=[{:08x},{:08x},{:08x}]",
+                             "source_player={} source_seq={} action={} lap_data=[{:08x},{:08x},{:08x}] "
+                             "total_time_frames={}",
                              playerNumber, packetNum, i, i == playerNumber - 1 ? 0 : usedIndex,
                              source_sequence >> 24, source_sequence & 0x00ffffff, action,
-                             block->timingData[0], block->timingData[1], block->timingData[2]);
+                             block->timingData[0], block->timingData[1], block->timingData[2],
+                             block->raceTimeFrameCount);
             };
             if (i == playerNumber - 1) {
                 log_timing_record("skip-local-human");

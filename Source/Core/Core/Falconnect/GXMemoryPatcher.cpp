@@ -336,7 +336,7 @@ void GXMemoryPatcher::SetLapCount(const u8 lapCount) const {
 
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& patchData,
                                    const bool full,
-                                   const std::array<u32, 3>& resolved_center_position) {
+                                   const std::array<u32, 3>& received_center_position) {
     if (racerNum == 0) return;
 
   u32 blockBaseAddress = manager.Read_U32(referencePointer + 0x227878);
@@ -360,11 +360,11 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
     manager.Write_U8(0x04, baseAddress);
 
-    manager.Write_U32(resolved_center_position[0], baseAddress + (31 * 4));
-    manager.Write_U32(resolved_center_position[1], baseAddress + (32 * 4));
-    manager.Write_U32(resolved_center_position[2], baseAddress + (33 * 4));
-
     if (full) {
+
+        manager.Write_U32(received_center_position[0], baseAddress + (31 * 4));
+        manager.Write_U32(received_center_position[1], baseAddress + (32 * 4));
+        manager.Write_U32(received_center_position[2], baseAddress + (33 * 4));
 
         //manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
         //manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
@@ -437,6 +437,8 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
         for (std::size_t i = 0; i < patchData.timingData.size(); i++)
             manager.Write_U32(patchData.timingData[i],
                               secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
+        // raceTimeFrameCount is packet metadata for the jitter filter. Do not overwrite the
+        // game's total-time counter at +0x744.
     }
     if (log_timing) {
         m_last_timing_log[racerNum] = now;

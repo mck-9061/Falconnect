@@ -75,18 +75,22 @@ void FalconnectSocketManager::Start() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-void FalconnectSocketManager::SendFrame(RacerMemoryBlock* frame, const u8 local_racer)
+void FalconnectSocketManager::PublishFrame(OutgoingRaceData frame,
+                                           const std::vector<u8>& cpu_racer_indices)
 {
-    const std::unique_ptr<RacerMemoryBlock> owned_frame(frame);
-    if (!frame || local_racer >= MAX_RACERS)
-        return;
-    // Lock ownership before outgoing data, matching the sender and assignment update.
+    // Ownership can change while Update samples memory. Discard that frame and wait for the
+    // next Update rather than publishing an incomplete or incorrectly assigned snapshot.
     const std::lock_guard<std::mutex> assignment_lock(m_cpu_assignment_mutex);
-    if (local_racer != 0 && std::find(m_cpu_racer_indices.begin(), m_cpu_racer_indices.end(),
-                                    local_racer) == m_cpu_racer_indices.end())
+    if (cpu_racer_indices != m_cpu_racer_indices || !frame[0])
         return;
+    for (const u8 racer : cpu_racer_indices)
+    {
+        if (racer >= MAX_RACERS || !frame[racer])
+            return;
+    }
+    // A sender sees either the entire previous frame or the entire new frame, never a mixture.
     const std::lock_guard<std::mutex> lock(m_outgoing_mutex);
-    m_frames_to_send[local_racer] = *frame;
+    m_frames_to_send = std::move(frame);
 }
 
 bool FalconnectSocketManager::OwnsCpuRacer(const u8 racer) const

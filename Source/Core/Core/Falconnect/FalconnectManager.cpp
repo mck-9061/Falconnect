@@ -3,6 +3,8 @@
 #include <bit>
 #include <chrono>
 #include <iostream>
+#include <memory>
+#include <utility>
 #include <thread>
 
 #include "FalconnectSocketManager.h"
@@ -224,25 +226,8 @@ void FalconnectManager::Update() {
     // Wait for the machine to grid, then let the socket manager know we've gridded
     if (currentState == GameState::RACE_LOADED) {
         if (patcher->memoryReader->HasGridded()) {
-            // INFO_LOG_FMT(FALCONNECT, "Sending initial frames");
-
-            const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
-
-            for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
-                const u8 cpuRacer = cpu_racer_indices[i];
-                FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), cpuRacer);
-                // INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
-            }
-
-            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-            // INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
-
             currentState = GameState::RACE_GRIDDED;
             FalconnectSocketManager::instance->hasGridded = true;
-            for (const u8 cpuRacer : cpu_racer_indices)
-                patcher->EnableAIControlFor(cpuRacer, 1);
-
-            //patcher->EnableAIControlFor(0, 1);
         }
     }
 
@@ -257,23 +242,26 @@ void FalconnectManager::Update() {
         }
     }
 
+    // Update runs only from Core::OnFrameEnd. Sample every locally controlled racer exactly
+    // once here, including on the grid-to-race transition, before publishing any of them.
+    if (currentState == GameState::RACE_GRIDDED || currentState == GameState::RACING) {
+        auto* socket_manager = FalconnectSocketManager::instance;
+        const auto cpu_racer_indices = socket_manager->GetCpuRacerIndices();
+        FalconnectSocketManager::OutgoingRaceData frame{};
+        const auto sample_racer = [&](u8 racer) {
+            const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
+            if (block)
+                frame[racer] = *block;
+        };
+        sample_racer(0);
+        for (const u8 racer : cpu_racer_indices) {
+            patcher->EnableAIControlFor(racer, 1);
+            sample_racer(racer);
+        }
+        socket_manager->PublishFrame(std::move(frame), cpu_racer_indices);
+    }
+
     if (currentState == GameState::RACING) {
-        //INFO_LOG_FMT(FALCONNECT, "Sending frame");
-        // Process operation queue and keep frame to send updated
-        const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
-        for (const u8 cpuRacer : cpu_racer_indices)
-            patcher->EnableAIControlFor(cpuRacer, 1);
-
-        //patcher->EnableAIControlFor(0, 1);
-         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-
-         for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
-             //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
-             const u8 cpuRacer = cpu_racer_indices[i];
-             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), cpuRacer);
-         }
-        //INFO_LOG_FMT(FALCONNECT, "Frame sent");
-
         u16 ping = FalconnectSocketManager::instance->ping - 4;
         if (ping > 1000) ping = 1; // overflow
         const u16 packetRate = FalconnectSocketManager::instance->ping == 0 ? 0 :

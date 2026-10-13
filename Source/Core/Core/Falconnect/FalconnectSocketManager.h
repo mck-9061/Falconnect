@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstddef>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <string>
 #include <thread>
@@ -12,7 +13,6 @@
 
 #include "RacerMemoryBlock.h"
 #include "Core/Falconnect/RaceDataProtocol.h"
-#include <optional>
 #include "Core/Falconnect/CourseSettings.h"
 #include "Common/CommonTypes.h"
 
@@ -41,7 +41,9 @@ public:
     void SocketThread();
     void DataThread();
     void SendDataThread();
-    void SendFrame(RacerMemoryBlock *frame, u8 local_racer);
+    using OutgoingRaceData = std::array<std::optional<RacerMemoryBlock>, MAX_RACERS>;
+    // Publish one complete frame sampled by FalconnectManager::Update on the CPU thread.
+    void PublishFrame(OutgoingRaceData frame, const std::vector<u8>& cpu_racer_indices);
     std::vector<u8> GetCpuRacerIndices() const;
     void SetCpuRacerIndices(std::vector<u8> indices);
     void SetSelectedCustomMachineData(std::vector<u8> machine_data);
@@ -88,7 +90,7 @@ private:
     void NotifyServerWhenReadyToLoad();
 
     std::mutex m_outgoing_mutex;
-    std::array<std::optional<RacerMemoryBlock>, MAX_RACERS> m_frames_to_send{};
+    OutgoingRaceData m_frames_to_send{};
     bool m_force_full_update = true;
 
     int localSocket = 0;

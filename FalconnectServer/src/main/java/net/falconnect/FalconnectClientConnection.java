@@ -16,6 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FalconnectClientConnection {
+  // The client restarts its race-data counter at one for every START_RACE. Permit a small loss
+  // window for that first packet, but do not let a late high-numbered packet from the previous
+  // race establish the new race's sequence high-water mark.
+  private static final int MAX_INITIAL_RACE_PACKET_SEQUENCE = 128;
   public Socket socket;
   public volatile DatagramSocket udpSocket;
   public DataInputStream fromClientStream;
@@ -34,6 +38,7 @@ public class FalconnectClientConnection {
 
   public volatile int lastReceivedUdpPort;
   private int lastReceivedCount;
+  private boolean awaitingInitialRacePacket;
   public volatile long lastUdpPacketReceivedAt;
   public volatile boolean cpuReallocationNeeded;
   public volatile boolean cpuRestorationNeeded;
@@ -83,6 +88,7 @@ public class FalconnectClientConnection {
     numCpus = 0;
     cpuStartIndex = 1;
     lastReceivedCount = 0;
+    awaitingInitialRacePacket = true;
 
     receiveMessageThread = new MessageHandlerThread(this);
     sendMessageThread = new MessageSenderThread(this);
@@ -200,6 +206,10 @@ public class FalconnectClientConnection {
                                                       List<Byte> cpuRacerIndices,
                                                       int sourceSequence,
                                                       int duplicateLimit) {
+    if (awaitingInitialRacePacket) {
+      if (sourceSequence > MAX_INITIAL_RACE_PACKET_SEQUENCE) return false;
+      awaitingInitialRacePacket = false;
+    }
     if (sourceSequence <= lastReceivedCount) return false;
 
     latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
@@ -256,6 +266,7 @@ public class FalconnectClientConnection {
   public synchronized void resetRaceDataTracking() {
     latestReceivedRaceData = ReceivedRaceData.empty();
     lastReceivedCount = 0;
+    awaitingInitialRacePacket = true;
     lastPlayerRacerData = null;
     consecutiveDuplicatePlayerDataPackets = 0;
     duplicateRaceDataDetected = false;

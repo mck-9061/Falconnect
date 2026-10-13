@@ -476,6 +476,11 @@ void FalconnectSocketManager::SocketThread() {
                 INFO_LOG_FMT(FALCONNECT, "START_RACE");
                 start = true;
 
+                // Retire any detached UDP workers from the previous race before creating the
+                // new pair. Their packet counter is local to the worker, so allowing one to
+                // resume here would send race-one sequence numbers during race two.
+                const u32 race_generation = m_race_data_generation.fetch_add(1) + 1;
+
                 lastPacketNum = 0;
                 hasReceivedAnyDataEver = false;
                 ping.store(0);
@@ -497,10 +502,10 @@ void FalconnectSocketManager::SocketThread() {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
 
                 shouldRunDataThread = true;
-                std::thread readThread(&FalconnectSocketManager::DataThread, this);
+                std::thread readThread(&FalconnectSocketManager::DataThread, this, race_generation);
                 readThread.detach();
 
-                std::thread sendThread(&FalconnectSocketManager::SendDataThread, this);
+                std::thread sendThread(&FalconnectSocketManager::SendDataThread, this, race_generation);
                 sendThread.detach();
 
                 break;
@@ -547,11 +552,11 @@ void FalconnectSocketManager::SendUdpPingIfDue()
            reinterpret_cast<sockaddr*>(&serverUdpAddress), sizeof(serverUdpAddress));
 }
 
-void FalconnectSocketManager::SendDataThread() {
+void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
     u32 sentCount = 0;
     auto last_timing_log = std::chrono::steady_clock::time_point{};
 
-    while (shouldRunDataThread) {
+    while (shouldRunDataThread.load() && m_race_data_generation.load() == race_generation) {
         shouldSendData = false;
 
         if (FalconnectManager::instance->currentState != GameState::RACING) continue;
@@ -563,6 +568,11 @@ void FalconnectSocketManager::SendDataThread() {
             // INFO_LOG_FMT(FALCONNECT, "Bad frame!");
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        // A newer START_RACE can arrive while waiting for a frame. Do not let this retired
+        // worker send even one packet from its old sequence into the new race.
+        if (m_race_data_generation.load() != race_generation)
+            break;
 
         //INFO_LOG_FMT(FALCONNECT, "Sending...");
 
@@ -640,7 +650,7 @@ void FalconnectSocketManager::SendDataThread() {
     }
 }
 
-void FalconnectSocketManager::DataThread() {
+void FalconnectSocketManager::DataThread(const u32 race_generation) {
     const auto timeout_start = std::chrono::steady_clock::now();
     auto last_packet_time = timeout_start;
     auto packet_rate_window_started = timeout_start;
@@ -656,7 +666,7 @@ void FalconnectSocketManager::DataThread() {
     setsockopt(serverUdpSocket, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout));
 #endif
 
-    while (shouldRunDataThread) {
+    while (shouldRunDataThread.load() && m_race_data_generation.load() == race_generation) {
         // Receive datagram
         char buffer[FULL_RACE_PACKET_SIZE] = { 0 };
         sockaddr_in from{};
@@ -668,6 +678,11 @@ void FalconnectSocketManager::DataThread() {
                                       0,
                                       reinterpret_cast<sockaddr *>(&from),
                                       &fromLen);
+
+        // recvfrom may have been blocking when a new race replaced this worker. Discard the
+        // wake-up packet; the new generation owns the socket from this point on.
+        if (m_race_data_generation.load() != race_generation)
+            break;
 
         if (received == RACE_PACKET_HEADER_SIZE &&
             buffer[0] == static_cast<char>(FromServerPacketType::UDP_PONG)) {
@@ -811,7 +826,9 @@ void FalconnectSocketManager::DataThread() {
             start = false;
             exited = false;
             canLoad = false;
-            shouldRunDataThread = false;
+            // Do not stop a newer race if this is a delayed receiver from an older generation.
+            if (m_race_data_generation.load() == race_generation)
+                shouldRunDataThread = false;
             hasReceivedAnyDataEver = false;
 
             char data[FULL_RACE_PACKET_SIZE] = { 0 };

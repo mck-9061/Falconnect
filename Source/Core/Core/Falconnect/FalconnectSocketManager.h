@@ -53,8 +53,8 @@ public:
     bool lockFrameToSend = false;
 
     void SocketThread();
-    void DataThread();
-    void SendDataThread();
+    void DataThread(u32 race_generation);
+    void SendDataThread(u32 race_generation);
     void SendUdpPingIfDue();
     void SendFrame(RacerMemoryBlock *frame, u8 index);
     std::vector<u8> GetCpuRacerIndices() const;
@@ -118,7 +118,11 @@ private:
     mutable std::mutex m_course_settings_mutex;
     Falconnect::CourseSettings m_course_settings;
 
-    bool shouldRunDataThread = true;
+    std::atomic<bool> shouldRunDataThread{true};
+    // Detached UDP workers belong to one race only. A shared boolean is insufficient because a
+    // previous worker can observe it becoming true for the next race and resume its old packet
+    // sequence.
+    std::atomic<u32> m_race_data_generation{0};
 
     std::mutex m_ping_mutex;
     std::chrono::steady_clock::time_point m_last_ping_sent_at{};

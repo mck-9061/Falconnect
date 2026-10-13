@@ -1,5 +1,6 @@
 #include "FalconnectManager.h"
 
+#include <algorithm>
 #include <bit>
 #include <chrono>
 #include <iostream>
@@ -196,7 +197,13 @@ void FalconnectManager::Update() {
     if (shouldStart.exchange(false)) {
         currentState = GameState::RACE_LOADED;
         m_has_remote_position_offset.fill(false);
-        m_remote_position_offset_history = {};
+        for (auto& frame_differences : m_remote_frame_differences)
+            frame_differences.clear();
+        for (auto& frame_difference_counts : m_remote_frame_difference_counts)
+            frame_difference_counts.clear();
+        m_has_modal_frame_difference.fill(false);
+        m_modal_frame_differences.fill(0);
+        m_latest_remote_position_offsets = {};
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -300,8 +307,11 @@ void FalconnectManager::Update() {
         FalconnectSocketManager::instance->shouldSendData = true;
 
         // Use one local sample for the whole received server snapshot. Remote offsets are only
-        // refreshed for racers whose received position moved; the rest retain their last offset.
+        // refreshed when a moved racer matches its expected frame delay; the rest retain their
+        // last accepted offset.
         const RacerMemoryBlock* our_actual_data = patcher->memoryReader->ReadRacerData(0);
+        const u32 local_frame_count = our_actual_data->timingData[0];
+        const auto received_snapshot_time = std::chrono::steady_clock::now();
 
         //frameCount++;
         for (int i = 0; i < 30; i++) {
@@ -315,45 +325,63 @@ void FalconnectManager::Update() {
                     continue;
                 }
 
-                auto& position_offset_history = m_remote_position_offset_history[i];
-                if (received_racer.position_updated ||
-                    !m_has_remote_position_offset[i]) {
-                    if (m_has_remote_position_offset[i]) {
-                        for (std::size_t sample = 0;
-                             sample + 1 < position_offset_history.size(); sample++) {
-                            position_offset_history[sample] = position_offset_history[sample + 1];
+                const s64 frame_difference = static_cast<s64>(racer_block.timingData[0]) -
+                    static_cast<s64>(local_frame_count);
+                auto& frame_differences = m_remote_frame_differences[i];
+                // Rejected snapshots enter the window before we calculate the mode. This
+                // lets a sustained change in ping become the new accepted delay.
+                frame_differences.emplace_back(received_snapshot_time, frame_difference);
+                auto& frame_difference_counts = m_remote_frame_difference_counts[i];
+                ++frame_difference_counts[frame_difference];
+                while (!frame_differences.empty() &&
+                       received_snapshot_time - frame_differences.front().first >
+                           FRAME_DIFFERENCE_WINDOW) {
+                    const s64 expired_difference = frame_differences.front().second;
+                    auto expired_count = frame_difference_counts.find(expired_difference);
+                    if (--expired_count->second == 0)
+                        frame_difference_counts.erase(expired_count);
+                    frame_differences.pop_front();
+                }
+
+                std::size_t maximum_count = 0;
+                for (const auto& [difference, count] : frame_difference_counts)
+                    maximum_count = std::max(maximum_count, count);
+
+                auto& modal_frame_difference = m_modal_frame_differences[i];
+                const auto modal_count = frame_difference_counts.find(modal_frame_difference);
+                if (!m_has_modal_frame_difference[i] || modal_count == frame_difference_counts.end() ||
+                    modal_count->second < maximum_count) {
+                    for (const auto& [difference, count] : frame_difference_counts) {
+                        if (count == maximum_count) {
+                            modal_frame_difference = difference;
+                            break;
                         }
                     }
+                    m_has_modal_frame_difference[i] = true;
+                }
+                const bool accepts_received_data =
+                    frame_difference == modal_frame_difference;
 
-                    auto& latest_position_offset = position_offset_history.back();
+                auto& latest_position_offset = m_latest_remote_position_offsets[i];
+                if (accepts_received_data &&
+                    (received_racer.position_updated || !m_has_remote_position_offset[i])) {
                     for (std::size_t axis = 0; axis < latest_position_offset.size(); axis++) {
                         latest_position_offset[axis] =
                             std::bit_cast<float>(racer_block.centerPosition[axis]) -
                             std::bit_cast<float>(our_actual_data->centerPosition[axis]);
-                    }
-
-                    // There is no history for a newly seen racer, so seed every sample with
-                    // its first received offset rather than blending toward the origin.
-                    if (!m_has_remote_position_offset[i]) {
-                        position_offset_history.fill(latest_position_offset);
                     }
                     m_has_remote_position_offset[i] = true;
                 }
 
                 std::array<u32, 3> center_position{};
                 for (std::size_t axis = 0; axis < center_position.size(); axis++) {
-                    float averaged_position_offset = 0.0f;
-                    for (const auto& position_offset : position_offset_history) {
-                        averaged_position_offset += position_offset[axis];
-                    }
-                    averaged_position_offset /=
-                        static_cast<float>(position_offset_history.size());
                     center_position[axis] = std::bit_cast<u32>(
                         std::bit_cast<float>(our_actual_data->centerPosition[axis]) +
-                        averaged_position_offset);
+                        latest_position_offset[axis]);
                 }
 
-                patcher->SetRacerData(racer_num, racer_block, true,
+                patcher->SetRacerData(racer_num, racer_block,
+                                      received_racer.position_updated && accepts_received_data,
                                       center_position);
             }
         }

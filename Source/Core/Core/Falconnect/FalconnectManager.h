@@ -2,6 +2,10 @@
 #define DOLPHIN_EMU_FALCONNECTMANAGER_H
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <deque>
+#include <unordered_map>
+#include <utility>
 
 #include "GXMemoryPatcher.h"
 #include "Core/Core.h"
@@ -44,11 +48,15 @@ private:
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
-    static constexpr std::size_t REMOTE_POSITION_OFFSET_HISTORY_SIZE = 4;
-    // Each remote racer keeps four offsets from the local racer. Averaging those samples avoids
-    // applying every network position as an abrupt correction.
-    std::array<std::array<std::array<float, 3>, REMOTE_POSITION_OFFSET_HISTORY_SIZE>, 30>
-        m_remote_position_offset_history{};
+    using FrameDifferenceSample = std::pair<std::chrono::steady_clock::time_point, s64>;
+    static constexpr auto FRAME_DIFFERENCE_WINDOW = std::chrono::seconds(5);
+    // The last accepted remote offset remains in use while a received snapshot's frame delay
+    // differs from the rolling five-second mode for that racer.
+    std::array<std::deque<FrameDifferenceSample>, 30> m_remote_frame_differences{};
+    std::array<std::unordered_map<s64, std::size_t>, 30> m_remote_frame_difference_counts{};
+    std::array<s64, 30> m_modal_frame_differences{};
+    std::array<bool, 30> m_has_modal_frame_difference{};
+    std::array<std::array<float, 3>, 30> m_latest_remote_position_offsets{};
     std::array<bool, 30> m_has_remote_position_offset{};
 };
 

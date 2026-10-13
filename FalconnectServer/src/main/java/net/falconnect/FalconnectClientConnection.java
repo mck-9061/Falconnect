@@ -100,18 +100,20 @@ public class FalconnectClientConnection {
     //Thread.sleep(4);
 
     if (packet[0] == ToClientPacketType.FULL_DATA.ordinal()) {
-      DatagramSocket currentUdpSocket = udpSocket;
-      if (lastReceivedUdpPort != 0 && currentUdpSocket != null && !currentUdpSocket.isClosed()) {
-        DatagramPacket dPacket = new DatagramPacket(packet, packet.length, socket.getInetAddress(), lastReceivedUdpPort);
-        currentUdpSocket.send(dPacket);
-      } else {
-        //System.out.println("No port!");
-      }
-
+      SendUdpPacket(packet);
       return;
     }
     synchronized (toClientStream) {
       if (!disconnected) toClientStream.write(packet);
+    }
+  }
+
+  public void SendUdpPacket(byte[] packet) throws IOException {
+    DatagramSocket currentUdpSocket = udpSocket;
+    if (lastReceivedUdpPort != 0 && currentUdpSocket != null && !currentUdpSocket.isClosed()) {
+      DatagramPacket dPacket = new DatagramPacket(packet, packet.length, socket.getInetAddress(),
+          lastReceivedUdpPort);
+      currentUdpSocket.send(dPacket);
     }
   }
 

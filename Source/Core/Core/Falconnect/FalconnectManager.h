@@ -49,19 +49,19 @@ private:
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
     using FrameDifferenceSample = std::pair<std::chrono::steady_clock::time_point, s64>;
-    struct DeferredRacerData {
+    struct DelayedRacerData {
         RacerMemoryBlock block{};
         u8 racer_num = 0;
-        bool valid = false;
+        s64 updates_remaining = 0;
     };
     static constexpr auto FRAME_DIFFERENCE_WINDOW = std::chrono::seconds(5);
     // A received snapshot updates position and rotation when its frame delay matches the rolling
-    // five-second mode, or after a one-update deferral when it is newer than that mode.
+    // five-second mode, or after a matching number of update deferrals when it is newer.
     std::array<std::deque<FrameDifferenceSample>, 30> m_remote_frame_differences{};
     std::array<std::unordered_map<s64, std::size_t>, 30> m_remote_frame_difference_counts{};
     std::array<s64, 30> m_modal_frame_differences{};
     std::array<bool, 30> m_has_modal_frame_difference{};
-    std::array<DeferredRacerData, 30> m_deferred_newer_racer_data{};
+    std::array<std::deque<DelayedRacerData>, 30> m_delayed_newer_racer_data{};
 };
 
 

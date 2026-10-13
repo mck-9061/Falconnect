@@ -1,6 +1,8 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <mutex>
 #include <queue>
@@ -53,6 +55,7 @@ public:
     void SocketThread();
     void DataThread();
     void SendDataThread();
+    void SendUdpPingIfDue();
     void SendFrame(RacerMemoryBlock *frame, u8 index);
     std::vector<u8> GetCpuRacerIndices() const;
     void SetCpuRacerIndices(std::vector<u8> indices);
@@ -79,7 +82,9 @@ public:
     bool shouldSendData = false;
     bool hasReceivedAnyDataEver = false;
 
-    u16 ping = 0;
+    std::atomic<u16> ping{0};
+    std::atomic<bool> hasPingSample{false};
+    std::atomic<u16> packetRate{0};
     u8 playerNumber = 0;
     u8 racerId = 6;
     u8 selectedCourse = 1;
@@ -115,7 +120,12 @@ private:
 
     bool shouldRunDataThread = true;
 
-    u32 timeBeforePing = 0;
+    std::mutex m_ping_mutex;
+    std::chrono::steady_clock::time_point m_last_ping_sent_at{};
+    std::chrono::steady_clock::time_point m_pending_ping_sent_at{};
+    u32 m_next_ping_sequence = 0;
+    u32 m_pending_ping_sequence = 0;
+    bool m_has_pending_ping = false;
     mutable std::mutex m_cpu_assignment_mutex;
     std::vector<u8> m_cpu_racer_indices;
     mutable std::mutex m_received_race_data_mutex;

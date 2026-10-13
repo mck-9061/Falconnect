@@ -35,6 +35,7 @@ public class UDPHandlerThread extends Thread {
     messagesToProcess = new LinkedBlockingQueue<>();
 
     messageTypes.put((byte) 0x1, FullDataMessage.class);
+    messageTypes.put((byte) 0x6, UdpPingMessage.class);
   }
 
   public void run() {
@@ -53,7 +54,11 @@ public class UDPHandlerThread extends Thread {
 
           byte messageType = data[0];
           byte[] packetData = java.util.Arrays.copyOf(data, datagramPacket.getLength());
-          FromClientMessage message = messageTypes.get(messageType).getDeclaredConstructor(FalconnectClientConnection.class, byte[].class).newInstance(clientConnection, packetData);
+          Class<? extends FromClientMessage> messageClass = messageTypes.get(messageType);
+          if (messageClass == null) continue;
+          FromClientMessage message = messageClass
+              .getDeclaredConstructor(FalconnectClientConnection.class, byte[].class)
+              .newInstance(clientConnection, packetData);
           message.ProcessMessage();
 
         } catch (SocketTimeoutException e) {

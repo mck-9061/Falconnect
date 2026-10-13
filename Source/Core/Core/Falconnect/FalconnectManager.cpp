@@ -202,7 +202,8 @@ void FalconnectManager::Update() {
             frame_difference_counts.clear();
         m_has_modal_frame_difference.fill(false);
         m_modal_frame_differences.fill(0);
-        m_deferred_newer_racer_data = {};
+        for (auto& delayed_racer_data : m_delayed_newer_racer_data)
+            delayed_racer_data.clear();
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -282,9 +283,10 @@ void FalconnectManager::Update() {
          }
         //INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
-        u16 ping = FalconnectSocketManager::instance->ping - 4;
-        if (ping > 1000) ping = 1; // overflow
-        const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
+        const u16 ping = FalconnectSocketManager::instance->ping.load();
+        const u16 packetRate = FalconnectSocketManager::instance->packetRate.load();
+        const std::string ping_display = FalconnectSocketManager::instance->hasPingSample.load() ?
+            std::to_string(ping) + "ms" : "--";
 
         patcher->ConstrainMenu();
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
@@ -323,7 +325,7 @@ void FalconnectManager::Update() {
                 const auto& racer_block = received_racer.block;
 
                 if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
-                    m_deferred_newer_racer_data[i].valid = false;
+                    m_delayed_newer_racer_data[i].clear();
                     continue;
                 }
 
@@ -334,11 +336,20 @@ void FalconnectManager::Update() {
                                                      racer_block.raceTimeFrameCount > 0;
                 bool accepts_received_data = true;
                 bool defers_received_data = false;
-                auto& deferred_data = m_deferred_newer_racer_data[i];
-                const DeferredRacerData previous_deferred_data = deferred_data;
-                const bool has_deferred_data = race_frame_count_started && previous_deferred_data.valid;
+                std::deque<DelayedRacerData> delayed_data_to_apply;
+                auto& delayed_racer_data = m_delayed_newer_racer_data[i];
 
                 if (race_frame_count_started) {
+                    for (auto delayed_data = delayed_racer_data.begin();
+                         delayed_data != delayed_racer_data.end();) {
+                        if (--delayed_data->updates_remaining <= 0) {
+                            delayed_data_to_apply.push_back(*delayed_data);
+                            delayed_data = delayed_racer_data.erase(delayed_data);
+                        } else {
+                            ++delayed_data;
+                        }
+                    }
+
                     auto& frame_differences = m_remote_frame_differences[i];
                     // Rejected snapshots enter the window before we calculate the mode. This
                     // lets a sustained change in ping become the new accepted delay.
@@ -374,19 +385,18 @@ void FalconnectManager::Update() {
 
                     accepts_received_data = frame_difference == modal_frame_difference;
 
-                    // A smaller difference is a newer snapshot. Retain it for one update rather
-                    // than dropping it, so its position is applied at the same stable delay as the
-                    // modal snapshots. A later newer snapshot replaces an older deferred one.
+                    // A smaller difference is a newer snapshot. Hold it for exactly the number
+                    // of updates by which it is newer, so it reaches the game at the modal delay.
                     defers_received_data = frame_difference < modal_frame_difference;
                     if (defers_received_data) {
-                        deferred_data.block = racer_block;
-                        deferred_data.racer_num = racer_num;
-                        deferred_data.valid = true;
-                    } else {
-                        deferred_data.valid = false;
+                        delayed_racer_data.push_back({
+                            racer_block,
+                            racer_num,
+                            modal_frame_difference - frame_difference,
+                        });
                     }
                 } else {
-                    deferred_data.valid = false;
+                    delayed_racer_data.clear();
                 }
 
                 // The first player-count slots are the human racers. In a two-player race,
@@ -404,28 +414,27 @@ void FalconnectManager::Update() {
                     racer_block.centerPosition[2],
                 };
 
-                // Apply the prior deferred snapshot first. A current snapshot that is itself
-                // deferred is not written until the following update.
-                if (has_deferred_data) {
-                    const std::array<u32, 3> deferred_center_position = {
-                        previous_deferred_data.block.centerPosition[0],
-                        previous_deferred_data.block.centerPosition[1],
-                        previous_deferred_data.block.centerPosition[2],
+                // Apply every snapshot whose delay has elapsed. A current snapshot that is
+                // itself delayed is not written until its own delay expires.
+                for (const DelayedRacerData& delayed_data : delayed_data_to_apply) {
+                    const std::array<u32, 3> delayed_center_position = {
+                        delayed_data.block.centerPosition[0],
+                        delayed_data.block.centerPosition[1],
+                        delayed_data.block.centerPosition[2],
                     };
-                    patcher->SetRacerData(previous_deferred_data.racer_num,
-                                          previous_deferred_data.block, true,
-                                          deferred_center_position);
+                    patcher->SetRacerData(delayed_data.racer_num, delayed_data.block, true,
+                                          delayed_center_position);
                 }
 
                 if (!defers_received_data) {
                     patcher->SetRacerData(racer_num, racer_block,
-                                          !has_deferred_data && accepts_received_data,
+                                          delayed_data_to_apply.empty() && accepts_received_data,
                                           center_position);
                 }
             }
         }
 
-        std::string race_status = "Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " +
+        std::string race_status = "Falconnect | Ping: " + ping_display + " | PR: " +
                                   std::to_string(packetRate) + "p/s";
         if (has_remote_frame_difference)
             race_status += " | FD: " + std::to_string(remote_frame_difference);

@@ -65,6 +65,8 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
         for (std::size_t i = 0; i < block->timingData.size(); i++)
             block->timingData[i] =
                 manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));
+        block->raceTimeFrameCount =
+            manager.Read_U32(secondaryAddress + RACE_TIME_FRAME_COUNT_OFFSET);
     }
     const auto now = std::chrono::steady_clock::now();
     if (racerNum < m_last_timing_log.size() &&
@@ -72,9 +74,10 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
         m_last_timing_log[racerNum] = now;
         INFO_LOG_FMT(FALCONNECT,
                      "TIMING READ local_racer={} primary={:08x} secondary={:08x} "
-                     "chain={} state={:08x} words=[{:08x},{:08x},{:08x}]",
+                     "chain={} state={:08x} lap_data=[{:08x},{:08x},{:08x}] total_time_frames={}",
                      racerNum, address, secondaryAddress, secondaryAddress != 0 ? "ok" : "invalid",
-                     block->state, block->timingData[0], block->timingData[1], block->timingData[2]);
+                     block->state, block->timingData[0], block->timingData[1], block->timingData[2],
+                     block->raceTimeFrameCount);
     }
     //INFO_LOG_FMT(FALCONNECT, "State: {}", block->state);
 
@@ -91,7 +94,7 @@ u32 GXMemoryReader::ReadSecondaryRacerAddress(const u8 racerNum) const {
     // The local human has a separate block; its +0x540 pointer heads the CPU array.
     const u32 humanAddress = manager.Read_U32(baseAddress - 0x20);
     if (humanAddress < 0x80000000 ||
-        static_cast<u64>(humanAddress) + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
+        static_cast<u64>(humanAddress) + RACE_TIME_FRAME_COUNT_OFFSET + sizeof(u32) > ramEnd) return 0;
     if (racerNum == 0) return humanAddress;
 
     const u32 cpuBaseAddress = manager.Read_U32(humanAddress + 0x540);
@@ -99,7 +102,7 @@ u32 GXMemoryReader::ReadSecondaryRacerAddress(const u8 racerNum) const {
 
     // Local racer 1 is the first CPU block. Use wide arithmetic before validating the range.
     const u64 cpuAddress = static_cast<u64>(cpuBaseAddress) + (racerNum - 1) * 0x820;
-    if (cpuAddress + TIMING_DATA_OFFSET + 12 > ramEnd) return 0;
+    if (cpuAddress + RACE_TIME_FRAME_COUNT_OFFSET + sizeof(u32) > ramEnd) return 0;
     return static_cast<u32>(cpuAddress);
 }
 

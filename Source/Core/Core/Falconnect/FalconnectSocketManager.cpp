@@ -21,6 +21,7 @@
 #endif
 
 #include <chrono>
+#include <limits>
 #include <thread>
 
 #include "FalconnectManager.h"
@@ -480,7 +481,16 @@ void FalconnectSocketManager::SocketThread() {
 
                 lastPacketNum = 0;
                 hasReceivedAnyDataEver = false;
-                timeBeforePing = 0;
+                ping.store(0);
+                hasPingSample.store(false);
+                packetRate.store(0);
+                {
+                    const std::lock_guard<std::mutex> lock(m_ping_mutex);
+                    m_last_ping_sent_at = {};
+                    m_pending_ping_sent_at = {};
+                    m_pending_ping_sequence = 0;
+                    m_has_pending_ping = false;
+                }
                 {
                     const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
                     m_received_race_data = {};
@@ -513,6 +523,33 @@ void FalconnectSocketManager::SocketThread() {
     delete this;
 }
 
+void FalconnectSocketManager::SendUdpPingIfDue()
+{
+    constexpr auto ping_interval = std::chrono::seconds(2);
+    const auto now = std::chrono::steady_clock::now();
+    std::array<char, RACE_PACKET_HEADER_SIZE> data{};
+
+    {
+        const std::lock_guard<std::mutex> lock(m_ping_mutex);
+        if (now - m_last_ping_sent_at < ping_interval)
+            return;
+
+        const u32 sequence = ++m_next_ping_sequence;
+        data[0] = static_cast<char>(ToServerPacketType::UDP_PING);
+        data[1] = static_cast<char>((sequence >> 24) & 0xff);
+        data[2] = static_cast<char>((sequence >> 16) & 0xff);
+        data[3] = static_cast<char>((sequence >> 8) & 0xff);
+        data[4] = static_cast<char>(sequence & 0xff);
+        m_last_ping_sent_at = now;
+        m_pending_ping_sent_at = now;
+        m_pending_ping_sequence = sequence;
+        m_has_pending_ping = true;
+    }
+
+    sendto(serverUdpSocket, data.data(), data.size(), 0,
+           reinterpret_cast<sockaddr*>(&serverUdpAddress), sizeof(serverUdpAddress));
+}
+
 void FalconnectSocketManager::SendDataThread() {
     u32 sentCount = 0;
     auto last_timing_log = std::chrono::steady_clock::time_point{};
@@ -529,6 +566,7 @@ void FalconnectSocketManager::SendDataThread() {
         timeBeforeUpdate = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
         if (FalconnectManager::instance->currentState != GameState::RACING) continue;
+        SendUdpPingIfDue();
         // Send our frames
         sentCount++;
 
@@ -630,6 +668,8 @@ void FalconnectSocketManager::SendDataThread() {
 void FalconnectSocketManager::DataThread() {
     const auto timeout_start = std::chrono::steady_clock::now();
     auto last_packet_time = timeout_start;
+    auto packet_rate_window_started = timeout_start;
+    u32 packets_in_rate_window = 0;
     auto last_timing_log = std::chrono::steady_clock::time_point{};
 
 #ifdef _WIN32
@@ -654,6 +694,27 @@ void FalconnectSocketManager::DataThread() {
                                       reinterpret_cast<sockaddr *>(&from),
                                       &fromLen);
 
+        if (received == RACE_PACKET_HEADER_SIZE &&
+            buffer[0] == static_cast<char>(FromServerPacketType::UDP_PONG)) {
+            const u32 sequence =
+                (static_cast<u32>(static_cast<u8>(buffer[1])) << 24) |
+                (static_cast<u32>(static_cast<u8>(buffer[2])) << 16) |
+                (static_cast<u32>(static_cast<u8>(buffer[3])) << 8) |
+                static_cast<u32>(static_cast<u8>(buffer[4]));
+            const auto pong_received_at = std::chrono::steady_clock::now();
+            const std::lock_guard<std::mutex> lock(m_ping_mutex);
+            if (m_has_pending_ping && sequence == m_pending_ping_sequence) {
+                const auto round_trip_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    pong_received_at - m_pending_ping_sent_at).count();
+                ping.store(static_cast<u16>(std::min<long long>(
+                    std::max<long long>(1, round_trip_milliseconds),
+                    std::numeric_limits<u16>::max())));
+                hasPingSample.store(true);
+                m_has_pending_ping = false;
+            }
+            continue;
+        }
+
         if (received != FULL_RACE_PACKET_SIZE ||
             buffer[0] != static_cast<char>(FromServerPacketType::FULL_DATA)) {
             if (std::chrono::steady_clock::now() - last_packet_time >= std::chrono::seconds(5)) {
@@ -665,14 +726,17 @@ void FalconnectSocketManager::DataThread() {
 
         last_packet_time = std::chrono::steady_clock::now();
 
-        // ping spoofing lol
-        // std::this_thread::sleep_for(std::chrono::milliseconds(6));
-
-        //INFO_LOG_FMT(FALCONNECT, "DATA_FULL");
-        //INFO_LOG_FMT(FALCONNECT, "Player number: {}", playerNumber);
-        // Set last read frame
-        if (timeBeforePing != 0) ping = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - timeBeforePing;
-        //INFO_LOG_FMT(FALCONNECT, "Receiving...");
+        ++packets_in_rate_window;
+        const auto packet_received_at = std::chrono::steady_clock::now();
+        if (packet_received_at - packet_rate_window_started >= std::chrono::seconds(1)) {
+            const auto elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+                packet_received_at - packet_rate_window_started).count();
+            packetRate.store(static_cast<u16>(std::min<long long>(
+                (packets_in_rate_window * 1000LL) / elapsed_milliseconds,
+                std::numeric_limits<u16>::max())));
+            packet_rate_window_started = packet_received_at;
+            packets_in_rate_window = 0;
+        }
 
         const u32 packetNum =
             ((buffer[1] & 0xff) << 24) |
@@ -803,6 +867,5 @@ void FalconnectSocketManager::DataThread() {
             break;
         }
 
-        timeBeforePing = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
 }

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <thread>
 
+#include <fmt/format.h>
+
 #include "FalconnectSocketManager.h"
 #include "PowerPCScripts.h"
 #include "Core/System.h"
@@ -309,10 +311,7 @@ void FalconnectManager::Update() {
         const u32 local_frame_count = our_actual_data->raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
 
-        const bool is_two_player_race = FalconnectSocketManager::instance->totalPlayerCount == 2;
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
-        bool has_remote_frame_difference = false;
-        s64 remote_frame_difference = 0;
 
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
@@ -397,15 +396,6 @@ void FalconnectManager::Update() {
                     delayed_racer_data.clear();
                 }
 
-                // The first player-count slots are the human racers. In a two-player race,
-                // report the other player's modal difference rather than a CPU's value.
-                if (race_frame_count_started && is_two_player_race && static_cast<u8>(i) <
-                                              FalconnectSocketManager::instance->totalPlayerCount &&
-                    static_cast<u8>(i) != local_human_racer) {
-                    remote_frame_difference = modal_frame_difference;
-                    has_remote_frame_difference = true;
-                }
-
                 const std::array<u32, 3> center_position = {
                     racer_block.centerPosition[0],
                     racer_block.centerPosition[1],
@@ -434,8 +424,36 @@ void FalconnectManager::Update() {
 
         std::string race_status = "Falconnect | Ping: " + ping_display + " | PR: " +
                                   std::to_string(packetRate) + "p/s";
-        if (has_remote_frame_difference)
-            race_status += " | FD: " + std::to_string(remote_frame_difference);
+        long double total_variance = 0;
+        std::size_t remote_player_count = 0;
+        for (u8 player_racer = 0;
+             player_racer < FalconnectSocketManager::instance->totalPlayerCount;
+             player_racer++) {
+            if (player_racer == local_human_racer)
+                continue;
+
+            const auto& frame_differences = m_remote_frame_differences[player_racer];
+            if (frame_differences.empty())
+                continue;
+
+            long double mean = 0;
+            for (const FrameDifferenceSample& sample : frame_differences)
+                mean += sample.second;
+            mean /= frame_differences.size();
+
+            long double variance = 0;
+            for (const FrameDifferenceSample& sample : frame_differences) {
+                const long double difference_from_mean = sample.second - mean;
+                variance += difference_from_mean * difference_from_mean;
+            }
+            total_variance += variance / frame_differences.size();
+            remote_player_count++;
+        }
+        if (remote_player_count != 0) {
+            // Mean population variance keeps the score comparable as players join or leave.
+            const long double connection_stability = total_variance / remote_player_count;
+            race_status += fmt::format(" | CS: {:.2f}", connection_stability);
+        }
         patcher->SetRenderedText(race_status);
 
         // Check if we've exited the race to the menu

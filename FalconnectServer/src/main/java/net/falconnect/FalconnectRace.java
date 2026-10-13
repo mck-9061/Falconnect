@@ -266,7 +266,6 @@ public class FalconnectRace extends Thread {
                 Thread.sleep(20);
                 message.Send();
 
-                client.lastReceivedCount = 0;
               }
             }
           }

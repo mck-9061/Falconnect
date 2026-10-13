@@ -26,30 +26,24 @@ public class FullDataMessage extends FromClientMessage {
     count |= (data[3] & 0xff) << 8;
     count |= (data[4] & 0xff);
 
-    if (count > origin.lastReceivedCount) {
-      int missedPackets = count - origin.lastReceivedCount - 1;
-      for (int i = 0; i < 1 + cpuCount; i++) {
-        byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
-        System.arraycopy(
-            data,
-            RaceDataFormat.PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
-            racerData,
-            0,
-            RaceDataFormat.RACER_DATA_BYTES);
-        allData.add(racerData);
-      }
+    for (int i = 0; i < 1 + cpuCount; i++) {
+      byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
+      System.arraycopy(
+          data,
+          RaceDataFormat.PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
+          racerData,
+          0,
+          RaceDataFormat.RACER_DATA_BYTES);
+      allData.add(racerData);
+    }
 
-      // Publish data, CPU ownership, and sequence together. The race broadcaster must never
-      // label an older payload with this packet's newer sequence number.
-      origin.publishReceivedRaceData(allData, cpuIndices, count);
-      origin.lastReceivedCount = count;
-      origin.recordPlayerRacerData(allData.getFirst(), MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS);
-      origin.hasUpdated = true;
-      origin.lastUdpPacketReceivedAt = System.currentTimeMillis();
-      origin.hasReceivedRaceData = true;
-      if (origin.cpuHandoffActive) origin.cpuRestorationNeeded = true;
-    } else {
-      System.out.println("Skipping old packet: " + count + ". Latest packet: " + origin.lastReceivedCount);
+    // Sequence validation, publication and duplicate tracking share the same lock as the
+    // START_RACE reset. This prevents an in-flight packet from the prior race reintroducing its
+    // sequence after that reset.
+    if (!origin.acceptReceivedRaceData(allData, cpuIndices, count,
+        MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS)) {
+      System.out.println("Skipping old packet: " + count + ". Latest packet: "
+          + origin.getLastReceivedCount());
     }
 
 

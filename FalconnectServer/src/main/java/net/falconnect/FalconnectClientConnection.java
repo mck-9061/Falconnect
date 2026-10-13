@@ -33,7 +33,7 @@ public class FalconnectClientConnection {
   public int udpPort;
 
   public volatile int lastReceivedUdpPort;
-  public int lastReceivedCount;
+  private int lastReceivedCount;
   public volatile long lastUdpPacketReceivedAt;
   public volatile boolean cpuReallocationNeeded;
   public volatile boolean cpuRestorationNeeded;
@@ -190,6 +190,31 @@ public class FalconnectClientConnection {
                                                     int sourceSequence) {
     latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
         List.copyOf(cpuRacerIndices), sourceSequence);
+  }
+
+  // A race reset must not be interleaved with a UDP handler which has already compared its
+  // sequence number but has not yet stored it. Otherwise, an in-flight packet from the previous
+  // race can restore the old high-water mark after the reset and reject every packet in the new
+  // race (whose sender starts again at sequence 1).
+  public synchronized boolean acceptReceivedRaceData(List<byte[]> racerData,
+                                                      List<Byte> cpuRacerIndices,
+                                                      int sourceSequence,
+                                                      int duplicateLimit) {
+    if (sourceSequence <= lastReceivedCount) return false;
+
+    latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
+        List.copyOf(cpuRacerIndices), sourceSequence);
+    lastReceivedCount = sourceSequence;
+    recordPlayerRacerData(racerData.getFirst(), duplicateLimit);
+    hasUpdated = true;
+    lastUdpPacketReceivedAt = System.currentTimeMillis();
+    hasReceivedRaceData = true;
+    if (cpuHandoffActive) cpuRestorationNeeded = true;
+    return true;
+  }
+
+  public synchronized int getLastReceivedCount() {
+    return lastReceivedCount;
   }
 
   public synchronized ReceivedRaceData getLatestReceivedRaceData() {

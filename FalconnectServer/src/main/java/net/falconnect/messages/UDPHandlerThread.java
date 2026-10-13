@@ -41,7 +41,7 @@ public class UDPHandlerThread extends Thread {
     while (!clientConnection.disconnected) {
       DatagramSocket udpSocket = clientConnection.udpSocket;
       if (udpSocket != null) {
-        byte[] data = new byte[RaceDataFormat.CLIENT_FULL_RACE_PACKET_BYTES];
+        byte[] data = new byte[RaceDataFormat.MAX_RACE_DATAGRAM_BYTES + 1];
 
 
         DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
@@ -49,6 +49,10 @@ public class UDPHandlerThread extends Thread {
           udpSocket.setSoTimeout(5000);
           udpSocket.receive(datagramPacket);
 
+          if (!datagramPacket.getAddress().equals(clientConnection.socket.getInetAddress()) ||
+              datagramPacket.getLength() > RaceDataFormat.MAX_RACE_DATAGRAM_BYTES ||
+              datagramPacket.getLength() < RaceDataFormat.PACKET_HEADER_BYTES ||
+              !messageTypes.containsKey(data[0])) continue;
           clientConnection.lastReceivedUdpPort = datagramPacket.getPort();
 
           byte messageType = data[0];

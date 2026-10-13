@@ -53,7 +53,8 @@ public class FalconnectClientConnection {
   private final MessageSenderThread sendMessageThread;
   private final UDPHandlerThread udpHandlerThread;
 
-  private ReceivedRaceData latestReceivedRaceData = ReceivedRaceData.empty();
+  private final RaceDataFormat.RacerRecord[] latestRaceRecords = new RaceDataFormat.RacerRecord[RaceDataFormat.MAX_RACERS];
+  private final byte[][] pendingFullRecords = new byte[RaceDataFormat.MAX_RACERS][];
   public byte[] dataToSend;
 
   public FalconnectClientConnection(Socket socket) throws IOException {
@@ -154,44 +155,27 @@ public class FalconnectClientConnection {
     if (currentUdpSocket != null) currentUdpSocket.close();
   }
 
-  public static final class ReceivedRaceData {
-    private final List<byte[]> racerData;
-    private final List<Byte> cpuRacerIndices;
-    private final int sourceSequence;
-
-    private ReceivedRaceData(List<byte[]> racerData, List<Byte> cpuRacerIndices,
-                             int sourceSequence) {
-      this.racerData = racerData;
-      this.cpuRacerIndices = cpuRacerIndices;
-      this.sourceSequence = sourceSequence;
-    }
-
-    public static ReceivedRaceData empty() {
-      return new ReceivedRaceData(List.of(), List.of(), 0);
-    }
-
-    public List<byte[]> getRacerData() {
-      return racerData;
-    }
-
-    public List<Byte> getCpuRacerIndices() {
-      return cpuRacerIndices;
-    }
-
-    public int getSourceSequence() {
-      return sourceSequence;
+  // Called only after validating the entire packet, while holding this connection's monitor.
+  public synchronized void publishRaceRecords(List<RaceDataFormat.RacerRecord> records) {
+    for (var record : records) {
+      latestRaceRecords[record.racer()] = record;
+      if (record.full()) pendingFullRecords[record.racer()] = record.payload();
     }
   }
 
-  public synchronized void publishReceivedRaceData(List<byte[]> racerData,
-                                                    List<Byte> cpuRacerIndices,
-                                                    int sourceSequence) {
-    latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
-        List.copyOf(cpuRacerIndices), sourceSequence);
-  }
-
-  public synchronized ReceivedRaceData getLatestReceivedRaceData() {
-    return latestReceivedRaceData;
+  public synchronized List<RaceDataFormat.RacerRecord> consumeRelayRecords() {
+    var records = new ArrayList<RaceDataFormat.RacerRecord>();
+    for (int racer = 0; racer < latestRaceRecords.length; ++racer) {
+      var latest = latestRaceRecords[racer];
+      if (latest == null || (racer != playerNum - 1 && !cpuRacerIndices.contains((byte) racer)))
+        continue;
+      byte[] inputs = latest.full() ? RaceDataFormat.inputsFromFull(latest.payload()) : latest.payload();
+      byte[] full = pendingFullRecords[racer];
+      records.add(new RaceDataFormat.RacerRecord(racer, full != null, latest.source(),
+          full == null ? inputs : RaceDataFormat.withInputs(full, inputs)));
+      pendingFullRecords[racer] = null;
+    }
+    return records;
   }
 
   public synchronized List<Byte> getCpuRacerIndices() { return new ArrayList<>(cpuRacerIndices); }
@@ -199,6 +183,12 @@ public class FalconnectClientConnection {
   public synchronized List<Byte> getHomeCpuRacerIndices() { return new ArrayList<>(homeCpuRacerIndices); }
 
   public synchronized void setCpuRacerIndices(List<Byte> indices) {
+    for (int racer = 0; racer < latestRaceRecords.length; ++racer) {
+      if (racer != playerNum - 1 && (!indices.contains((byte) racer) || !cpuRacerIndices.contains((byte) racer))) {
+        latestRaceRecords[racer] = null;
+        pendingFullRecords[racer] = null;
+      }
+    }
     previousCpuRacerIndices = cpuRacerIndices;
     cpuRacerIndices = new ArrayList<>(indices);
     numCpus = (byte) indices.size();
@@ -227,7 +217,8 @@ public class FalconnectClientConnection {
   }
 
   public synchronized void resetRaceDataTracking() {
-    latestReceivedRaceData = ReceivedRaceData.empty();
+    java.util.Arrays.fill(latestRaceRecords, null);
+    java.util.Arrays.fill(pendingFullRecords, null);
     lastReceivedCount = 0;
     lastPlayerRacerData = null;
     consecutiveDuplicatePlayerDataPackets = 0;

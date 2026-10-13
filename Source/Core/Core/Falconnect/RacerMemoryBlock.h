@@ -26,6 +26,11 @@ public:
         3;   // timingData (12 bytes from the secondary racer block)
     static constexpr std::size_t SOCKET_DATA_SIZE = SOCKET_FIELD_COUNT * sizeof(u32);
 
+    // State, seven inputs, side attack, energy, restore flag, and three timing words.
+    static constexpr std::size_t INPUT_DATA_SIZE = 14 * sizeof(u32);
+    std::vector<u8> GetInputSocketData() const;
+    bool ApplyInputSocketData(const std::vector<u8>& data);
+
     static RacerMemoryBlock* CreateFromDolphinData(const std::vector<u32> &data);
 
     static RacerMemoryBlock* CreateFromSocketData(const std::vector<u8> &data);

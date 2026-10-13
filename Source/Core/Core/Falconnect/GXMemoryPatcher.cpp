@@ -335,8 +335,7 @@ void GXMemoryPatcher::SetLapCount(const u8 lapCount) const {
 }
 
 void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& patchData,
-                                   const bool full,
-                                   const std::array<u32, 3>& resolved_center_position) {
+                                   const bool full) {
     if (racerNum == 0) return;
 
   u32 blockBaseAddress = manager.Read_U32(referencePointer + 0x227878);
@@ -360,11 +359,9 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     // Make sure the game thinks it's an AI so it isn't trying to update the inputs
     manager.Write_U8(0x04, baseAddress);
 
-    manager.Write_U32(resolved_center_position[0], baseAddress + (31 * 4));
-    manager.Write_U32(resolved_center_position[1], baseAddress + (32 * 4));
-    manager.Write_U32(resolved_center_position[2], baseAddress + (33 * 4));
-
     if (full) {
+        for (std::size_t axis = 0; axis < 3; ++axis)
+            manager.Write_U32(patchData.centerPosition[axis], baseAddress + (31 + axis) * 4);
 
         //manager.Write_U32(patchData.centerPosOscX, baseAddress + 0x158);
         //manager.Write_U32(patchData.centerPosOscY, baseAddress + 0x168);
@@ -416,10 +413,12 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
 
   manager.Write_U32(patchData.sideAttack, baseAddress + (388 * 4));
 
-    manager.Write_U32(patchData.maxSpeedKmh, baseAddress + (54 * 4));
-    manager.Write_U32(patchData.acceleration, baseAddress + (136 * 4));
-    manager.Write_U32(patchData.baseSpeed, baseAddress + (137 * 4));
-    manager.Write_U32(patchData.maxSpeed, baseAddress + (139 * 4));
+    if (full) {
+        manager.Write_U32(patchData.maxSpeedKmh, baseAddress + (54 * 4));
+        manager.Write_U32(patchData.acceleration, baseAddress + (136 * 4));
+        manager.Write_U32(patchData.baseSpeed, baseAddress + (137 * 4));
+        manager.Write_U32(patchData.maxSpeed, baseAddress + (139 * 4));
+    }
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 

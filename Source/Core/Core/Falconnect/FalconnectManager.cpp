@@ -195,8 +195,6 @@ void FalconnectManager::Update() {
     // Initial setup done, wait for the race to start
     if (shouldStart.exchange(false)) {
         currentState = GameState::RACE_LOADED;
-        m_has_remote_position_offset.fill(false);
-        m_remote_position_offset_history = {};
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -232,7 +230,7 @@ void FalconnectManager::Update() {
 
             for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
                 const u8 cpuRacer = cpu_racer_indices[i];
-                FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
+                FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), cpuRacer);
                 // INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
             }
 
@@ -272,13 +270,14 @@ void FalconnectManager::Update() {
          for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
              //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
              const u8 cpuRacer = cpu_racer_indices[i];
-             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
+             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), cpuRacer);
          }
         //INFO_LOG_FMT(FALCONNECT, "Frame sent");
 
         u16 ping = FalconnectSocketManager::instance->ping - 4;
         if (ping > 1000) ping = 1; // overflow
-        const u16 packetRate = static_cast<u16>(1.0 / (static_cast<double>(FalconnectSocketManager::instance->ping) / 1000.0));
+        const u16 packetRate = FalconnectSocketManager::instance->ping == 0 ? 0 :
+            static_cast<u16>(1000 / FalconnectSocketManager::instance->ping);
 
         patcher->SetRenderedText("Falconnect | Ping: " + std::to_string(ping) + "ms | PR: " + std::to_string(packetRate) + "p/s");
 
@@ -286,78 +285,14 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
         FalconnectSocketManager::ReceivedRaceData received_race_data;
-        const auto data_wait_started = std::chrono::steady_clock::now();
-        while (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data) &&
-               !FalconnectSocketManager::instance->shouldDisconnect) {
-            if (std::chrono::steady_clock::now() - data_wait_started >= std::chrono::seconds(5)) {
-                // INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
-                FalconnectSocketManager::instance->HandleConnectionLost();
-                return;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
+        for (const auto& received_racer : received_race_data.racers) {
+            if (!received_racer.valid ||
+                FalconnectSocketManager::instance->OwnsCpuRacer(received_racer.racer_index))
+                continue;
+            patcher->SetRacerData(received_racer.racer_index, received_racer.block,
+                                  received_racer.full_updated);
         }
-        if (FalconnectSocketManager::instance->shouldDisconnect) return;
-        FalconnectSocketManager::instance->shouldSendData = true;
-
-        // Use one local sample for the whole received server snapshot. Remote offsets are only
-        // refreshed for racers whose received position moved; the rest retain their last offset.
-        const RacerMemoryBlock* our_actual_data = patcher->memoryReader->ReadRacerData(0);
-
-        //frameCount++;
-        for (int i = 0; i < 30; i++) {
-            //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
-            const auto& received_racer = received_race_data.racers[i];
-            if (received_racer.valid) {
-                const auto racer_num = received_racer.racer_index;
-                const auto& racer_block = received_racer.block;
-
-                if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
-                    continue;
-                }
-
-                auto& position_offset_history = m_remote_position_offset_history[i];
-                if (received_racer.position_updated ||
-                    !m_has_remote_position_offset[i]) {
-                    if (m_has_remote_position_offset[i]) {
-                        for (std::size_t sample = 0;
-                             sample + 1 < position_offset_history.size(); sample++) {
-                            position_offset_history[sample] = position_offset_history[sample + 1];
-                        }
-                    }
-
-                    auto& latest_position_offset = position_offset_history.back();
-                    for (std::size_t axis = 0; axis < latest_position_offset.size(); axis++) {
-                        latest_position_offset[axis] =
-                            std::bit_cast<float>(racer_block.centerPosition[axis]) -
-                            std::bit_cast<float>(our_actual_data->centerPosition[axis]);
-                    }
-
-                    // There is no history for a newly seen racer, so seed every sample with
-                    // its first received offset rather than blending toward the origin.
-                    if (!m_has_remote_position_offset[i]) {
-                        position_offset_history.fill(latest_position_offset);
-                    }
-                    m_has_remote_position_offset[i] = true;
-                }
-
-                std::array<u32, 3> center_position{};
-                for (std::size_t axis = 0; axis < center_position.size(); axis++) {
-                    float averaged_position_offset = 0.0f;
-                    for (const auto& position_offset : position_offset_history) {
-                        averaged_position_offset += position_offset[axis];
-                    }
-                    averaged_position_offset /=
-                        static_cast<float>(position_offset_history.size());
-                    center_position[axis] = std::bit_cast<u32>(
-                        std::bit_cast<float>(our_actual_data->centerPosition[axis]) +
-                        averaged_position_offset);
-                }
-
-                patcher->SetRacerData(racer_num, racer_block, true,
-                                      center_position);
-            }
-        }
-        //if (frameCount >= 1) frameCount = 0;
 
         // Check if we've exited the race to the menu
         if (!patcher->memoryReader->ReadIsInRace()) {

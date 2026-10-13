@@ -72,6 +72,8 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
 }
 
 RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &data) {
+    if (data.size() != SOCKET_DATA_SIZE)
+        return nullptr;
     // Convert u8 vector to u32 (big endian)
     std::vector<uint32_t> usedData;
     usedData.reserve(data.size() / 4);
@@ -241,4 +243,30 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     }
 
     return out;
+}
+
+std::vector<u8> RacerMemoryBlock::GetInputSocketData() const
+{
+    const std::array<u32, 14> words{state, inputs[0], inputs[1], inputs[2], inputs[3],
+        inputs[4], inputs[5], inputs[6], sideAttack, energy, restoreFlag,
+        timingData[0], timingData[1], timingData[2]};
+    std::vector<u8> bytes;
+    bytes.reserve(INPUT_DATA_SIZE);
+    for (const u32 word : words)
+        for (int shift = 24; shift >= 0; shift -= 8)
+            bytes.push_back(static_cast<u8>(word >> shift));
+    return bytes;
+}
+
+bool RacerMemoryBlock::ApplyInputSocketData(const std::vector<u8>& data)
+{
+    if (data.size() != INPUT_DATA_SIZE)
+        return false;
+    std::array<u32*, 14> words{&state, &inputs[0], &inputs[1], &inputs[2], &inputs[3],
+        &inputs[4], &inputs[5], &inputs[6], &sideAttack, &energy, &restoreFlag,
+        &timingData[0], &timingData[1], &timingData[2]};
+    for (std::size_t i = 0; i < words.size(); ++i)
+        *words[i] = (u32{data[i * 4]} << 24) | (u32{data[i * 4 + 1]} << 16) |
+                    (u32{data[i * 4 + 2]} << 8) | data[i * 4 + 3];
+    return true;
 }

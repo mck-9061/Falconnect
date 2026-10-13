@@ -1,6 +1,7 @@
 #ifndef DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #define DOLPHIN_EMU_SERVERSOCKETMANAGER_H
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <mutex>
 #include <queue>
@@ -10,6 +11,8 @@
 #include <netinet/in.h>
 
 #include "RacerMemoryBlock.h"
+#include "Core/Falconnect/RaceDataProtocol.h"
+#include <optional>
 #include "Core/Falconnect/CourseSettings.h"
 #include "Common/CommonTypes.h"
 
@@ -18,28 +21,14 @@ class FalconnectSocketManager {
 public:
     static FalconnectSocketManager* instance;
 
+    // Fixed TCP control frame sizing; race UDP uses RaceDataProtocol.h.
     static constexpr std::size_t RACE_PACKET_HEADER_SIZE = 5;
     static constexpr std::size_t MAX_RACERS = 30;
     static constexpr std::size_t SERVER_RACER_RECORD_SIZE =
         RacerMemoryBlock::SOCKET_DATA_SIZE + sizeof(u32);
     static constexpr std::size_t FULL_RACE_PACKET_SIZE =
         RACE_PACKET_HEADER_SIZE + (MAX_RACERS * SERVER_RACER_RECORD_SIZE);
-    static constexpr std::size_t CLIENT_FULL_RACE_PACKET_SIZE =
-        RACE_PACKET_HEADER_SIZE + (MAX_RACERS * RacerMemoryBlock::SOCKET_DATA_SIZE);
-
-    static constexpr std::size_t ClientRacePacketSize(const std::size_t racer_count)
-    {
-      return RACE_PACKET_HEADER_SIZE + (racer_count * RacerMemoryBlock::SOCKET_DATA_SIZE);
-    }
-
-    struct ReceivedRacerData
-    {
-        RacerMemoryBlock block{};
-        u8 racer_index = 0;
-        u32 source_sequence = 0;
-        bool valid = false;
-        bool position_updated = false;
-    };
+    using ReceivedRacerData = Falconnect::ReceivedRacerData;
 
     struct ReceivedRaceData
     {
@@ -48,12 +37,11 @@ public:
 
     std::thread socketThread[1];
 
-    bool lockFrameToSend = false;
 
     void SocketThread();
     void DataThread();
     void SendDataThread();
-    void SendFrame(RacerMemoryBlock *frame, u8 index);
+    void SendFrame(RacerMemoryBlock *frame, u8 local_racer);
     std::vector<u8> GetCpuRacerIndices() const;
     void SetCpuRacerIndices(std::vector<u8> indices);
     void SetSelectedCustomMachineData(std::vector<u8> machine_data);
@@ -62,7 +50,7 @@ public:
     std::vector<u8> GetCustomMachineDataForRace() const;
     void HandleConnectionLost();
     bool OwnsCpuRacer(u8 racer) const;
-    bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
+    void ConsumeReceivedRaceData(ReceivedRaceData* received_data);
     Falconnect::CourseSettings GetCourseSettings() const;
 
     bool hasConnected = false;
@@ -76,7 +64,6 @@ public:
     bool exited = false;
     bool canLoad = false;
     bool shouldDisconnect = false;
-    bool shouldSendData = false;
     bool hasReceivedAnyDataEver = false;
 
     u16 ping = 0;
@@ -94,33 +81,33 @@ public:
     //std::queue<OperationType> operationQueue;
     //std::queue<std::variant<u8, RacerMemoryBlock, std::string>> operationArgumentsQueue;
 
-    RacerMemoryBlock* ourLastKnownData = nullptr;
 
 private:
     void Start();
     void NotifyServerWhenGridded();
     void NotifyServerWhenReadyToLoad();
 
-    RacerMemoryBlock* framesToSend[30] = {};
+    std::mutex m_outgoing_mutex;
+    std::array<std::optional<RacerMemoryBlock>, MAX_RACERS> m_frames_to_send{};
+    bool m_force_full_update = true;
 
     int localSocket = 0;
     int serverSocket = 0;
     int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
     bool hasStarted = false;
-    bool doneFirst = false;
+
 
     mutable std::mutex m_course_settings_mutex;
     Falconnect::CourseSettings m_course_settings;
 
-    bool shouldRunDataThread = true;
+    std::atomic<bool> shouldRunDataThread{true};
 
     u32 timeBeforePing = 0;
     mutable std::mutex m_cpu_assignment_mutex;
     std::vector<u8> m_cpu_racer_indices;
     mutable std::mutex m_received_race_data_mutex;
     ReceivedRaceData m_received_race_data;
-    bool m_received_race_data_ready = false;
     mutable std::mutex m_custom_machine_data_mutex;
     std::vector<u8> m_selected_custom_machine_data;
     std::vector<u8> m_remote_custom_machine_data;

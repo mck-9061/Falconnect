@@ -201,15 +201,22 @@ public class FalconnectRace extends Thread {
   }
 
   public void run() {
-    long time = System.nanoTime();
+    long epoch = System.nanoTime();
+    long tick = 1;
     try {
       while (isRunning) {
-        // wait for half a frame to pass
-        long currentTime = System.nanoTime();
-        if (currentTime - time < 8333333) continue;
-
-        time = currentTime;
-
+        // Absolute 120 Hz deadlines avoid adding processing time to every relay interval.
+        // Lobby loading can block; it must not accumulate ticks for the next race.
+        if (gameState != GameState.RACING) {
+          epoch = System.nanoTime();
+          tick = 1;
+        }
+        long deadline = epoch + tick * 1_000_000_000L / 120;
+        long remaining;
+        while ((remaining = deadline - System.nanoTime()) > 0 && isRunning)
+          java.util.concurrent.locks.LockSupport.parkNanos(remaining);
+        if (!isRunning) return;
+        ++tick;
 
         try {
           // Wait for all players to be ready
@@ -280,6 +287,8 @@ public class FalconnectRace extends Thread {
             if (allGridded) {
               System.out.println("All clients gridded; sending START_RACE to " + getClients().size() + " clients");
               gameState = GameState.RACING;
+              epoch = System.nanoTime();
+              tick = 1;
               for (FalconnectClientConnection client : getClients()) {
                 client.lastUdpPacketReceivedAt = System.currentTimeMillis();
                 client.resetRaceDataTracking();
@@ -501,101 +510,18 @@ public class FalconnectRace extends Thread {
   private long packetNum = 0;
 
   public void ConstructFullDataPacket() {
-    byte[] packet = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
-    packet[0] = (byte) ToClientPacketType.FULL_DATA.ordinal();
-    packetNum++;
-
-    //System.out.println(packetNum);
-
-    packet[1] = (byte) ((packetNum >>> 24) & 0xff);
-    packet[2] = (byte) ((packetNum >>> 16) & 0xff);
-    packet[3] = (byte) ((packetNum >>> 8) & 0xff);
-    packet[4] = (byte) ((packetNum) & 0xff);
-
-    //HashMap<Integer, Set<Float>> playerPositions = new HashMap<>();
-
+    var packet = java.nio.ByteBuffer.allocate(RaceDataFormat.MAX_RACE_DATAGRAM_BYTES);
+    packet.put((byte) ToClientPacketType.FULL_DATA.ordinal());
+    packet.putInt((int) ++packetNum);
     for (FalconnectClientConnection client : getClients()) {
-      FalconnectClientConnection.ReceivedRaceData receivedRaceData =
-          client.getLatestReceivedRaceData();
-      int i = 0;
-      List<Byte> cpuIndices = receivedRaceData.getCpuRacerIndices();
-      List<Byte> ownedCpuIndices = client.getCpuRacerIndices();
-
-      for (byte[] racerData : receivedRaceData.getRacerData()) {
-        if (i == 0) {
-          // Player's data
-          int racerIndex = client.playerNum - 1;
-          writeRacerRecord(packet, racerIndex, racerData,
-              sourceMetadata(client, receivedRaceData.getSourceSequence()));
-
-          //playerPositions.put(client.playerNum - 1, new HashSet<>());
-          // Get racer's position from received data
-//          byte[] x = new byte[4];
-//          byte[] y = new byte[4];
-//          byte[] z = new byte[4];
-//          System.arraycopy(racerData, 4, x, 0, 4);
-//          System.arraycopy(racerData, 8, y, 0, 4);
-//          System.arraycopy(racerData, 12, z, 0, 4);
-//
-//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(x).order(ByteOrder.BIG_ENDIAN).getFloat());
-//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(y).order(ByteOrder.BIG_ENDIAN).getFloat());
-//          playerPositions.get(client.playerNum - 1).add(ByteBuffer.wrap(z).order(ByteOrder.BIG_ENDIAN).getFloat());
-
-        } else {
-          // A packet may have arrived immediately before an assignment update. Its CPU records
-          // describe the sender's former ownership, so they must not overwrite the new owner's
-          // records in the shared race packet.
-          if (i - 1 >= cpuIndices.size() || !ownedCpuIndices.contains(cpuIndices.get(i - 1))) {
-            i++;
-            continue;
-          }
-
-          // CPU data
-          int racerIndex = cpuIndices.get(i - 1);
-          writeRacerRecord(packet, racerIndex, racerData,
-              sourceMetadata(client, receivedRaceData.getSourceSequence()));
-
-          //playerPositions.put(client.cpuStartIndex + i - 1, new HashSet<>());
-          // Get racer's position from received data
-//          byte[] x = new byte[4];
-//          byte[] y = new byte[4];
-//          byte[] z = new byte[4];
-//          System.arraycopy(racerData, 4, x, 0, 4);
-//          System.arraycopy(racerData, 8, y, 0, 4);
-//          System.arraycopy(racerData, 12, z, 0, 4);
-//
-//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(x).order(ByteOrder.BIG_ENDIAN).getFloat());
-//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(y).order(ByteOrder.BIG_ENDIAN).getFloat());
-//          playerPositions.get(client.cpuStartIndex + i - 1).add(ByteBuffer.wrap(z).order(ByteOrder.BIG_ENDIAN).getFloat());
-        }
-
-        i++;
+      for (var record : client.consumeRelayRecords()) {
+        packet.put((byte) record.racer());
+        packet.put((byte) (record.full() ? 1 : 0));
+        packet.putInt(sourceMetadata(client, record.source()));
+        packet.put(record.payload());
       }
     }
-
-    // Calculate offsets for each racer's position
-//    for (FalconnectClientConnection client : getClients()) {
-//      byte[] toSend = new byte[RaceDataFormat.FULL_RACE_PACKET_BYTES];
-//      System.arraycopy(packet, 0, toSend, 0, RaceDataFormat.FULL_RACE_PACKET_BYTES);
-//
-//      for (Integer racer : playerPositions.keySet()) {
-//
-//      }
-//    }
-
-    fullDataPacket = packet;
-    // System.out.println("Packet constructed");
-  }
-
-  private static void writeRacerRecord(byte[] packet, int racerIndex, byte[] racerData,
-                                       int sourceSequence) {
-    int offset = RaceDataFormat.serverRecordOffset(racerIndex);
-    System.arraycopy(racerData, 0, packet, offset, RaceDataFormat.RACER_DATA_BYTES);
-    int sequenceOffset = offset + RaceDataFormat.RACER_DATA_BYTES;
-    packet[sequenceOffset] = (byte) (sourceSequence >>> 24);
-    packet[sequenceOffset + 1] = (byte) (sourceSequence >>> 16);
-    packet[sequenceOffset + 2] = (byte) (sourceSequence >>> 8);
-    packet[sequenceOffset + 3] = (byte) sourceSequence;
+    fullDataPacket = java.util.Arrays.copyOf(packet.array(), packet.position());
   }
 
   private static int sourceMetadata(FalconnectClientConnection client, int sourceSequence) {
@@ -607,17 +533,10 @@ public class FalconnectRace extends Thread {
 
   public void SendFullDataPacket() throws IOException, InterruptedException {
     ConstructFullDataPacket();
-
+    // Send on the relay clock itself; the TCP message queue can delay or coalesce race ticks.
     for (FalconnectClientConnection client : getClients()) {
-      //if (client.hasUpdated) {
-        FullDataMessage message = new FullDataMessage(client, fullDataPacket);
-        message.Send();
-        client.hasUpdated = false;
-      //} else {
-        //System.out.println("Skipped " + client.uid);
-      //}
+      client.SendPacket(fullDataPacket);
+      client.hasUpdated = false;
     }
-
-    //System.out.println("Full data packet distributed");
   }
 }

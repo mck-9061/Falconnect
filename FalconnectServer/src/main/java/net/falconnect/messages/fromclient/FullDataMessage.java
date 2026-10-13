@@ -3,64 +3,38 @@ package net.falconnect.messages.fromclient;
 import net.falconnect.FalconnectClientConnection;
 import net.falconnect.RaceDataFormat;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class FullDataMessage extends FromClientMessage {
-  private static final int MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS = 5000;
   public FullDataMessage(FalconnectClientConnection origin, byte[] data) {
     super(origin, data);
   }
 
   @Override
   public void ProcessMessage() {
-    List<byte[]> allData = new ArrayList<>();
-    if (data.length < RaceDataFormat.PACKET_HEADER_BYTES ||
-        (data.length - RaceDataFormat.PACKET_HEADER_BYTES) % RaceDataFormat.RACER_DATA_BYTES != 0) return;
-    int cpuCount = (data.length - RaceDataFormat.PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
-    List<Byte> cpuIndices = clientCpuIndicesForPacket(cpuCount);
-    if (cpuIndices == null) return;
-
-    int count = (data[1] & 0xff) << 24;
-    count |= (data[2] & 0xff) << 16;
-    count |= (data[3] & 0xff) << 8;
-    count |= (data[4] & 0xff);
-
-    if (count > origin.lastReceivedCount) {
-      int missedPackets = count - origin.lastReceivedCount - 1;
-      for (int i = 0; i < 1 + cpuCount; i++) {
-        byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
-        System.arraycopy(
-            data,
-            RaceDataFormat.PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
-            racerData,
-            0,
-            RaceDataFormat.RACER_DATA_BYTES);
-        allData.add(racerData);
-      }
-
-      // Publish data, CPU ownership, and sequence together. The race broadcaster must never
-      // label an older payload with this packet's newer sequence number.
-      origin.publishReceivedRaceData(allData, cpuIndices, count);
-      origin.lastReceivedCount = count;
-      origin.recordPlayerRacerData(allData.getFirst(), MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS);
+    final java.util.List<RaceDataFormat.RacerRecord> records;
+    try {
+      records = RaceDataFormat.decode(data, false);
+    } catch (IllegalArgumentException e) {
+      return;
+    }
+    int sequence = java.nio.ByteBuffer.wrap(data, 1, 4).getInt();
+    synchronized (origin) {
+      if (origin.hasReceivedRaceData && !RaceDataFormat.isNewSequence(sequence, origin.lastReceivedCount))
+        return;
+      // Explicit global IDs prevent a delayed packet from relabeling CPUs after reassignment.
+      // Ignore relinquished CPUs while accepting the human's liveness after a handoff.
+      var owned = origin.getCpuRacerIndices();
+      if (records.stream().noneMatch(record -> record.racer() == origin.playerNum - 1)) return;
+      origin.publishRaceRecords(records.stream().filter(record ->
+          record.racer() == origin.playerNum - 1 || owned.contains((byte) record.racer())).toList());
+      origin.lastReceivedCount = sequence;
       origin.hasUpdated = true;
       origin.lastUdpPacketReceivedAt = System.currentTimeMillis();
       origin.hasReceivedRaceData = true;
       if (origin.cpuHandoffActive) origin.cpuRestorationNeeded = true;
-    } else {
-      System.out.println("Skipping old packet: " + count + ". Latest packet: " + origin.lastReceivedCount);
+      // Holding the same controls is normal. Only compare the once-per-second full snapshots
+      // for the existing frozen-game watchdog (about 15 seconds of identical vehicle data).
+      records.stream().filter(record -> record.racer() == origin.playerNum - 1 && record.full())
+          .findFirst().ifPresent(record -> origin.recordPlayerRacerData(record.payload(), 15));
     }
-
-
-
-    //System.out.println("Received data starting with " + data[1]);
-  }
-
-  private List<Byte> clientCpuIndicesForPacket(int cpuCount) {
-    List<Byte> current = origin.getCpuRacerIndices();
-    if (cpuCount == current.size()) return current;
-    List<Byte> previous = origin.getPreviousCpuRacerIndices();
-    return cpuCount == previous.size() ? previous : null;
   }
 }

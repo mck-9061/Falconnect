@@ -75,6 +75,9 @@ void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address
 
 void GXMemoryPatcher::DisableB() const {
     manager.Write_U8(0x20, referencePointer + 0x245477);
+
+    manager.Write_U32(0x01000100, referencePointer + 0x2453e5);
+    manager.Write_U16(0x0008, referencePointer + 0x245472);
 }
 
 void GXMemoryPatcher::DisableOptionsMenuControl() const {
@@ -249,11 +252,10 @@ void GXMemoryPatcher::StartRaceFromPracticeOptions() const {
 }
 
 void GXMemoryPatcher::ForceStartRace() const {
-    // Normal practice loading reaches settings state 7 before requesting the race.
-    // Forced loading can bypass that menu entirely. Leaving its state at 0 makes
-    // ReadIsInRace report a menu exit and stops Falconnect's race updates.
+    manager.Write_U32(0x01000100, referencePointer + 0x2453e5);
+    manager.Write_U16(0x0008, referencePointer + 0x245472);
     manager.Write_U16(7, referencePointer + 0x2454e2);
-    manager.Write_U32(0x08000000, referencePointer + 0x245474);
+    manager.Write_U32(0x28000100, referencePointer + 0x245474);
 }
 
 void GXMemoryPatcher::StartCountdown() const {

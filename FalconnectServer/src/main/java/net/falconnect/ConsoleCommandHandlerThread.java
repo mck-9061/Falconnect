@@ -47,7 +47,8 @@ public class ConsoleCommandHandlerThread extends Thread {
                 + " players. State: " + race.gameState + ". Track override: "
                 + (track == null ? "none" : track)
                 + ". Lap count override: " + formatOverride(race.getLapCountOverride())
-                + ". Boost lap override: " + formatOverride(race.getBoostLapOverride()));
+                + ". Boost lap override: " + formatOverride(race.getBoostLapOverride())
+                + ". Machine override: " + race.getMachineOverride());
             for (FalconnectClientConnection client : race.getClients()) {
               output.println(client.uid + ". IP:" + client.socket.getRemoteSocketAddress()
                   + ". Name: " + new String(client.name) + ". State: " + client.state
@@ -91,9 +92,38 @@ public class ConsoleCommandHandlerThread extends Thread {
           output.println("Maximum CPUs per client set to " + server.getMaxCpusPerClient()
               + ". Applies to races that have not started loading yet.");
           break;
-        case "track": {
-          requireArguments(args, 2, "track <game-id> <track-id|clear>");
+        case "machine": {
+          requireArguments(args, 2, "machine <game-id> <machine-id|random|clear>");
           int gameId = Integer.parseInt(args[1]);
+          MachineSelection selection = args[2].equalsIgnoreCase("clear") ? null
+              : args[2].equalsIgnoreCase("random") ? MachineSelection.random(false)
+              : MachineSelection.same(parseTrackId(args[2]));
+          server.setMachineOverride(gameId, selection);
+          output.println("Machine override for game " + gameId + ": " + selection);
+          break;
+        }
+        case "custommachine": {
+          if (args.length != 3 && args.length != 5)
+            throw new IllegalArgumentException("Usage: custommachine <game-id> <body-id> <cockpit-id> <booster-id> | custommachine <game-id> <random|clear>");
+          int gameId = Integer.parseInt(args[1]);
+          MachineSelection selection;
+          if (args.length == 5)
+            selection = MachineSelection.custom(parseTrackId(args[2]), parseTrackId(args[3]), parseTrackId(args[4]));
+          else if (args[2].equalsIgnoreCase("random")) selection = MachineSelection.random(true);
+          else if (args[2].equalsIgnoreCase("clear")) selection = null;
+          else throw new IllegalArgumentException("Use random, clear, or three part IDs.");
+          server.setMachineOverride(gameId, selection);
+          output.println("Machine override for game " + gameId + ": " + selection);
+          break;
+        }
+        case "track": {
+          requireArguments(args, 2, "track <game-id> <track-id|random|clear>");
+          int gameId = Integer.parseInt(args[1]);
+          if (args[2].equalsIgnoreCase("random")) {
+            output.println("Game " + gameId + " will use randomly selected track ID "
+                + server.selectRandomTrack(gameId) + ".");
+            break;
+          }
           Integer trackId = args[2].equalsIgnoreCase("clear") ? null : parseTrackId(args[2]);
           server.setTrackOverride(gameId, trackId);
           output.println(trackId == null ? "Track override cleared for game " + gameId + "."
@@ -142,8 +172,15 @@ public class ConsoleCommandHandlerThread extends Thread {
         + FalconnectServer.MAX_SUPPORTED_RACES + "); existing games continue.");
     output.println("maxplayers <count>                Set player limit per game (2-30); existing players stay.");
     output.println("kickall                           Kick every player and close every game; server stays online.");
-    output.println("track <game-id> <track-id|clear>   Override a waiting game's track, or restore voting.");
+    output.println("track <game-id> <track-id|random|clear>   Override a waiting game's track, or restore voting.");
     output.println("                                  Track IDs: 0-255, decimal or 0x-prefixed hexadecimal.");
+    output.println("                                  random selects a compatible track from TrackTable now.");
+    output.println("machine <game-id> <id|random|clear> Force all humans and CPUs to one machine, unique random machines, or restore selections.");
+    output.println("                                  Machine IDs: 0-40 (0x00-0x28); random draws without replacement.");
+    output.println("custommachine <game-id> <body> <cockpit> <booster> Force custom parts for every human and CPU.");
+    output.println("                                  Body: 0-24; cockpit: 25-49; booster: 50-74. Decimal or 0x hex.");
+    output.println("custommachine <game-id> <random|clear> Unique random part combinations, or restore selections.");
+    output.println("                                  Machine overrides apply to waiting games and reroll each race until cleared.");
     output.println("laps <game-id> <count|clear>       Override a waiting game's lap count (1-255), or use the track default.");
     output.println("boostlap <game-id> <lap|clear>     Override its boost lap (0-255, zero-based), or use the track default.");
     output.println("                                  0 grants boost from the start; boost lap cannot exceed the lap count.");

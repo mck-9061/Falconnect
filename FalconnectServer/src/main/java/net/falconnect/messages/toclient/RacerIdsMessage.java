@@ -7,7 +7,6 @@ import net.falconnect.ToClientPacketType;
 import java.util.List;
 
 public class RacerIdsMessage extends ToClientMessage {
-  private static final int CUSTOM_MACHINE_RACER_ID = 0x32;
 
   public RacerIdsMessage(FalconnectClientConnection destination, List<FalconnectClientConnection> clients,
                          FalconnectRace race) {
@@ -15,17 +14,6 @@ public class RacerIdsMessage extends ToClientMessage {
 
     data[0] = (byte) ToClientPacketType.RACER_IDS.ordinal();
 
-    int i = 1;
-    for (FalconnectClientConnection client : clients) {
-      data[i] = client.usesCustomMachine()
-          ? (byte) CUSTOM_MACHINE_RACER_ID
-          : client.racerId;
-      i++;
-    }
-
-    while (i < 31) {
-      data[i] = race.getCpuRacerId(i - 1);
-      i++;
-    }
+    for (int i = 0; i < 30; i++) data[i + 1] = race.getRaceMachine(i).id();
   }
 }

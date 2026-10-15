@@ -91,6 +91,16 @@ public class FalconnectServer {
     findGame(gameId).setBoostLapOverride(boostLap);
   }
 
+  public synchronized void setMachineOverride(int gameId, MachineSelection selection) {
+    findGame(gameId).setMachineOverride(selection);
+  }
+
+  public synchronized int selectRandomTrack(int gameId) {
+    FalconnectRace race = findGame(gameId);
+    race.selectRandomTrack();
+    return race.getTrackOverride();
+  }
+
   private FalconnectRace findGame(int gameId) {
     for (FalconnectRace race : currentRaces) {
       if (race.getPortBlockIndex() == gameId) return race;

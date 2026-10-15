@@ -12,6 +12,9 @@ public class FalconnectRace extends Thread {
   private static final boolean ASSIGN_ALL_CPUS_TO_SECOND_PLAYER_FOR_TESTING = true;
   private int maxCpusPerClient;
   private Integer trackOverride;
+  private MachineSelection machineOverride;
+  private List<MachineSelection.Machine> raceMachines;
+
   private Integer lapCountOverride;
   private Integer boostLapOverride;
   private String lastSettingsError;
@@ -62,6 +65,33 @@ public class FalconnectRace extends Thread {
 
   public synchronized List<FalconnectClientConnection> getClients() {
     return List.copyOf(clients);
+  }
+
+  public synchronized void setMachineOverride(MachineSelection selection) {
+    requireWaitingForReady();
+    machineOverride = selection;
+  }
+
+  public synchronized MachineSelection getMachineOverride() { return machineOverride; }
+
+  public synchronized void selectRandomTrack() {
+    requireWaitingForReady();
+    List<Integer> candidates = new ArrayList<>();
+    for (int id : TrackTable.trackIds()) {
+      try {
+        resolveTrackSettings(id, lapCountOverride, boostLapOverride);
+        candidates.add(id);
+      } catch (IllegalArgumentException ignored) {
+        // Only draw from tracks compatible with the game's explicit lap settings.
+      }
+    }
+    if (candidates.isEmpty())
+      throw new IllegalArgumentException("No configured tracks match these lap/boost overrides.");
+    setTrackOverride(candidates.get(new Random().nextInt(candidates.size())));
+  }
+
+  public synchronized MachineSelection.Machine getRaceMachine(int index) {
+    return raceMachines.get(index);
   }
 
   public synchronized void setTrackOverride(Integer trackId) {
@@ -187,6 +217,18 @@ public class FalconnectRace extends Thread {
       client.cpuStartIndex = cpuIndices.isEmpty() ? 0 : cpuIndices.get(0);
       client.udpPort = getUdpPort(client.playerNum);
     }
+    GenerateCpuRacerIds();
+    if (machineOverride != null) {
+      raceMachines = machineOverride.generate();
+    } else {
+      List<MachineSelection.Machine> grid = new ArrayList<>();
+      for (FalconnectClientConnection client : clients)
+        grid.add(new MachineSelection.Machine(client.usesCustomMachine() ? (byte) 0x32 : client.racerId,
+            client.customMachineData[0], client.customMachineData[1], client.customMachineData[2]));
+      for (int i = clients.size(); i < RaceDataFormat.MAX_RACERS; i++)
+        grid.add(new MachineSelection.Machine(cpuRacerIds[i], (byte) 0, (byte) 0, (byte) 0));
+      raceMachines = List.copyOf(grid);
+    }
     gameState = GameState.WAITING_FOR_GRID;
     return (byte) selectedTrackSettings.trackId();
   }
@@ -195,8 +237,7 @@ public class FalconnectRace extends Thread {
     cpuRacerIds = new byte[RaceDataFormat.MAX_RACERS];
     Random random = new Random();
     for (int racerIndex = 0; racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
-      // Zero is treated as an unset racer ID by the client patcher, so standard machines are
-      // represented by the regular IDs 1 through 30.
+      // Preserve the default CPU pool; explicit random overrides use all standard IDs.
       cpuRacerIds[racerIndex] = (byte) (random.nextInt(REGULAR_MACHINE_COUNT) + 1);
     }
   }
@@ -265,8 +306,6 @@ public class FalconnectRace extends Thread {
 
               Thread.sleep(1000);
 
-              GenerateCpuRacerIds();
-
               for (FalconnectClientConnection client : getClients()) {
                 new CpuAssignmentMessage(client).Send();
                 // GX's course setting is the number of opponent slots to initialise. That includes
@@ -280,7 +319,7 @@ public class FalconnectRace extends Thread {
                 Thread.sleep(20);
                 racerIdsMessage.Send();
                 CustomMachineDataMessage customMachineDataMessage =
-                    new CustomMachineDataMessage(client, getClients());
+                    new CustomMachineDataMessage(client, this);
                 Thread.sleep(20);
                 customMachineDataMessage.Send();
                 NamesMessage namesMessage = new NamesMessage(client, getClients());

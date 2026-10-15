@@ -74,7 +74,7 @@ void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address
 }
 
 void GXMemoryPatcher::DisableB() const {
-    manager.Write_U32(0x20, referencePointer + 0x245477);
+    manager.Write_U8(0x20, referencePointer + 0x245477);
 }
 
 void GXMemoryPatcher::DisableOptionsMenuControl() const {
@@ -249,6 +249,10 @@ void GXMemoryPatcher::StartRaceFromPracticeOptions() const {
 }
 
 void GXMemoryPatcher::ForceStartRace() const {
+    // Normal practice loading reaches settings state 7 before requesting the race.
+    // Forced loading can bypass that menu entirely. Leaving its state at 0 makes
+    // ReadIsInRace report a menu exit and stops Falconnect's race updates.
+    manager.Write_U16(7, referencePointer + 0x2454e2);
     manager.Write_U32(0x08000000, referencePointer + 0x245474);
 }
 
@@ -274,7 +278,7 @@ void GXMemoryPatcher::SetOpponentRacerIds(const u8 racerIDs[]) const {
         }
 
         u8 data = racerIDs[i - 1];
-        if (data == 0) data = 0x06;
+        // ID zero is Red Gazelle, a valid server-selected machine.
 
         manager.Write_U8(data, address);
     }
@@ -662,6 +666,9 @@ void GXMemoryPatcher::StopPhysicsOnReceivedMachines() const {
 }
 
 void GXMemoryPatcher::SetupCustomMachines() const {
+    // The branch adjustment below is relative: never subtract it again on later races.
+    if (manager.Read_U32(referencePointer + 0x14f49c) == 0x3c60801b)
+        return;
     manager.Write_U32(0x3c60801b, referencePointer + 0x14f49c);
     Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x14f49c);
     manager.Write_U32(0x7c0380ae, referencePointer + 0x14f4a4);
@@ -688,4 +695,14 @@ void GXMemoryPatcher::SetCustomMachineData(const std::vector<u8>& machine_data) 
 
 void GXMemoryPatcher::SetSelectedRacerId(const u8 racer_id) const {
     manager.Write_U8(racer_id, referencePointer + 0x2453ef);
+}
+
+void GXMemoryPatcher::SetSelectedMachine(const u8 racer_id,
+                                         const std::vector<u8>& custom_parts) const {
+    SetSelectedRacerId(racer_id);
+    // The authoritative compact stream starts with our parts when our machine is custom.
+    const bool custom = racer_id == 0x32 && custom_parts.size() >= 3;
+    manager.Write_U8(custom ? custom_parts[0] : 0, referencePointer + 0x1c7664);
+    manager.Write_U8(custom ? custom_parts[1] : 0, referencePointer + 0x1c766c);
+    manager.Write_U8(custom ? custom_parts[2] : 0, referencePointer + 0x1c7674);
 }

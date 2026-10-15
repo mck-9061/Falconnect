@@ -72,7 +72,8 @@ void FalconnectManager::Update() {
         return;
     }
 
-    const bool server_requested_start = shouldStart.load();
+    // Consume START once so a packet arriving during this update cannot bypass setup.
+    const bool server_requested_start = shouldStart.exchange(false);
     if (!server_requested_start && !(
             currentState == GameState::RACE_LOADED ||
             currentState == GameState::RACE_GRIDDED ||
@@ -109,7 +110,7 @@ void FalconnectManager::Update() {
           // Connect to server
           if (FalconnectSocketManager::instance == nullptr || FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
             patcher->SetPracticeModeText("Connecting to Falconnect server...");
-            patcher->FullyDisableMenuControl();
+            //patcher->FullyDisableMenuControl();
 
               delete FalconnectSocketManager::instance;
 
@@ -132,7 +133,7 @@ void FalconnectManager::Update() {
                   std::this_thread::sleep_for(std::chrono::seconds(1));
               }
 
-              patcher->ReEnableMenuControl();
+              //patcher->ReEnableMenuControl();
               patcher->DisableB();
 
               if (FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
@@ -206,8 +207,11 @@ void FalconnectManager::Update() {
     }
 
     // Initial setup done, wait for the race to start
-    if (shouldStart.exchange(false)) {
+    if (server_requested_start) {
+        INFO_LOG_FMT(FALCONNECT, "LOAD player={} setup_complete=1",
+                     FalconnectSocketManager::instance->playerNumber);
         currentState = GameState::RACE_LOADED;
+        readCounter = 0;
         for (auto& frame_differences : m_remote_frame_differences)
             frame_differences.clear();
         for (auto& frame_difference_counts : m_remote_frame_difference_counts)
@@ -224,7 +228,10 @@ void FalconnectManager::Update() {
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
         // Use the server's selection, including its default for players forced out of menus.
-        patcher->SetSelectedRacerId(FalconnectSocketManager::instance->raceRacerId);
+        const std::vector<u8> custom_machine_data =
+            FalconnectSocketManager::instance->GetCustomMachineDataForRace();
+        patcher->SetSelectedMachine(FalconnectSocketManager::instance->raceRacerId,
+                                    custom_machine_data);
         // Set racer IDs
         patcher->SetOpponentRacerIds(racerIDs);
 
@@ -235,8 +242,6 @@ void FalconnectManager::Update() {
         patcher->SetBoostLap(course.boost_lap);
         patcher->SetGrid();
 
-        const std::vector<u8> custom_machine_data =
-            FalconnectSocketManager::instance->GetCustomMachineDataForRace();
         if (!custom_machine_data.empty()) {
             patcher->SetCustomMachineData(custom_machine_data);
             patcher->SetupCustomMachines();
@@ -251,6 +256,8 @@ void FalconnectManager::Update() {
     if (m_force_start_pending) {
         if (std::chrono::steady_clock::now() < m_force_start_at) return;
         patcher->ForceStartRace();
+        INFO_LOG_FMT(FALCONNECT, "LOAD force fallback applied; in_race={}",
+                     patcher->memoryReader->ReadIsInRace());
         m_force_start_pending = false;
         return;
     }
@@ -271,6 +278,8 @@ void FalconnectManager::Update() {
             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
             // INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
 
+            INFO_LOG_FMT(FALCONNECT, "LOAD gridded player={} owned_cpus={}",
+                         FalconnectSocketManager::instance->playerNumber, cpu_racer_indices.size());
             currentState = GameState::RACE_GRIDDED;
             FalconnectSocketManager::instance->hasGridded = true;
             for (const u8 cpuRacer : cpu_racer_indices)
@@ -287,6 +296,8 @@ void FalconnectManager::Update() {
             patcher->StartCountdown();
             patcher->InitialiseNameLabels();
             // INFO_LOG_FMT(FALCONNECT, "Countdown started");
+            INFO_LOG_FMT(FALCONNECT, "LOAD racing player={}",
+                         FalconnectSocketManager::instance->playerNumber);
             currentState = GameState::RACING;
         }
     }
@@ -504,7 +515,8 @@ void FalconnectManager::Update() {
             readCounter++;
 
             if (readCounter > 3) {
-                // INFO_LOG_FMT(FALCONNECT, "Exited race!");
+                INFO_LOG_FMT(FALCONNECT, "LOAD menu exit detected; stopping race updates player={}",
+                             FalconnectSocketManager::instance->playerNumber);
                 FalconnectSocketManager::instance->exited = true;
 
                 // Check that we're still in practice mode; if not, disconnect

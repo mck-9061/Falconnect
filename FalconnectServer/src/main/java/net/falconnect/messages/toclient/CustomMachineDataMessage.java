@@ -1,38 +1,27 @@
 package net.falconnect.messages.toclient;
 
 import net.falconnect.FalconnectClientConnection;
+import net.falconnect.FalconnectRace;
+import net.falconnect.MachineSelection;
+import net.falconnect.RaceDataFormat;
 import net.falconnect.ToClientPacketType;
 
-import java.util.List;
-
 public class CustomMachineDataMessage extends ToClientMessage {
-  private static final int COMPONENTS_PER_MACHINE = 3;
-
-  public CustomMachineDataMessage(FalconnectClientConnection destination,
-                                  List<FalconnectClientConnection> clients) {
+  public CustomMachineDataMessage(FalconnectClientConnection destination, FalconnectRace race) {
     super(destination);
     data[0] = (byte) ToClientPacketType.CUSTOM_MACHINE_DATA.ordinal();
-
     int cursor = 2;
-
-    // This is the complete custom-machine stream for this client, rather than only the
-    // remote portion.  The game consumes it in its local racer order: its own racer first,
-    // then the other player racers in the server's (UDP) order, followed by CPUs.  Keeping
-    // that ordering here gives the client one authoritative stream to place at 0x801b0000.
-    // In particular, it must not prepend its locally-read selection to this data.
-    if (destination.usesCustomMachine()) {
-      System.arraycopy(destination.customMachineData, 0, data, cursor, COMPONENTS_PER_MACHINE);
-      cursor += COMPONENTS_PER_MACHINE;
+    int ownIndex = Byte.toUnsignedInt(destination.playerNum) - 1;
+    // Match RACER_IDS on the client: swap server slot zero with this player's slot.
+    // Include CPUs, and skip standard machines in the compact part stream.
+    for (int local = 0; local < RaceDataFormat.MAX_RACERS; local++) {
+      int serverIndex = local == 0 ? ownIndex : local == ownIndex ? 0 : local;
+      MachineSelection.Machine machine = race.getRaceMachine(serverIndex);
+      if (machine.id() != 0x32) continue;
+      data[cursor++] = machine.body();
+      data[cursor++] = machine.cockpit();
+      data[cursor++] = machine.booster();
     }
-
-    for (FalconnectClientConnection client : clients) {
-      if (client == destination || !client.usesCustomMachine())
-        continue;
-
-      System.arraycopy(client.customMachineData, 0, data, cursor, COMPONENTS_PER_MACHINE);
-      cursor += COMPONENTS_PER_MACHINE;
-    }
-
-    data[1] = (byte) ((cursor - 2) / COMPONENTS_PER_MACHINE);
+    data[1] = (byte) ((cursor - 2) / 3);
   }
 }

@@ -64,5 +64,7 @@ public final class TrackTable {
     return BY_ID.getOrDefault(trackId, TrackSettings.defaults(trackId));
   }
 
+  public static java.util.Set<Integer> trackIds() { return BY_ID.keySet(); }
+
   private TrackTable() {}
 }

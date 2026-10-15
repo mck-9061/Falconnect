@@ -16,6 +16,7 @@ public class FalconnectServer {
   private volatile int maxClientsPerRace = 6;
   private volatile int maxConcurrentRaces = 3;
   private volatile int maxCpusPerClient = 3;
+  private volatile int countdownSeconds = 20;
 
   public ServerSocket socket;
   private final List<FalconnectRace> currentRaces = new ArrayList<>();
@@ -44,6 +45,13 @@ public class FalconnectServer {
   public int getMaxClientsPerRace() { return maxClientsPerRace; }
   public int getMaxConcurrentRaces() { return maxConcurrentRaces; }
   public int getMaxCpusPerClient() { return maxCpusPerClient; }
+
+  public int getCountdownSeconds() { return countdownSeconds; }
+
+  public void setCountdownSeconds(int value) {
+    requireRange(value, 1, 3600, "Countdown seconds");
+    countdownSeconds = value;
+  }
 
   public TrackSettings getTrackSettings(int trackId) { return TrackTable.get(trackId); }
 

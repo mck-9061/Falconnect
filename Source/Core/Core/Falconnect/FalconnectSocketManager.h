@@ -77,7 +77,9 @@ public:
     bool hasGridded = false;
     bool start = false;
     bool exited = false;
-    bool canLoad = false;
+    std::atomic<bool> canLoad{false};
+    std::atomic<bool> raceLoadRequested{false};
+    u8 raceRacerId = 6;
     bool shouldDisconnect = false;
     bool shouldSendData = false;
     bool hasReceivedAnyDataEver = false;

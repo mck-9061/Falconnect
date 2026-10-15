@@ -239,7 +239,7 @@ void FalconnectSocketManager::NotifyServerWhenGridded() const {
 }
 
 void FalconnectSocketManager::NotifyServerWhenReadyToLoad() const {
-    while (!canLoad && !shouldDisconnect)
+    while (!canLoad && !raceLoadRequested && !shouldDisconnect)
     {
         INFO_LOG_FMT(FALCONNECT, "Waiting until we can load...");
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -247,6 +247,8 @@ void FalconnectSocketManager::NotifyServerWhenReadyToLoad() const {
 
     if (shouldDisconnect || !shouldRun)
         return;
+
+    if (raceLoadRequested) return;
 
     // First send our selected racer ID, then say we're ready.
     char data[FULL_RACE_PACKET_SIZE] = { 0 };
@@ -397,6 +399,7 @@ void FalconnectSocketManager::SocketThread() {
                     if (i == 0) usedIndex = playerNumber - 1;
                     if (i == playerNumber - 1) {
                         // INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our data", i);
+                        raceRacerId = static_cast<u8>(buffer[i + 1]);
                         continue; // Skip our data
                     }
 
@@ -457,6 +460,7 @@ void FalconnectSocketManager::SocketThread() {
 
             case FromServerPacketType::START: {
                 INFO_LOG_FMT(FALCONNECT, "START");
+                raceLoadRequested = true;
                 exited = false;
                 hasGridded = false;
 
@@ -826,6 +830,7 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
             start = false;
             exited = false;
             canLoad = false;
+            raceLoadRequested = false;
             // Do not stop a newer race if this is a delayed receiver from an older generation.
             if (m_race_data_generation.load() == race_generation)
                 shouldRunDataThread = false;

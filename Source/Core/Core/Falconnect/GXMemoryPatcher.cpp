@@ -73,6 +73,10 @@ void GXMemoryPatcher::WriteU8Vector(const std::vector<u8> &in, const u32 address
     ScheduleInvalidateCacheRange(address, i);
 }
 
+void GXMemoryPatcher::DisableB() const {
+    manager.Write_U32(0x20, referencePointer + 0x245477);
+}
+
 void GXMemoryPatcher::DisableOptionsMenuControl() const {
     const u32 menuControlAddress = referencePointer + 0x3e28f0;
     manager.Write_U32(0x3c608060, menuControlAddress);
@@ -80,18 +84,23 @@ void GXMemoryPatcher::DisableOptionsMenuControl() const {
     manager.Write_U32(0x88630000, menuControlAddress + 8);
 
     ScheduleInvalidateCacheRange(menuControlAddress, 12);
+
+    manager.Write_U8(0x0, referencePointer + 0x245478);
 }
 
 void GXMemoryPatcher::FullyDisableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
     manager.Write_U32(0x60000000, address);
     Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address);
+
+    manager.Write_U8(0x0, referencePointer + 0x245478);
 }
 
 void GXMemoryPatcher::ReEnableMenuControl() const {
     const u32 address = referencePointer + 0x3e2604;
     manager.Write_U32(0x480056d1, address);
     Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(address);
+    manager.Write_U8(0x80, referencePointer + 0x245478);
 }
 
 void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
@@ -150,8 +159,6 @@ void GXMemoryPatcher::DisableAIControl() const {
 }
 
 void GXMemoryPatcher::EnableAIControlFor(const u8 start, const u8 count) {
-    if (start == 0) return;
-
     u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);
     if (baseAddress < 0x80000000) {
         // INFO_LOG_FMT(FALCONNECT, "Invalid address!");
@@ -239,6 +246,10 @@ void GXMemoryPatcher::SetBoostLap(const u8 lap) const {
 
 void GXMemoryPatcher::StartRaceFromPracticeOptions() const {
     manager.Write_U32(0x01010101, 0x80600000);
+}
+
+void GXMemoryPatcher::ForceStartRace() const {
+    manager.Write_U32(0x08000000, referencePointer + 0x245474);
 }
 
 void GXMemoryPatcher::StartCountdown() const {

@@ -34,6 +34,7 @@ void FalconnectManager::Update() {
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
+        m_force_start_pending = false;
 
         if (FalconnectSocketManager::instance != nullptr) {
             FalconnectSocketManager::instance->shouldDisconnect = true;
@@ -58,6 +59,8 @@ void FalconnectManager::Update() {
     if (shouldReset) {
         log("Resetting...");
         shouldReset = false;
+        m_force_start_pending = false;
+        shouldStart = false;
 
         patcher->ResetToTitle();
         currentState = GameState::FAILED_TO_CONNECT;
@@ -69,7 +72,8 @@ void FalconnectManager::Update() {
         return;
     }
 
-    if (!(
+    const bool server_requested_start = shouldStart.load();
+    if (!server_requested_start && !(
             currentState == GameState::RACE_LOADED ||
             currentState == GameState::RACE_GRIDDED ||
             currentState == GameState::RACING
@@ -105,7 +109,7 @@ void FalconnectManager::Update() {
           // Connect to server
           if (FalconnectSocketManager::instance == nullptr || FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
             patcher->SetPracticeModeText("Connecting to Falconnect server...");
-            patcher->FullyDisableMenuControl(); // broken lol (only disables input in machine settings and options)
+            patcher->FullyDisableMenuControl();
 
               delete FalconnectSocketManager::instance;
 
@@ -129,6 +133,7 @@ void FalconnectManager::Update() {
               }
 
               patcher->ReEnableMenuControl();
+              patcher->DisableB();
 
               if (FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
                   patcher->SetPracticeModeText("Failed to connect!");
@@ -159,7 +164,8 @@ void FalconnectManager::Update() {
         currentState = GameState::SETTINGS_SELECTED;
     }
 
-    if (currentState == GameState::SETTINGS_SELECTED) {
+    if (currentState == GameState::SETTINGS_SELECTED ||
+        (server_requested_start && currentState != GameState::READY_TO_LOAD)) {
         log("Setting up...");
 
         // Disable menu control
@@ -179,20 +185,24 @@ void FalconnectManager::Update() {
 
         patcher->SetGrid();
 
-        // Get our racer ID
-        FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
-        FalconnectSocketManager::instance->selectedCourse = patcher->memoryReader->ReadSelectedCourse();
-        FalconnectSocketManager::instance->SetSelectedCustomMachineData(
-            patcher->memoryReader->ReadSelectedCustomMachine());
-        if (FalconnectSocketManager::instance->UsesSelectedCustomMachine()) {
-            constexpr u8 custom_machine_racer_id = 0x32;
-            FalconnectSocketManager::instance->racerId = custom_machine_racer_id;
-            patcher->SetSelectedRacerId(custom_machine_racer_id);
+        if (!server_requested_start) {
+            // Get our racer ID
+            FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
+            FalconnectSocketManager::instance->selectedCourse = patcher->memoryReader->ReadSelectedCourse();
+            FalconnectSocketManager::instance->SetSelectedCustomMachineData(
+                patcher->memoryReader->ReadSelectedCustomMachine());
+            if (FalconnectSocketManager::instance->UsesSelectedCustomMachine()) {
+                constexpr u8 custom_machine_racer_id = 0x32;
+                FalconnectSocketManager::instance->racerId = custom_machine_racer_id;
+                patcher->SetSelectedRacerId(custom_machine_racer_id);
+            }
         }
 
         currentState = GameState::READY_TO_LOAD;
-        if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
-        return;
+        if (!server_requested_start) {
+            if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->canLoad = true;
+            return;
+        }
     }
 
     // Initial setup done, wait for the race to start
@@ -206,9 +216,15 @@ void FalconnectManager::Update() {
         m_modal_frame_differences.fill(0);
         for (auto& delayed_racer_data : m_delayed_newer_racer_data)
             delayed_racer_data.clear();
+        m_last_local_race_frame_count = 0;
+        m_local_race_frame_last_advanced = {};
+        m_local_race_frame_count_started = false;
+        m_local_racer_ai_enabled = false;
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
+        // Use the server's selection, including its default for players forced out of menus.
+        patcher->SetSelectedRacerId(FalconnectSocketManager::instance->raceRacerId);
         // Set racer IDs
         patcher->SetOpponentRacerIds(racerIDs);
 
@@ -227,6 +243,16 @@ void FalconnectManager::Update() {
         }
 
         patcher->StartRaceFromPracticeOptions();
+        m_force_start_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+        m_force_start_pending = true;
+    }
+
+    // Keep emulation running during the delay, and finish the fallback before reporting GRIDDED.
+    if (m_force_start_pending) {
+        if (std::chrono::steady_clock::now() < m_force_start_at) return;
+        patcher->ForceStartRace();
+        m_force_start_pending = false;
+        return;
     }
 
     // Wait for the machine to grid, then let the socket manager know we've gridded
@@ -310,6 +336,23 @@ void FalconnectManager::Update() {
         const RacerMemoryBlock* our_actual_data = patcher->memoryReader->ReadRacerData(0);
         const u32 local_frame_count = our_actual_data->raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
+
+        // GX stops increasing the local race-time frame counter once the local racer finishes.
+        // We receive server snapshots more often than GX renders frames, so only interpret it as
+        // stopped after a full second without an advance. This gives the game AI control of the
+        // finished local machine while the player waits for the rest of the field.
+        if (local_frame_count > m_last_local_race_frame_count) {
+            m_last_local_race_frame_count = local_frame_count;
+            m_local_race_frame_last_advanced = received_snapshot_time;
+            m_local_race_frame_count_started = true;
+        } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
+                   received_snapshot_time - m_local_race_frame_last_advanced >=
+                       std::chrono::seconds(1)) {
+            patcher->EnableAIControlFor(0, 1);
+            m_local_racer_ai_enabled = true;
+            INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
+                         local_frame_count);
+        }
 
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
 

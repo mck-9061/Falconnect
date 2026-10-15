@@ -14,6 +14,10 @@ public class UpdateStateMessage extends FromClientMessage {
     if (checkByte != 1) return;
 
     byte state = data[1];
+    if (state < 0 || state >= ClientState.values().length) return;
+    // A delayed readiness worker must not move a loading/gridded client backwards.
+    if (state == ClientState.READY.ordinal() && origin.state != ClientState.IN_MENUS &&
+        origin.state != ClientState.READY) return;
     origin.state = ClientState.values()[state];
 
     System.out.println(origin.state);

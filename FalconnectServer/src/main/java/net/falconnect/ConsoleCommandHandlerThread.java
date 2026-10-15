@@ -39,6 +39,7 @@ public class ConsoleCommandHandlerThread extends Thread {
           output.println("Limits: " + server.getMaxConcurrentRaces() + " games, "
               + server.getMaxClientsPerRace() + " players per game, "
               + server.getMaxCpusPerClient() + " CPUs per client for upcoming races.");
+          output.println("Ready countdown: " + server.getCountdownSeconds() + " seconds.");
           output.println("-----Server game and player listing-----");
           for (FalconnectRace race : server.getRaces()) {
             Integer track = race.getTrackOverride();
@@ -77,6 +78,12 @@ public class ConsoleCommandHandlerThread extends Thread {
           server.setMaxClientsPerRace(Integer.parseInt(args[1]));
           output.println("Maximum players per game set to " + server.getMaxClientsPerRace()
               + ". Existing players remain connected.");
+          break;
+        case "countdown":
+          requireArguments(args, 1, "countdown <seconds>");
+          server.setCountdownSeconds(Integer.parseInt(args[1]));
+          output.println("Ready countdown set to " + server.getCountdownSeconds()
+              + " seconds from the first ready player, including waiting games.");
           break;
         case "maxcpus":
           requireArguments(args, 1, "maxcpus <count>");
@@ -142,6 +149,7 @@ public class ConsoleCommandHandlerThread extends Thread {
     output.println("                                  0 grants boost from the start; boost lap cannot exceed the lap count.");
     output.println("                                  Incompatible track votes keep the game waiting until settings are corrected.");
     output.println("maxcpus <count>                   Set CPUs per client (0-29) for races not yet loading.");
+    output.println("countdown <seconds>              Force load after the first ready player (1-3600 seconds; default 20).");
     output.println("help                              List commands and arguments.");
     output.println("Settings last until server restart. Game IDs come from list and may be reused after closure.");
   }

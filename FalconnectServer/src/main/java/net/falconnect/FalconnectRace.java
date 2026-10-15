@@ -23,6 +23,7 @@ public class FalconnectRace extends Thread {
 
   private byte[] fullDataPacket;
   private byte[] cpuRacerIds;
+  private Long firstReadyAtNanos;
   private int lastLobbyPlayerCount = -1;
   private int lastLobbyReadyCount = -1;
 
@@ -119,9 +120,24 @@ public class FalconnectRace extends Thread {
   // Capture settings and select the course under the same lock as console track overrides.
   // This limit is retained through CPU handoff/restoration for the whole race.
   synchronized Byte PrepareRaceStart() {
-    if (!isRunning || gameState != GameState.WAITING_FOR_READY || clients.size() < 2 ||
-        clients.stream().anyMatch(client -> client.disconnected || client.state != ClientState.READY))
+    return PrepareRaceStart(System.nanoTime());
+  }
+
+  synchronized Byte PrepareRaceStart(long nowNanos) {
+    if (!isRunning || gameState != GameState.WAITING_FOR_READY) return null;
+    boolean anyReady = clients.stream().anyMatch(client ->
+        !client.disconnected && client.state == ClientState.READY);
+    if (!anyReady) {
+      firstReadyAtNanos = null;
       return null;
+    }
+    if (firstReadyAtNanos == null) firstReadyAtNanos = nowNanos;
+    boolean countdownExpired = nowNanos - firstReadyAtNanos >=
+        server.getCountdownSeconds() * 1_000_000_000L;
+    boolean allReady = clients.size() >= 2 && clients.stream().allMatch(client ->
+        !client.disconnected && client.state == ClientState.READY);
+    if (!allReady && !countdownExpired) return null;
+    if (clients.stream().anyMatch(client -> client.disconnected)) return null;
 
     try {
       List<TrackSettings> courses = new ArrayList<>();
@@ -130,9 +146,11 @@ public class FalconnectRace extends Thread {
       } else {
         // Votes may change after a command. Validate every candidate before choosing so an
         // invalid combination neither kills the race thread nor silently changes the vote odds.
-        for (FalconnectClientConnection client : clients)
+        for (FalconnectClientConnection client : clients) {
+          if (client.state != ClientState.READY) continue;
           courses.add(resolveTrackSettings(Byte.toUnsignedInt(client.selectedCourse),
               lapCountOverride, boostLapOverride));
+        }
       }
       selectedTrackSettings = courses.get(new Random().nextInt(courses.size()));
       lastSettingsError = null;
@@ -150,9 +168,15 @@ public class FalconnectRace extends Thread {
     int remainder = totalCpus % clients.size();
     int nextCpuIndex = clients.size();
     FalconnectClientConnection testCpuOwner =
-        ASSIGN_ALL_CPUS_TO_SECOND_PLAYER_FOR_TESTING ? clients.get(1) : null;
+        ASSIGN_ALL_CPUS_TO_SECOND_PLAYER_FOR_TESTING && clients.size() > 1 ? clients.get(1) : null;
     byte playerNum = 1;
     for (FalconnectClientConnection client : clients) {
+      // Players without submitted settings use the same standard machine locally and remotely.
+      if (client.state != ClientState.READY) {
+        client.racerId = 6;
+        Arrays.fill(client.customMachineData, (byte) 0);
+      }
+      client.state = ClientState.LOADING;
       client.playerNum = playerNum++;
       int cpuCount = testCpuOwner == null
           ? baseCpuCount + (client.playerNum <= remainder ? 1 : 0)

@@ -44,6 +44,8 @@ private:
     void log(const std::string& message);
     std::string lastLogged;
 
+    bool m_force_start_pending = false;
+    std::chrono::steady_clock::time_point m_force_start_at{};
     u8 readCounter = 0;
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;
@@ -62,6 +64,10 @@ private:
     std::array<s64, 30> m_modal_frame_differences{};
     std::array<bool, 30> m_has_modal_frame_difference{};
     std::array<std::deque<DelayedRacerData>, 30> m_delayed_newer_racer_data{};
+    u32 m_last_local_race_frame_count = 0;
+    std::chrono::steady_clock::time_point m_local_race_frame_last_advanced{};
+    bool m_local_race_frame_count_started = false;
+    bool m_local_racer_ai_enabled = false;
 };
 
 

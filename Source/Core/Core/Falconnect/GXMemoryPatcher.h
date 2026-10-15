@@ -18,11 +18,13 @@ public:
     void Initialise();
 
     // Patch methods
+    void DisableB() const;
     void DisableOptionsMenuControl() const;
     void FullyDisableMenuControl() const;
     void ReEnableMenuControl() const;
     void SetPracticeModeText(std::string text) const;
     void StartRaceFromPracticeOptions() const;
+    void ForceStartRace() const;
     void DisableAIControl() const;
     void DisableCountdown() const;
     void StartCountdown() const;

@@ -41,7 +41,13 @@ it usable, I'll open up alpha testing. No exact timeframe on this as I'm current
 Falconnect is being tested on Windows 11 (x86) and macOS Golden Gate (Apple Silicon) - other operating systems
 and CPU architectures will likely work but haven't been tested.
 
+## Notes
 Work in progress docs for the reverse engineering involved can be found at https://falconnect.net/.
+
+Falconnect, this repository, reverse engineering efforts, and developers, are not affiliated with Nintendo, Sega, 
+Amusement Vision, or the original development staff of F-Zero GX. F-Zero is a trademark of Nintendo. Falconnect
+contains none of the code, textures, audio, models, or any other copyrighted materials of F-Zero GX, and requires a
+legally obtained copy of the original game to function.
 
 ## With thanks to
 - Ghidra, [Ghidra-GameCube-Loader](https://github.com/Cuyler36/Ghidra-GameCube-Loader), and Dolphin's debugging tools - reverse engineering and debugging

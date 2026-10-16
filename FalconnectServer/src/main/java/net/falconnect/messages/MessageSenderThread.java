@@ -41,7 +41,7 @@ public class MessageSenderThread extends Thread {
               ToClientMessage nMessage = messagesToSend.take();
               if (nMessage instanceof FullDataMessage) {
                 message = nMessage;
-                System.out.println("Skipped old message");
+                //System.out.println("Skipped old message");
               } else {
                 message = nMessage;
                 break;

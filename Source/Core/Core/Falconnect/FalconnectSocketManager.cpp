@@ -221,6 +221,23 @@ void FalconnectSocketManager::HandleConnectionLost()
     }
 }
 
+void FalconnectSocketManager::RequestDisconnect()
+{
+    shouldRunDataThread = false;
+    shouldDisconnect = true;
+    shouldRun = false;
+
+    // SocketThread normally blocks in recvAll waiting for TCP control packets. Interrupt that
+    // blocking receive so its teardown can close the connection and the server sees EOF.
+    if (serverSocket == -1)
+        return;
+#ifdef _WIN32
+    shutdown(serverSocket, SD_BOTH);
+#else
+    shutdown(serverSocket, SHUT_RDWR);
+#endif
+}
+
 void FalconnectSocketManager::NotifyServerWhenGridded() const {
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -519,7 +536,9 @@ void FalconnectSocketManager::SocketThread() {
         }
     }
 
-    if (!isError) {
+    // RequestDisconnect has already shut down the TCP socket to wake recvAll. Do not attempt a
+    // final write on that half-closed descriptor (and risk SIGPIPE); the server observes EOF.
+    if (!isError && !shouldDisconnect) {
         char data[FULL_RACE_PACKET_SIZE] = { 0 };
         data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
 

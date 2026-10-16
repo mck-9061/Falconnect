@@ -591,6 +591,22 @@ void GXMemoryPatcher::ConstrainMenu() const {
     }
 }
 
+bool GXMemoryPatcher::IsMenuOpen() const {
+    return manager.Read_U8(referencePointer + 0x1bf144) != 0xff;
+}
+
+void GXMemoryPatcher::CloseMenu() const {
+    const u32 address = referencePointer + 0x1bf144;
+
+    manager.Write_U8(0xff, address);
+}
+
+void GXMemoryPatcher::OpenMenu() const {
+    const u32 address = referencePointer + 0x1bf144;
+    constexpr u8 course_select_menu = 0x6;
+    manager.Write_U8(course_select_menu, address);
+}
+
 void GXMemoryPatcher::InitialiseNameLabels() const {
     // Set font
     manager.Write_U8(0x03, referencePointer + 0x12a217);

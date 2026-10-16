@@ -244,6 +244,7 @@ public class FalconnectRace extends Thread {
   public synchronized void AddClient(FalconnectClientConnection client) {
     client.udpPort = getUdpPort(client.playerNum);
     clients.add(client);
+    client.setRace(this);
   }
 
   public synchronized boolean TryAddClient(FalconnectClientConnection client) {
@@ -263,7 +264,24 @@ public class FalconnectRace extends Thread {
     }
 
     clients = newList;
+    if (client.getRace() == this) client.setRace(null);
     System.out.println(clients.size());
+  }
+
+  /**
+   * A RESET means the player has returned to Course Select. They must stop participating in this
+   * race immediately (including CPU ownership), but their TCP connection remains valid for a
+   * newly allocated lobby.
+   */
+  public void ReturnClientToLobby(FalconnectClientConnection client)
+      throws IOException, InterruptedException {
+    if (client.disconnected) return;
+
+    client.state = ClientState.IN_MENUS;
+    client.resetRaceDataTracking();
+    TransferCpuAssignments(client, false);
+    RemoveClient(client);
+    server.AllocateClient(client);
   }
 
   public void run() {

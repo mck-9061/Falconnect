@@ -38,7 +38,7 @@ void FalconnectManager::Update() {
         m_force_start_course_write_until = {};
 
         if (FalconnectSocketManager::instance != nullptr) {
-            FalconnectSocketManager::instance->shouldDisconnect = true;
+            FalconnectSocketManager::instance->RequestDisconnect();
             shouldReset = true;
             FalconnectSocketManager::instance = nullptr;
         }
@@ -85,7 +85,8 @@ void FalconnectManager::Update() {
       {
         log("Not in Practice mode!");
         currentState = GameState::NOT_IN_PRACTICE;
-          if (FalconnectSocketManager::instance != nullptr) FalconnectSocketManager::instance->shouldDisconnect = true;
+          if (FalconnectSocketManager::instance != nullptr)
+              FalconnectSocketManager::instance->RequestDisconnect();
         return;
       }
 
@@ -151,7 +152,7 @@ void FalconnectManager::Update() {
 
                   if (!FalconnectSocketManager::instance->hasProperlyConnected) {
                       FalconnectSocketManager::instance->isError = true;
-                      FalconnectSocketManager::instance->shouldDisconnect = true;
+                      FalconnectSocketManager::instance->RequestDisconnect();
                   }
 
                   const auto& connection_error = FalconnectSocketManager::instance->connectionError;
@@ -235,6 +236,14 @@ void FalconnectManager::Update() {
         m_local_race_frame_last_advanced = {};
         m_local_race_frame_count_started = false;
         m_local_racer_ai_enabled = false;
+        m_last_human_race_frame_counts.fill(0);
+        m_human_race_frame_last_advanced.fill(std::chrono::steady_clock::time_point{});
+        m_human_race_frame_count_started.fill(false);
+        m_human_racers_finished.fill(false);
+        m_all_human_racers_finished = false;
+        m_all_human_racers_finished_at = {};
+        m_menu_should_reopen_after_finish = false;
+        m_menu_opened_after_finish = false;
 
         patcher->SetRenderedText("Falconnect | Synchronising...");
 
@@ -327,6 +336,13 @@ void FalconnectManager::Update() {
     }
 
     if (currentState == GameState::RACING) {
+        // Do not leave a pause/results menu over the race. Record that it was actually opened so
+        // only those clients receive the course-select menu after the post-finish grace period.
+        if (!m_menu_opened_after_finish && patcher->IsMenuOpen()) {
+            patcher->CloseMenu();
+            m_menu_should_reopen_after_finish = true;
+        }
+
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Update frames to send
         const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
@@ -390,6 +406,35 @@ void FalconnectManager::Update() {
         }
 
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
+        const u8 human_racer_count = std::min<u8>(
+            FalconnectSocketManager::instance->totalPlayerCount, 30);
+
+        const auto update_human_finish_state =
+            [&](const u8 racer_num, const u32 racer_frame_count) {
+                if (racer_num >= human_racer_count) return;
+
+                if (racer_frame_count > m_last_human_race_frame_counts[racer_num]) {
+                    m_last_human_race_frame_counts[racer_num] = racer_frame_count;
+                    m_human_race_frame_last_advanced[racer_num] = received_snapshot_time;
+                    m_human_race_frame_count_started[racer_num] = true;
+                    // A delayed fresh packet can prove that an apparent one-second stall was
+                    // network delay rather than a finish. Keep the menu locked in that case.
+                    if (m_human_racers_finished[racer_num] && !m_menu_opened_after_finish) {
+                        m_human_racers_finished[racer_num] = false;
+                        m_all_human_racers_finished = false;
+                        m_all_human_racers_finished_at = {};
+                    }
+                    return;
+                }
+
+                if (m_human_race_frame_count_started[racer_num] &&
+                    received_snapshot_time - m_human_race_frame_last_advanced[racer_num] >=
+                        std::chrono::seconds(1)) {
+                    m_human_racers_finished[racer_num] = true;
+                }
+            };
+
+        update_human_finish_state(local_human_racer, local_frame_count);
 
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
@@ -397,6 +442,14 @@ void FalconnectManager::Update() {
             if (received_racer.valid) {
                 const auto racer_num = received_racer.racer_index;
                 const auto& racer_block = received_racer.block;
+
+                // racer_index is remapped for this client's GX memory. The received array slot
+                // remains the authoritative server player slot, so use it to track finishes.
+                // The local racer is sampled directly from GX memory above; CPU slots are not
+                // considered by update_human_finish_state.
+                const u8 source_racer_slot = static_cast<u8>(i);
+                if (source_racer_slot != local_human_racer)
+                    update_human_finish_state(source_racer_slot, racer_block.raceTimeFrameCount);
 
                 if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
                     m_delayed_newer_racer_data[i].clear();
@@ -500,6 +553,34 @@ void FalconnectManager::Update() {
             }
         }
 
+        if (!m_all_human_racers_finished && human_racer_count != 0) {
+            bool all_humans_finished = true;
+            for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
+                if (!m_human_racers_finished[racer_num]) {
+                    all_humans_finished = false;
+                    break;
+                }
+            }
+            if (all_humans_finished) {
+                m_all_human_racers_finished = true;
+                m_all_human_racers_finished_at = received_snapshot_time;
+                INFO_LOG_FMT(FALCONNECT,
+                             "All {} human racers finished; keeping the menu closed for 10 seconds",
+                             human_racer_count);
+            }
+        }
+
+        if (m_all_human_racers_finished && !m_menu_opened_after_finish &&
+            received_snapshot_time - m_all_human_racers_finished_at >=
+                std::chrono::seconds(10)) {
+            if (m_menu_should_reopen_after_finish)
+                patcher->OpenMenu();  // OpenMenu writes only the 0x6 Course Select state.
+            m_menu_opened_after_finish = true;
+            INFO_LOG_FMT(FALCONNECT,
+                         "All human racers finished grace period elapsed; menu_reopened={}",
+                         m_menu_should_reopen_after_finish);
+        }
+
         std::string race_status = "Falconnect | Ping: " + ping_display + " | PR: " +
                                   std::to_string(packetRate) + "p/s";
         long double total_variance = 0;
@@ -549,7 +630,7 @@ void FalconnectManager::Update() {
 
                 if (mode != 3) {
                     SuccessAlertFmt("You disconnected from the race.");
-                    FalconnectSocketManager::instance->shouldDisconnect = true;
+                    FalconnectSocketManager::instance->RequestDisconnect();
                     currentState = GameState::NOT_IN_PRACTICE;
                     shouldReset = true;
                 } else {

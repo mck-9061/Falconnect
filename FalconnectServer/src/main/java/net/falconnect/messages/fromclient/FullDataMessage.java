@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class FullDataMessage extends FromClientMessage {
-  private static final int MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS = 5000;
+  // A stopped emulator can keep its networking worker alive, repeatedly sending the last frame.
+  // Use elapsed time rather than a packet count: the latter depends on the client's send rate.
+  private static final long DUPLICATE_RACE_DATA_TIMEOUT_MILLIS = 5_000;
   public FullDataMessage(FalconnectClientConnection origin, byte[] data) {
     super(origin, data);
   }
@@ -40,12 +42,8 @@ public class FullDataMessage extends FromClientMessage {
     // Sequence validation, publication and duplicate tracking share the same lock as the
     // START_RACE reset. This prevents an in-flight packet from the prior race reintroducing its
     // sequence after that reset.
-    if (!origin.acceptReceivedRaceData(allData, cpuIndices, count,
-        MAX_CONSECUTIVE_DUPLICATE_PLAYER_PACKETS)) {
-      System.out.println("Skipping old packet: " + count + ". Latest packet: "
-          + origin.getLastReceivedCount());
-    }
-
+    origin.acceptReceivedRaceData(allData, cpuIndices, count,
+      DUPLICATE_RACE_DATA_TIMEOUT_MILLIS);//System.out.println("Skipping old packet: " + count + ". Latest packet: " + origin.getLastReceivedCount());
 
 
     //System.out.println("Received data starting with " + data[1]);

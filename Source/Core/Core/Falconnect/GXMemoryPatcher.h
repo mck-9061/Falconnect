@@ -54,6 +54,9 @@ public:
     void SetSelectedRacerId(u8 racer_id) const;
     void SetSelectedMachine(u8 racer_id, const std::vector<u8>& custom_parts) const;
     void DisablePausing() const;
+    bool IsMenuOpen() const;
+    void CloseMenu() const;
+    void OpenMenu() const;
 
     u32 referencePointer{};
     bool isReady{};

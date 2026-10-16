@@ -49,10 +49,11 @@ public class FalconnectClientConnection {
   private List<Byte> previousCpuRacerIndices = new ArrayList<>();
   private List<Byte> homeCpuRacerIndices = new ArrayList<>();
   private byte[] lastPlayerRacerData;
-  private int consecutiveDuplicatePlayerDataPackets;
+  private long duplicatePlayerRacerDataSince;
 
   public boolean hasUpdated = false;
   public volatile boolean disconnected = false;
+  private volatile FalconnectRace race;
 
   private final MessageHandlerThread receiveMessageThread;
   private final MessageSenderThread sendMessageThread;
@@ -205,7 +206,7 @@ public class FalconnectClientConnection {
   public synchronized boolean acceptReceivedRaceData(List<byte[]> racerData,
                                                       List<Byte> cpuRacerIndices,
                                                       int sourceSequence,
-                                                      int duplicateLimit) {
+                                                      long duplicateTimeoutMillis) {
     if (awaitingInitialRacePacket) {
       if (sourceSequence > MAX_INITIAL_RACE_PACKET_SEQUENCE) return false;
       awaitingInitialRacePacket = false;
@@ -215,7 +216,7 @@ public class FalconnectClientConnection {
     latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
         List.copyOf(cpuRacerIndices), sourceSequence);
     lastReceivedCount = sourceSequence;
-    recordPlayerRacerData(racerData.getFirst(), duplicateLimit);
+    recordPlayerRacerData(racerData.getFirst(), duplicateTimeoutMillis);
     hasUpdated = true;
     lastUdpPacketReceivedAt = System.currentTimeMillis();
     hasReceivedRaceData = true;
@@ -232,6 +233,8 @@ public class FalconnectClientConnection {
   }
 
   public synchronized List<Byte> getCpuRacerIndices() { return new ArrayList<>(cpuRacerIndices); }
+  public FalconnectRace getRace() { return race; }
+  public void setRace(FalconnectRace race) { this.race = race; }
   public synchronized List<Byte> getPreviousCpuRacerIndices() { return new ArrayList<>(previousCpuRacerIndices); }
   public synchronized List<Byte> getHomeCpuRacerIndices() { return new ArrayList<>(homeCpuRacerIndices); }
 
@@ -253,14 +256,16 @@ public class FalconnectClientConnection {
     return false;
   }
 
-  public synchronized void recordPlayerRacerData(byte[] racerData, int duplicateLimit) {
+  public synchronized void recordPlayerRacerData(byte[] racerData, long duplicateTimeoutMillis) {
+    long now = System.currentTimeMillis();
     if (java.util.Arrays.equals(lastPlayerRacerData, racerData)) {
-      consecutiveDuplicatePlayerDataPackets++;
+      if (duplicatePlayerRacerDataSince == 0) duplicatePlayerRacerDataSince = now;
     } else {
-      consecutiveDuplicatePlayerDataPackets = 0;
+      duplicatePlayerRacerDataSince = 0;
     }
     lastPlayerRacerData = racerData.clone();
-    duplicateRaceDataDetected = consecutiveDuplicatePlayerDataPackets >= duplicateLimit;
+    duplicateRaceDataDetected = duplicatePlayerRacerDataSince != 0 &&
+        now - duplicatePlayerRacerDataSince >= duplicateTimeoutMillis;
   }
 
   public synchronized void resetRaceDataTracking() {
@@ -268,7 +273,7 @@ public class FalconnectClientConnection {
     lastReceivedCount = 0;
     awaitingInitialRacePacket = true;
     lastPlayerRacerData = null;
-    consecutiveDuplicatePlayerDataPackets = 0;
+    duplicatePlayerRacerDataSince = 0;
     duplicateRaceDataDetected = false;
     hasReceivedRaceData = false;
     cpuReallocationNeeded = false;

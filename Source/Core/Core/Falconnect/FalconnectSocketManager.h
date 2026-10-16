@@ -74,6 +74,9 @@ public:
     void SetRemoteCustomMachineData(std::vector<u8> machine_data);
     std::vector<u8> GetCustomMachineDataForRace() const;
     void HandleConnectionLost();
+    // Wake the TCP reader immediately when Dolphin is no longer running the game. Merely setting
+    // shouldDisconnect leaves that reader blocked in recv(), so the server keeps the client.
+    void RequestDisconnect();
     bool OwnsCpuRacer(u8 racer) const;
     bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
     Falconnect::CourseSettings GetCourseSettings() const;
@@ -122,7 +125,7 @@ private:
     RacerMemoryBlock* framesToSend[30] = {};
 
     int localSocket = 0;
-    int serverSocket = 0;
+    int serverSocket = -1;
     int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
     bool hasStarted = false;

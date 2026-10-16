@@ -94,8 +94,10 @@ void FalconnectManager::Update() {
 
       if (currentState == GameState::FAILED_TO_CONNECT) return;
 
-      if (currentState == GameState::IN_PRACTICE &&
-          FalconnectSocketManager::instance != nullptr &&
+      // A local player enters SETTINGS_SELECTED/READY_TO_LOAD immediately after readying, but
+      // lobby status continues changing until the race starts. Keep the display live for every
+      // non-race menu state, not only while this player remains in Practice.
+      if (FalconnectSocketManager::instance != nullptr &&
           FalconnectSocketManager::instance->hasProperlyConnected &&
           (displayedReadyPlayerCount != FalconnectSocketManager::instance->readyPlayerCount ||
            displayedTotalPlayerCount != FalconnectSocketManager::instance->totalPlayerCount ||

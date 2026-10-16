@@ -103,6 +103,7 @@ public:
     u8 ourCpus = 0;
     u8 readyPlayerCount = 0;
     u8 totalPlayerCount = 0;
+    u16 forceRaceStartCountdownSeconds = 0;
     u8 cpuStartIndex = 1;
     std::vector<u8> name;
     std::vector<std::vector<u8>> names;

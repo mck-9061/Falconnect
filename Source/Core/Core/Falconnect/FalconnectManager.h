@@ -50,6 +50,7 @@ private:
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
+    u16 displayedForceRaceStartCountdownSeconds = 0;
     using FrameDifferenceSample = std::pair<std::chrono::steady_clock::time_point, s64>;
     struct DelayedRacerData {
         RacerMemoryBlock block{};

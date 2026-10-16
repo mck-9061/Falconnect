@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 public final class ProtocolVersion {
   // Bump together with Core/Falconnect/ProtocolVersion.h for incompatible TCP or UDP changes.
-  public static final int VERSION = 4;
+  public static final int VERSION = 5;
   public static final int VERSION_MESSAGE = 0x7f;
   public static final int TIMEOUT_MILLIS = 5000;
 

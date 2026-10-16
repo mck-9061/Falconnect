@@ -8,7 +8,7 @@
 namespace Falconnect
 {
 // Bump both this and ProtocolVersion.java when either TCP or UDP wire compatibility changes.
-inline constexpr u32 PROTOCOL_VERSION = 4;
+inline constexpr u32 PROTOCOL_VERSION = 5;
 inline constexpr u8 VERSION_MESSAGE = 0x7f;
 
 // The server speaks first. This five-byte message is independent of the normal frame size.

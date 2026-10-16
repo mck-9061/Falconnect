@@ -126,20 +126,31 @@ void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
     manager.Write_U32(textPosition, pointerAddress);
 }
 
-void GXMemoryPatcher::SetPlayersReadyText(const u8 ready, const u8 total) const {
-    const u32 textPosition = referencePointer + 0x1ae8b8;
-    std::vector<u32> ascii = stringToUint32Array(std::to_string(ready) + "/" + std::to_string(total) + " players ready  ");
-    ascii.append_range(ascii);
-    ascii.append_range(ascii);
+void GXMemoryPatcher::SetPlayersReadyText(const u8 ready, const u8 total,
+                                          const u16 force_start_countdown_seconds) const {
+    //const u32 textPosition = referencePointer + 0x1ae8b8;
+    std::string text = std::to_string(ready) + "/" + std::to_string(total) + " players ready";
+    if (force_start_countdown_seconds > 0)
+        text += " | Starts in: " + std::to_string(force_start_countdown_seconds) + "s";
+    const std::vector<u32> ascii = stringToUint32Array(text);
+    constexpr u32 textPosition = 0x8042f0f0;
+    constexpr u8 textBufferWords = 64;
 
-    while (ascii.size() < 65) {
-        ascii.push_back(32);
-    }
+    // Countdown values shrink in length (for example, 10s to 9s). Clear the old text first so
+    // the remaining character is not displayed after the new null terminator.
+    for (u8 offset = 0; offset < textBufferWords; offset++)
+        manager.Write_U32(0, textPosition + (offset * 4));
 
     for (u8 offset = 0; offset < ascii.size(); offset++) {
         const u32 address = textPosition + (offset * 4);
         manager.Write_U32(ascii[offset], address);
     }
+
+    // update pointers
+    manager.Write_U32(0x8042f0f0, referencePointer + 0x406148);
+    manager.Write_U32(0x8042f0f0, referencePointer + 0x406160);
+    manager.Write_U32(0x8042f0f0, referencePointer + 0x406190);
+    manager.Write_U32(0x8042f0f0, referencePointer + 0x1aeb08);
 }
 
 void GXMemoryPatcher::DisableAIControl() const {

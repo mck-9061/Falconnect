@@ -27,6 +27,7 @@ public class FalconnectRace extends Thread {
   private Long firstReadyAtNanos;
   private int lastLobbyPlayerCount = -1;
   private int lastLobbyReadyCount = -1;
+  private int lastLobbyForceStartCountdownSeconds = -1;
 
   public volatile GameState gameState;
   public volatile boolean isRunning;
@@ -417,14 +418,26 @@ public class FalconnectRace extends Thread {
       if (client.state == ClientState.READY) readyCount++;
     }
 
-    if (playerCount == lastLobbyPlayerCount && readyCount == lastLobbyReadyCount) return;
+    int forceStartCountdownSeconds = getForceStartCountdownSeconds(System.nanoTime());
+    if (playerCount == lastLobbyPlayerCount && readyCount == lastLobbyReadyCount &&
+        forceStartCountdownSeconds == lastLobbyForceStartCountdownSeconds) return;
 
     lastLobbyPlayerCount = playerCount;
     lastLobbyReadyCount = readyCount;
+    lastLobbyForceStartCountdownSeconds = forceStartCountdownSeconds;
     for (FalconnectClientConnection client : getClients()) {
       if (!client.disconnected)
-        new LobbyStatusMessage(client, readyCount, playerCount).Send();
+        new LobbyStatusMessage(client, readyCount, playerCount, forceStartCountdownSeconds).Send();
     }
+  }
+
+  private int getForceStartCountdownSeconds(long nowNanos) {
+    if (firstReadyAtNanos == null) return 0;
+
+    long countdownNanos = server.getCountdownSeconds() * 1_000_000_000L;
+    long remainingNanos = Math.max(0, countdownNanos - (nowNanos - firstReadyAtNanos));
+    // Use ceiling division so a newly-started 20-second countdown displays 20 rather than 19.
+    return (int) ((remainingNanos + 999_999_999L) / 1_000_000_000L);
   }
 
   private void DisconnectTimedOutClients() {

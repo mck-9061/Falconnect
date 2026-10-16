@@ -437,9 +437,11 @@ void FalconnectSocketManager::SocketThread() {
             case FromServerPacketType::LOBBY_STATUS: {
                 readyPlayerCount = static_cast<u8>(buffer[1]);
                 totalPlayerCount = static_cast<u8>(buffer[2]);
-                INFO_LOG_FMT(FALCONNECT, "Lobby status: {}/{} players ready", readyPlayerCount,
-                             totalPlayerCount);
-                FalconnectManager::instance->patcher->SetPlayersReadyText(instance->readyPlayerCount, instance->totalPlayerCount);
+                forceRaceStartCountdownSeconds =
+                    (static_cast<u16>(static_cast<u8>(buffer[3])) << 8) |
+                    static_cast<u16>(static_cast<u8>(buffer[4]));
+                INFO_LOG_FMT(FALCONNECT, "Lobby status: {}/{} players ready, force start in {}s",
+                             readyPlayerCount, totalPlayerCount, forceRaceStartCountdownSeconds);
                 break;
             }
 

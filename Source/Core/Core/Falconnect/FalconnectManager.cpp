@@ -96,11 +96,16 @@ void FalconnectManager::Update() {
           FalconnectSocketManager::instance != nullptr &&
           FalconnectSocketManager::instance->hasProperlyConnected &&
           (displayedReadyPlayerCount != FalconnectSocketManager::instance->readyPlayerCount ||
-           displayedTotalPlayerCount != FalconnectSocketManager::instance->totalPlayerCount)) {
+           displayedTotalPlayerCount != FalconnectSocketManager::instance->totalPlayerCount ||
+           displayedForceRaceStartCountdownSeconds !=
+               FalconnectSocketManager::instance->forceRaceStartCountdownSeconds)) {
           patcher->SetPlayersReadyText(FalconnectSocketManager::instance->readyPlayerCount,
-                                       FalconnectSocketManager::instance->totalPlayerCount);
+                                       FalconnectSocketManager::instance->totalPlayerCount,
+                                       FalconnectSocketManager::instance->forceRaceStartCountdownSeconds);
           displayedReadyPlayerCount = FalconnectSocketManager::instance->readyPlayerCount;
           displayedTotalPlayerCount = FalconnectSocketManager::instance->totalPlayerCount;
+          displayedForceRaceStartCountdownSeconds =
+              FalconnectSocketManager::instance->forceRaceStartCountdownSeconds;
       }
 
       if (!patcher->memoryReader->ReadSettingsSelectedFlag())

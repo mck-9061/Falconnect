@@ -482,6 +482,9 @@ void FalconnectSocketManager::SocketThread() {
                 raceLoadRequested = true;
                 exited = false;
                 hasGridded = false;
+                // START begins a new load. Do not let a stale START_RACE flag from the previous
+                // race start this countdown before the server has received every GRIDDED update.
+                start = false;
 
                 { // force the compiler to not be a whiny baby
                   FalconnectManager::instance->shouldStart = true;
@@ -506,6 +509,7 @@ void FalconnectSocketManager::SocketThread() {
 
                 lastPacketNum = 0;
                 hasReceivedAnyDataEver = false;
+                m_has_sent_race_data_for_generation = false;
                 ping.store(0);
                 hasPingSample.store(false);
                 packetRate.store(0);
@@ -667,6 +671,11 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));
 
+        if (sent_bytes == static_cast<int>(ClientRacePacketSize(racer_count)) &&
+            m_race_data_generation.load() == race_generation) {
+            m_has_sent_race_data_for_generation = true;
+        }
+
         if (log_timing)
             INFO_LOG_FMT(FALCONNECT, "TIMING TX RESULT player={} seq={} sent_bytes={} expected_bytes={}",
                          playerNumber, sentCount, sent_bytes, ClientRacePacketSize(racer_count));
@@ -727,12 +736,23 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
                 hasPingSample.store(true);
                 m_has_pending_ping = false;
             }
+            // A pong proves the UDP path is alive, but it is not race data. Preserve the
+            // five-second full-snapshot fail-safe even if the server is only echoing pings.
+            if (m_has_sent_race_data_for_generation.load() &&
+                pong_received_at - last_packet_time >= std::chrono::seconds(5)) {
+                HandleConnectionLost();
+                break;
+            }
             continue;
         }
 
         if (received != FULL_RACE_PACKET_SIZE ||
             buffer[0] != static_cast<char>(FromServerPacketType::FULL_DATA)) {
-            if (std::chrono::steady_clock::now() - last_packet_time >= std::chrono::seconds(5)) {
+            // During a new race the server cannot address this UDP socket until we have sent a
+            // packet from it. Starting the timeout earlier races the course/countdown setup and
+            // can incorrectly disconnect a client at the beginning of race two.
+            if (m_has_sent_race_data_for_generation.load() &&
+                std::chrono::steady_clock::now() - last_packet_time >= std::chrono::seconds(5)) {
                 HandleConnectionLost();
                 break;
             }

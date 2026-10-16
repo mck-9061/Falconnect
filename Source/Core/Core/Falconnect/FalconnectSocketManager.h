@@ -135,6 +135,9 @@ private:
     Falconnect::CourseSettings m_course_settings;
 
     std::atomic<bool> shouldRunDataThread{true};
+    // A new race cannot receive a server snapshot until it has advertised its freshly-bound UDP
+    // port. Arm the receive watchdog only after this generation has sent its first race packet.
+    std::atomic<bool> m_has_sent_race_data_for_generation{false};
     // Detached UDP workers belong to one race only. A shared boolean is insufficient because a
     // previous worker can observe it becoming true for the next race and resume its old packet
     // sequence.

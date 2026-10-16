@@ -317,8 +317,10 @@ void FalconnectManager::Update() {
                          FalconnectSocketManager::instance->playerNumber, cpu_racer_indices.size());
             currentState = GameState::RACE_GRIDDED;
             FalconnectSocketManager::instance->hasGridded = true;
-            for (const u8 cpuRacer : cpu_racer_indices)
-                patcher->EnableAIControlFor(cpuRacer, 1);
+
+            // testing
+            //for (const u8 cpuRacer : cpu_racer_indices)
+                patcher->EnableAIControlFor(1, 29);
 
             //patcher->EnableAIControlFor(0, 1);
         }
@@ -370,15 +372,10 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
         FalconnectSocketManager::ReceivedRaceData received_race_data;
-        const auto data_wait_started = std::chrono::steady_clock::now();
-
         while (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data) &&
                !FalconnectSocketManager::instance->shouldDisconnect) {
-            if (std::chrono::steady_clock::now() - data_wait_started >= std::chrono::seconds(5)) {
-                INFO_LOG_FMT(FALCONNECT, "No race data received from the server for 5 seconds");
-                FalconnectSocketManager::instance->HandleConnectionLost();
-                return;
-            }
+            // DataThread owns the UDP timeout. It begins only after this race has sent a packet
+            // from its freshly bound socket, avoiding a race-two reset while the countdown loads.
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
@@ -552,9 +549,9 @@ void FalconnectManager::Update() {
                                           delayed_center_position);
                 }
 
-                if (!defers_received_data) {
+                if (!defers_received_data && (delayed_data_to_apply.empty() && accepts_received_data)) {
                     patcher->SetRacerData(racer_num, racer_block,
-                                          delayed_data_to_apply.empty() && accepts_received_data,
+                                          true,
                                           center_position);
                 }
             }

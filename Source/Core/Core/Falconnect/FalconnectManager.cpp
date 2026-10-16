@@ -238,8 +238,10 @@ void FalconnectManager::Update() {
         m_local_racer_ai_enabled = false;
         m_last_human_race_frame_counts.fill(0);
         m_human_race_frame_last_advanced.fill(std::chrono::steady_clock::time_point{});
+        m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
         m_human_race_frame_count_started.fill(false);
         m_human_racers_finished.fill(false);
+        m_human_finish_tracking_started_at = {};
         m_all_human_racers_finished = false;
         m_all_human_racers_finished_at = {};
         m_menu_should_reopen_after_finish = false;
@@ -331,6 +333,7 @@ void FalconnectManager::Update() {
             // INFO_LOG_FMT(FALCONNECT, "Countdown started");
             INFO_LOG_FMT(FALCONNECT, "LOAD racing player={}",
                          FalconnectSocketManager::instance->playerNumber);
+            m_human_finish_tracking_started_at = std::chrono::steady_clock::now();
             currentState = GameState::RACING;
         }
     }
@@ -435,6 +438,7 @@ void FalconnectManager::Update() {
             };
 
         update_human_finish_state(local_human_racer, local_frame_count);
+        m_human_racer_last_received[local_human_racer] = received_snapshot_time;
 
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
@@ -448,8 +452,11 @@ void FalconnectManager::Update() {
                 // The local racer is sampled directly from GX memory above; CPU slots are not
                 // considered by update_human_finish_state.
                 const u8 source_racer_slot = static_cast<u8>(i);
-                if (source_racer_slot != local_human_racer)
+                if (source_racer_slot != local_human_racer) {
+                    if (source_racer_slot < human_racer_count)
+                        m_human_racer_last_received[source_racer_slot] = received_snapshot_time;
                     update_human_finish_state(source_racer_slot, racer_block.raceTimeFrameCount);
+                }
 
                 if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
                     m_delayed_newer_racer_data[i].clear();
@@ -550,6 +557,26 @@ void FalconnectManager::Update() {
                                           delayed_data_to_apply.empty() && accepts_received_data,
                                           center_position);
                 }
+            }
+        }
+
+        // Once the server has timed out or removed a remote player, their record becomes absent
+        // from each full-data snapshot. They can no longer advance their race timer, so do not
+        // require a finish signal that will never arrive before reopening the menu.
+        for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
+            if (racer_num == local_human_racer)
+                continue;
+
+            const auto last_received = m_human_racer_last_received[racer_num];
+            const bool never_received_after_start =
+                last_received == std::chrono::steady_clock::time_point{} &&
+                received_snapshot_time - m_human_finish_tracking_started_at >=
+                    std::chrono::seconds(5);
+            const bool record_was_removed =
+                last_received != std::chrono::steady_clock::time_point{} &&
+                received_snapshot_time - last_received >= std::chrono::seconds(1);
+            if (never_received_after_start || record_was_removed) {
+                m_human_racers_finished[racer_num] = true;
             }
         }
 

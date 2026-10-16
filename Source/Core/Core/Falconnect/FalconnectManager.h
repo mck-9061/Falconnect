@@ -74,8 +74,14 @@ private:
     std::array<u32, 30> m_last_human_race_frame_counts{};
     std::array<std::chrono::steady_clock::time_point, 30>
         m_human_race_frame_last_advanced{};
+    // A disconnected player is removed from the server's full-data packet. Keep the last
+    // snapshot in which each remote human slot was present so that disappearance cannot hold the
+    // post-race menu closed forever.
+    std::array<std::chrono::steady_clock::time_point, 30>
+        m_human_racer_last_received{};
     std::array<bool, 30> m_human_race_frame_count_started{};
     std::array<bool, 30> m_human_racers_finished{};
+    std::chrono::steady_clock::time_point m_human_finish_tracking_started_at{};
     bool m_all_human_racers_finished = false;
     std::chrono::steady_clock::time_point m_all_human_racers_finished_at{};
     bool m_menu_should_reopen_after_finish = false;

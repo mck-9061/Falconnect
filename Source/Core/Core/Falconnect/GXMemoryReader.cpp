@@ -61,14 +61,17 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
 
     RacerMemoryBlock* block = RacerMemoryBlock::CreateFromDolphinData(dolphinMemory);
     const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
+
     if (secondaryAddress != 0) {
-        for (std::size_t i = 0; i < block->timingData.size(); i++)
+        for (u32 i = 0; i < block->timingData.size(); i++)
             block->timingData[i] =
                 manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));
         block->raceTimeFrameCount =
             manager.Read_U32(secondaryAddress + RACE_TIME_FRAME_COUNT_OFFSET);
     }
+
     const auto now = std::chrono::steady_clock::now();
+
     if (racerNum < m_last_timing_log.size() &&
         now - m_last_timing_log[racerNum] >= std::chrono::seconds(1)) {
         m_last_timing_log[racerNum] = now;
@@ -79,6 +82,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
                      block->state, block->timingData[0], block->timingData[1], block->timingData[2],
                      block->raceTimeFrameCount);
     }
+
     //INFO_LOG_FMT(FALCONNECT, "State: {}", block->state);
 
     return block;

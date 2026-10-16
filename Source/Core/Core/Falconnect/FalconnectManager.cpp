@@ -269,7 +269,7 @@ void FalconnectManager::Update() {
 
             const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
 
-            for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
+            for (u8 i = 0; i < cpu_racer_indices.size(); i++) {
                 const u8 cpuRacer = cpu_racer_indices[i];
                 FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
                 // INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
@@ -311,7 +311,7 @@ void FalconnectManager::Update() {
 
          FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
 
-         for (std::size_t i = 0; i < cpu_racer_indices.size(); i++) {
+         for (u8 i = 0; i < cpu_racer_indices.size(); i++) {
              //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
              const u8 cpuRacer = cpu_racer_indices[i];
              FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);

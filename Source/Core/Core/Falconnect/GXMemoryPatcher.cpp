@@ -444,27 +444,33 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     const auto now = std::chrono::steady_clock::now();
     const bool log_timing = racerNum < m_last_timing_log.size() &&
         now - m_last_timing_log[racerNum] >= std::chrono::seconds(1);
+
     std::array<u32, 3> timing_before{};
+
     if (log_timing && secondaryAddress != 0) {
-        for (std::size_t i = 0; i < timing_before.size(); i++)
+        for (u32 i = 0; i < timing_before.size(); i++)
             timing_before[i] = manager.Read_U32(
                 secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
     }
+
     if (secondaryAddress != 0) {
-        for (std::size_t i = 0; i < patchData.timingData.size(); i++)
+        for (u32 i = 0; i < patchData.timingData.size(); i++)
             manager.Write_U32(patchData.timingData[i],
                               secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
         // raceTimeFrameCount is packet metadata for the jitter filter. Do not overwrite the
         // game's total-time counter at +0x744.
     }
+
     if (log_timing) {
         m_last_timing_log[racerNum] = now;
         std::array<u32, 3> timing_after{};
+
         if (secondaryAddress != 0) {
-            for (std::size_t i = 0; i < timing_after.size(); i++)
+            for (u32 i = 0; i < timing_after.size(); i++)
                 timing_after[i] = manager.Read_U32(
                     secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
         }
+
         INFO_LOG_FMT(FALCONNECT,
                      "TIMING APPLY local_racer={} secondary={:08x} action={} "
                      "before=[{:08x},{:08x},{:08x}] received=[{:08x},{:08x},{:08x}] "
@@ -475,6 +481,7 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
                      timing_after[2], m_has_written_timing[racerNum] &&
                          timing_before != m_last_written_timing[racerNum]);
     }
+
     if (secondaryAddress != 0 && racerNum < m_last_written_timing.size()) {
         m_last_written_timing[racerNum] = patchData.timingData;
         m_has_written_timing[racerNum] = true;

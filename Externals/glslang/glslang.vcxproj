@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <Import Project="..\..\Source\VSProps\Base.Macros.props" />
   <Import Project="$(VSPropsDir)Base.Targets.props" />
@@ -32,11 +32,11 @@
     <DevCmdArch Condition="'$(Platform)'=='x64'">amd64</DevCmdArch>
 	<DevCmdArch Condition="'$(Platform)'=='ARM64'">arm64</DevCmdArch>
     <CmakeReleaseCLI>call vsdevcmd.bat -arch=$(DevCmdArch)
-      cmake -G $(CmakeGenerator) -A $(Platform) -DCMAKE_BUILD_TYPE="Release" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGLSLANG_TESTS=OFF -DENABLE_GLSLANG_BINARIES=OFF -DBUILD_EXTERNAL=OFF -DENABLE_SPVREMAPPER=OFF -DENABLE_HLSL=OFF -DENABLE_OPT=OFF -DENABLE_EXCEPTIONS=OFF -S glslang -B "$(BuildRootDir)tmp\$(ProjectName)-$(Configuration)-$(Platform)"
-    </CmakeReleaseCLI>
+			cmake -G $(CmakeGenerator) -A $(Platform) -T $(PlatformToolset) -DCMAKE_BUILD_TYPE="Release" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGLSLANG_TESTS=OFF -DENABLE_GLSLANG_BINARIES=OFF -DBUILD_EXTERNAL=OFF -DENABLE_SPVREMAPPER=OFF -DENABLE_HLSL=OFF -DENABLE_OPT=OFF -DENABLE_EXCEPTIONS=OFF -S glslang -B "$(BuildRootDir)tmp\$(ProjectName)-$(Configuration)-$(Platform)"
+		</CmakeReleaseCLI>
     <CmakeDebugCLI>call vsdevcmd.bat -arch=$(DevCmdArch)
-      cmake -G $(CmakeGenerator) -A $(Platform) -DCMAKE_BUILD_TYPE="Debug" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug -DGLSLANG_TESTS=OFF -DENABLE_GLSLANG_BINARIES=OFF -DBUILD_EXTERNAL=OFF -DENABLE_SPVREMAPPER=OFF -DENABLE_HLSL=OFF -DENABLE_OPT=OFF -DENABLE_EXCEPTIONS=OFF -S glslang -B "$(BuildRootDir)tmp\$(ProjectName)-$(Configuration)-$(Platform)"
-    </CmakeDebugCLI>
+			cmake -G $(CmakeGenerator) -A $(Platform) -T $(PlatformToolset)  -DCMAKE_BUILD_TYPE="Debug" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug -DGLSLANG_TESTS=OFF -DENABLE_GLSLANG_BINARIES=OFF -DBUILD_EXTERNAL=OFF -DENABLE_SPVREMAPPER=OFF -DENABLE_HLSL=OFF -DENABLE_OPT=OFF -DENABLE_EXCEPTIONS=OFF -S glslang -B "$(BuildRootDir)tmp\$(ProjectName)-$(Configuration)-$(Platform)"
+		</CmakeDebugCLI>
     <CmakeCopyCLI>
       echo Copying..
       if not exist "$(BuildRootDir)$(Platform)\$(Configuration)\$(ProjectName)\bin\" mkdir -p "$(BuildRootDir)$(Platform)\$(Configuration)\$(ProjectName)\bin\"

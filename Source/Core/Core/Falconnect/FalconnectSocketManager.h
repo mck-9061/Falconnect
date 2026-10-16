@@ -9,7 +9,17 @@
 #include <string>
 #include <thread>
 #include <variant>
+#ifdef _WIN32
+#include <windows.h>
+#include <wS2tcpip.h>
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include "expr.h"
+#endif
 
 #include "RacerMemoryBlock.h"
 #include "Core/Falconnect/CourseSettings.h"

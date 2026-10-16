@@ -552,7 +552,7 @@ void FalconnectSocketManager::SendUdpPingIfDue()
         m_has_pending_ping = true;
     }
 
-    sendto(serverUdpSocket, data.data(), data.size(), 0,
+    sendto(serverUdpSocket, data.data(), static_cast<int>(data.size()), 0,
            reinterpret_cast<sockaddr*>(&serverUdpAddress), sizeof(serverUdpAddress));
 }
 
@@ -597,7 +597,7 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
         const bool log_timing = now - last_timing_log >= std::chrono::seconds(1);
         if (log_timing) last_timing_log = now;
         bool missing_frame = false;
-        for (std::size_t frame_index = 0; frame_index < racer_count; frame_index++) {
+        for (u8 frame_index = 0; frame_index < racer_count; frame_index++) {
             if (framesToSend[frame_index] == nullptr) {
                 if (log_timing)
                     INFO_LOG_FMT(FALCONNECT,
@@ -641,7 +641,7 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
 
         const auto sent_bytes = sendto(serverUdpSocket,
             data,
-            ClientRacePacketSize(racer_count),
+            static_cast<int>(ClientRacePacketSize(racer_count)),
             0,
             reinterpret_cast<sockaddr *>(&serverUdpAddress),
             sizeof(serverUdpAddress));

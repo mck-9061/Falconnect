@@ -138,9 +138,9 @@ signals:
   void ConfigureOSD();
 
   // Falconnect
-  void RunServer();
-  void ConnectToServer();
-  void StartGame();
+  // void RunServer();
+  // void ConnectToServer();
+  // void StartGame();
 
 private:
   void OnEmulationStateChanged(Core::State state);
@@ -166,7 +166,7 @@ private:
   void AddJITMenu();
   void AddSymbolsMenu();
 
-  void AddFalconnectMenu();
+  //void AddFalconnectMenu();
 
   void UpdateStateSlotMenu();
 

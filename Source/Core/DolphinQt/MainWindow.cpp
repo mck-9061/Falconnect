@@ -549,9 +549,9 @@ void MainWindow::ConnectMenuBar()
   connect(m_menu_bar, &MenuBar::SetStateSlot, this, &MainWindow::SetStateSlot);
 
   // Falconnect
-  connect(m_menu_bar, &MenuBar::RunServer, this, &MainWindow::StartServer);
-  connect(m_menu_bar, &MenuBar::ConnectToServer, this, &MainWindow::ConnectToServer);
-  connect(m_menu_bar, &MenuBar::StartGame, this, &MainWindow::StartFalconnectGame);
+  // connect(m_menu_bar, &MenuBar::RunServer, this, &MainWindow::StartServer);
+  // connect(m_menu_bar, &MenuBar::ConnectToServer, this, &MainWindow::ConnectToServer);
+  // connect(m_menu_bar, &MenuBar::StartGame, this, &MainWindow::StartFalconnectGame);
 
   // Options
   connect(m_menu_bar, &MenuBar::Configure, this, &MainWindow::ShowSettingsWindow);
@@ -1602,31 +1602,31 @@ void MainWindow::DecrementSelectedStateSlot()
 }
 
 // Falconnect
-void MainWindow::StartServer() {
-  FalconnectSocketManager::instance = new FalconnectSocketManager();
-  FalconnectSocketManager::instance->isHost = true;
+// void MainWindow::StartServer() {
+//   FalconnectSocketManager::instance = new FalconnectSocketManager();
+//   FalconnectSocketManager::instance->isHost = true;
+//
+//   std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
+//
+//   socketThread.detach();
+//
+//   INFO_LOG_FMT(FALCONNECT, "Host socket thread created and listening");
+// }
 
-  std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
-
-  socketThread.detach();
-
-  INFO_LOG_FMT(FALCONNECT, "Host socket thread created and listening");
-}
-
-void MainWindow::StartFalconnectGame() {
-  INFO_LOG_FMT(FALCONNECT, "Starting match...");
-  FalconnectManager::instance->shouldStart = true;
-}
-
-void MainWindow::ConnectToServer() {
-  FalconnectSocketManager::instance = new FalconnectSocketManager();
-
-  std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
-
-  socketThread.detach();
-
-  INFO_LOG_FMT(FALCONNECT, "Socket thread created and listening");
-}
+// void MainWindow::StartFalconnectGame() {
+//   INFO_LOG_FMT(FALCONNECT, "Starting match...");
+//   FalconnectManager::instance->shouldStart = true;
+// }
+//
+// void MainWindow::ConnectToServer() {
+//   FalconnectSocketManager::instance = new FalconnectSocketManager();
+//
+//   std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
+//
+//   socketThread.detach();
+//
+//   INFO_LOG_FMT(FALCONNECT, "Socket thread created and listening");
+// }
 
 void MainWindow::PerformOnlineUpdate(const std::string& region)
 {

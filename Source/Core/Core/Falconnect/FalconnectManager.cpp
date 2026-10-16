@@ -35,6 +35,7 @@ void FalconnectManager::Update() {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
         m_force_start_pending = false;
+        m_force_start_course_write_until = {};
 
         if (FalconnectSocketManager::instance != nullptr) {
             FalconnectSocketManager::instance->shouldDisconnect = true;
@@ -60,6 +61,7 @@ void FalconnectManager::Update() {
         log("Resetting...");
         shouldReset = false;
         m_force_start_pending = false;
+        m_force_start_course_write_until = {};
         shouldStart = false;
 
         patcher->ResetToTitle();
@@ -241,6 +243,7 @@ void FalconnectManager::Update() {
         patcher->SetOpponentRacerIds(racerIDs);
 
         const auto course = FalconnectSocketManager::instance->GetCourseSettings();
+        m_force_start_course_id = course.track_id;
         patcher->SetCourse(course.track_id);
         patcher->SetCpuCount(course.opponent_count);
         patcher->SetLapCount(course.lap_count);
@@ -259,13 +262,24 @@ void FalconnectManager::Update() {
 
     // Keep emulation running during the delay, and finish the fallback before reporting GRIDDED.
     if (m_force_start_pending) {
-        if (std::chrono::steady_clock::now() < m_force_start_at) return;
+        const auto now = std::chrono::steady_clock::now();
+        // A forced client may still be hovering a different course in Track Select. Keep the
+        // server's course in memory on every frame leading up to the force, including the frame
+        // which loads the force-start code.
+        patcher->SetCourse(m_force_start_course_id);
+        if (now < m_force_start_at) return;
         patcher->ForceStartRace();
+        m_force_start_course_write_until = now + std::chrono::seconds(1);
         INFO_LOG_FMT(FALCONNECT, "LOAD force fallback applied; in_race={}",
                      patcher->memoryReader->ReadIsInRace());
         m_force_start_pending = false;
         return;
     }
+
+    // Track Select can overwrite the selection while its transition code is still running.
+    // Continue winning that race for one second after ForceStartRace was installed.
+    if (std::chrono::steady_clock::now() < m_force_start_course_write_until)
+        patcher->SetCourse(m_force_start_course_id);
 
     // Wait for the machine to grid, then let the socket manager know we've gridded
     if (currentState == GameState::RACE_LOADED) {

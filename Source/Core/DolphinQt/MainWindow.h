@@ -127,9 +127,9 @@ private:
   void BootWiiSystemMenu();
 
   // Falconnect
-  void StartServer();
-  void ConnectToServer();
-  void StartFalconnectGame();
+  // void StartServer();
+  // void ConnectToServer();
+  // void StartFalconnectGame();
 
   void PerformOnlineUpdate(const std::string& region);
 

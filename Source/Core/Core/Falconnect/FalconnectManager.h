@@ -46,6 +46,8 @@ private:
 
     bool m_force_start_pending = false;
     std::chrono::steady_clock::time_point m_force_start_at{};
+    std::chrono::steady_clock::time_point m_force_start_course_write_until{};
+    u8 m_force_start_course_id = 1;
     u8 readCounter = 0;
     u8 frameCount = 0;
     u8 displayedReadyPlayerCount = 0;

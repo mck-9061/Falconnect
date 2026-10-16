@@ -93,7 +93,7 @@ MenuBar::MenuBar(QWidget* parent) : QMenuBar(parent)
   AddJITMenu();
   AddSymbolsMenu();
   AddHelpMenu();
-  AddFalconnectMenu();
+  //AddFalconnectMenu();
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
           [=, this](Core::State state) { OnEmulationStateChanged(state); });
@@ -409,12 +409,12 @@ void MenuBar::AddEmulationMenu()
 
 // Falconnect stuff
 
-void MenuBar::AddFalconnectMenu()
-{
-  QMenu* emu_menu = addMenu(tr("&Falconnect"));
-  m_run_server = emu_menu->addAction(tr("&Host room"), this, &MenuBar::RunServer);
-  m_connect_to_server = emu_menu->addAction(tr("&Connect to hosted room"), this, &MenuBar::ConnectToServer);
-}
+// void MenuBar::AddFalconnectMenu()
+// {
+//   QMenu* emu_menu = addMenu(tr("&Falconnect"));
+//   m_run_server = emu_menu->addAction(tr("&Host room"), this, &MenuBar::RunServer);
+//   m_connect_to_server = emu_menu->addAction(tr("&Connect to hosted room"), this, &MenuBar::ConnectToServer);
+// }
 
 void MenuBar::AddStateLoadMenu(QMenu* emu_menu)
 {

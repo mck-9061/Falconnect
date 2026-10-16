@@ -195,6 +195,8 @@ void FalconnectManager::Update() {
 
         patcher->SetGrid();
 
+        patcher->DisablePausing();
+
         if (!server_requested_start) {
             // Get our racer ID
             FalconnectSocketManager::instance->racerId = patcher->memoryReader->ReadSelectedRacerID();
@@ -251,6 +253,7 @@ void FalconnectManager::Update() {
         patcher->SetLapCount(course.lap_count);
         patcher->SetBoostLap(course.boost_lap);
         patcher->SetGrid();
+        patcher->DisablePausing();
 
         if (!custom_machine_data.empty()) {
             patcher->SetCustomMachineData(custom_machine_data);

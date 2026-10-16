@@ -53,6 +53,7 @@ public:
     void SetCustomMachineData(const std::vector<u8>& machine_data) const;
     void SetSelectedRacerId(u8 racer_id) const;
     void SetSelectedMachine(u8 racer_id, const std::vector<u8>& custom_parts) const;
+    void DisablePausing() const;
 
     u32 referencePointer{};
     bool isReady{};

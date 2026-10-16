@@ -730,3 +730,8 @@ void GXMemoryPatcher::SetSelectedMachine(const u8 racer_id,
     manager.Write_U8(custom ? custom_parts[1] : 0, referencePointer + 0x1c766c);
     manager.Write_U8(custom ? custom_parts[2] : 0, referencePointer + 0x1c7674);
 }
+
+void GXMemoryPatcher::DisablePausing() const {
+    manager.Write_U32(0x38000000, referencePointer + 0x374a0);
+    Core::System::GetInstance().GetPowerPC().ScheduleInvalidateCacheThreadSafe(referencePointer + 0x374a0);
+}

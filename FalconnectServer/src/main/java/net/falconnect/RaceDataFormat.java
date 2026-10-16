@@ -10,6 +10,7 @@ public final class RaceDataFormat {
       1 +  // magic
       1 +  // state
       3 +  // center position
+      3 +  // last center position
       3 +  // world velocity
       3 +  // world orientation
       3 +  // up vector

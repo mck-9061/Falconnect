@@ -9,9 +9,9 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromDolphinData(const std::vector<u32>
     block->centerPosition[1] = data[32];
     block->centerPosition[2] = data[33];
 
-    // block->lastCenterPosition[0] = data[34]; // also: 0x1e0:0x1ec, 0x4c8:0x4d4
-    // block->lastCenterPosition[1] = data[35];
-    // block->lastCenterPosition[2] = data[36];
+    block->lastCenterPosition[0] = data[34]; // also: 0x1e0:0x1ec, 0x4c8:0x4d4
+    block->lastCenterPosition[1] = data[35];
+    block->lastCenterPosition[2] = data[36];
 
     block->velocityWorld[0] = data[37];
     block->velocityWorld[1] = data[38];
@@ -94,64 +94,64 @@ RacerMemoryBlock* RacerMemoryBlock::CreateFromSocketData(const std::vector<u8> &
     block->centerPosition[1] = usedData[2];
     block->centerPosition[2] = usedData[3];
 
-    // block->lastCenterPosition[0] = usedData[4]; // also: 0x1e0:0x1ec, 0x4c8:0x4d4
-    // block->lastCenterPosition[1] = usedData[5];
-    // block->lastCenterPosition[2] = usedData[6];
+    block->lastCenterPosition[0] = usedData[4]; // also: 0x1e0:0x1ec, 0x4c8:0x4d4
+    block->lastCenterPosition[1] = usedData[5];
+    block->lastCenterPosition[2] = usedData[6];
 
-    block->velocityWorld[0] = usedData[4];
-    block->velocityWorld[1] = usedData[5];
-    block->velocityWorld[2] = usedData[6];
+    block->velocityWorld[0] = usedData[7];
+    block->velocityWorld[1] = usedData[8];
+    block->velocityWorld[2] = usedData[9];
 
     // block->velocityMachine[0] = usedData[10]; // Z component also stored at 0xd4:0xd8
     // block->velocityMachine[1] = usedData[11];
     // block->velocityMachine[2] = usedData[12];
 
-    block->orientationWorld[0] = usedData[7]; // also: 0x11c:0x128, 0x14c:0x158
-    block->orientationWorld[1] = usedData[8];
-    block->orientationWorld[2] = usedData[9];
+    block->orientationWorld[0] = usedData[10]; // also: 0x11c:0x128, 0x14c:0x158
+    block->orientationWorld[1] = usedData[11];
+    block->orientationWorld[2] = usedData[12];
 
-    block->upVector[0] = usedData[10]; // also: 0x12c:0x138, 0x15c:0x168
-    block->upVector[1] = usedData[11];
-    block->upVector[2] = usedData[12];
+    block->upVector[0] = usedData[13]; // also: 0x12c:0x138, 0x15c:0x168
+    block->upVector[1] = usedData[14];
+    block->upVector[2] = usedData[15];
 
-    block->orientationGravity[0] = usedData[13]; // also: 0x13c:0x148, 0x16c:0x178
-    block->orientationGravity[1] = usedData[14];
-    block->orientationGravity[2] = usedData[15];
+    block->orientationGravity[0] = usedData[16]; // also: 0x13c:0x148, 0x16c:0x178
+    block->orientationGravity[1] = usedData[17];
+    block->orientationGravity[2] = usedData[18];
 
-    block->speed = usedData[16];
-    block->arialTilt = usedData[17];
-    block->energy = usedData[18];
+    block->speed = usedData[19];
+    block->arialTilt = usedData[20];
+    block->energy = usedData[21];
 
-    block->trackOrientation[0] = usedData[19];
-    block->trackOrientation[1] = usedData[20];
-    block->trackOrientation[2] = usedData[21];
+    block->trackOrientation[0] = usedData[22];
+    block->trackOrientation[1] = usedData[23];
+    block->trackOrientation[2] = usedData[24];
     //
     // block->bottomPosition[0] = usedData[28];
     // block->bottomPosition[1] = usedData[29];
     // block->bottomPosition[2] = usedData[30];
 
-    block->inputs[0] = usedData[22]; // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
-     block->inputs[1] = usedData[23];
-     block->inputs[2] = usedData[24];
-     block->inputs[3] = usedData[25];
-     block->inputs[4] = usedData[26];
-     block->inputs[5] = usedData[27];
-     block->inputs[6] = usedData[28];
+    block->inputs[0] = usedData[25]; // l/r also stored at 0x20c:0x210 (0x1fc:0x200)
+     block->inputs[1] = usedData[26];
+     block->inputs[2] = usedData[27];
+     block->inputs[3] = usedData[28];
+     block->inputs[4] = usedData[29];
+     block->inputs[5] = usedData[30];
+     block->inputs[6] = usedData[31];
 
-    block->sideAttack = usedData[29];
+    block->sideAttack = usedData[32];
 
-    block->maxSpeedKmh = usedData[30];
-    block->acceleration = usedData[31];
-    block->baseSpeed = usedData[32];
-    block->maxSpeed = usedData[33];
+    block->maxSpeedKmh = usedData[33];
+    block->acceleration = usedData[34];
+    block->baseSpeed = usedData[35];
+    block->maxSpeed = usedData[36];
 
-    block->restoreFlag = usedData[34];
+    block->restoreFlag = usedData[37];
 
-    block->magic = usedData[35];
+    block->magic = usedData[38];
 
     for (std::size_t i = 0; i < block->timingData.size(); i++)
-        block->timingData[i] = usedData[36 + i];
-    block->raceTimeFrameCount = usedData[39];
+        block->timingData[i] = usedData[39 + i];
+    block->raceTimeFrameCount = usedData[42];
 
     // block->centerPosOscX = usedData[44];
     // block->centerPosOscY = usedData[45];
@@ -168,10 +168,9 @@ std::vector<u8> RacerMemoryBlock::GetSocketData() const {
     data.push_back(centerPosition[0]);
     data.push_back(centerPosition[1]);
     data.push_back(centerPosition[2]);
-    //
-    // data.push_back(lastCenterPosition[0]);
-    // data.push_back(lastCenterPosition[1]);
-    // data.push_back(lastCenterPosition[2]);
+    data.push_back(lastCenterPosition[0]);
+    data.push_back(lastCenterPosition[1]);
+    data.push_back(lastCenterPosition[2]);
 
     data.push_back(velocityWorld[0]);
     data.push_back(velocityWorld[1]);

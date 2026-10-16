@@ -13,6 +13,7 @@ public:
         1 +  // magic
         1 +  // state
         3 +  // centerPosition
+        3 +  // lastCenterPosition
         3 +  // velocityWorld
         3 +  // orientationWorld
         3 +  // upVector

@@ -25,11 +25,14 @@ public class FullDataMessage extends FromClientMessage {
     origin.noteRacePacketObserved();
     int cpuCount = (data.length - RaceDataFormat.PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
     List<Byte> cpuIndices = clientCpuIndicesForPacket(cpuCount);
-    if (cpuIndices == null) {
+    final boolean cpuLayoutIsStale = cpuIndices == null;
+    if (cpuLayoutIsStale) {
       origin.logRacePacketRejection("CPU slots=" + cpuCount + ", expected current=" +
           origin.getCpuRacerIndices().size() + " or previous=" +
-          origin.getPreviousCpuRacerIndices().size());
-      return;
+          origin.getPreviousCpuRacerIndices().size() + "; accepting human record only");
+      // The first record is always the human racer. Keep that valid liveness/race data while
+      // deliberately dropping ambiguous CPU records until the assignment control message wins.
+      cpuIndices = List.of();
     }
 
     int count = (data[1] & 0xff) << 24;
@@ -38,6 +41,7 @@ public class FullDataMessage extends FromClientMessage {
     count |= (data[4] & 0xff);
 
     for (int i = 0; i < 1 + cpuCount; i++) {
+      if (cpuLayoutIsStale && i != 0) break;
       byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
       System.arraycopy(
           data,

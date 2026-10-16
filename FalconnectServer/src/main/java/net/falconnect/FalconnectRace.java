@@ -8,8 +8,6 @@ import java.util.*;
 public class FalconnectRace extends Thread {
   private static final long UDP_TIMEOUT_MILLIS = 5_000;
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
-  // Temporary test override: remove or set false to restore the normal balanced allocation.
-  private static final boolean ASSIGN_ALL_CPUS_TO_SECOND_PLAYER_FOR_TESTING = true;
   private int maxCpusPerClient;
   private Integer trackOverride;
   private MachineSelection machineOverride;
@@ -197,8 +195,6 @@ public class FalconnectRace extends Thread {
     int baseCpuCount = totalCpus / clients.size();
     int remainder = totalCpus % clients.size();
     int nextCpuIndex = clients.size();
-    FalconnectClientConnection testCpuOwner =
-        ASSIGN_ALL_CPUS_TO_SECOND_PLAYER_FOR_TESTING && clients.size() > 1 ? clients.get(1) : null;
     byte playerNum = 1;
     for (FalconnectClientConnection client : clients) {
       // Players without submitted settings use the same standard machine locally and remotely.
@@ -208,9 +204,7 @@ public class FalconnectRace extends Thread {
       }
       client.state = ClientState.LOADING;
       client.playerNum = playerNum++;
-      int cpuCount = testCpuOwner == null
-          ? baseCpuCount + (client.playerNum <= remainder ? 1 : 0)
-          : (client == testCpuOwner ? totalCpus : 0);
+      int cpuCount = baseCpuCount + (client.playerNum <= remainder ? 1 : 0);
       List<Byte> cpuIndices = new ArrayList<>();
       for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
       client.setHomeCpuRacerIndices(cpuIndices);

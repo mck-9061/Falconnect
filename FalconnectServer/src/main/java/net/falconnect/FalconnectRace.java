@@ -363,6 +363,7 @@ public class FalconnectRace extends Thread {
               gameState = GameState.RACING;
               for (FalconnectClientConnection client : getClients()) {
                 client.lastUdpPacketReceivedAt = System.currentTimeMillis();
+                client.lastUdpRacePacketObservedAt = System.currentTimeMillis();
                 client.resetRaceDataTracking();
                 System.out.println("Sending START_RACE to player " + client.playerNum);
                 StatusMessage message = new StatusMessage(client, ToClientPacketType.START_RACE);
@@ -462,7 +463,7 @@ public class FalconnectRace extends Thread {
     long now = System.currentTimeMillis();
     for (FalconnectClientConnection client : getClients()) {
       if (!client.disconnected && client.state != ClientState.IN_MENUS &&
-          now - client.lastUdpPacketReceivedAt > UDP_TIMEOUT_MILLIS) {
+          now - client.lastUdpRacePacketObservedAt > UDP_TIMEOUT_MILLIS) {
         System.out.println("Client timed out during race: " + client.playerNum);
         DisconnectClient(client, "No race data received for 5 seconds.");
       }

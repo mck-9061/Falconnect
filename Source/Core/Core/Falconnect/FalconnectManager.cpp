@@ -320,7 +320,7 @@ void FalconnectManager::Update() {
 
             // testing
             //for (const u8 cpuRacer : cpu_racer_indices)
-                patcher->EnableAIControlFor(1, 29);
+                //patcher->EnableAIControlFor(1, 29);
 
             //patcher->EnableAIControlFor(0, 1);
         }
@@ -372,14 +372,10 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Menu constrained");
 
         FalconnectSocketManager::ReceivedRaceData received_race_data;
-        while (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data) &&
-               !FalconnectSocketManager::instance->shouldDisconnect) {
-            // DataThread owns the UDP timeout. It begins only after this race has sent a packet
-            // from its freshly bound socket, avoiding a race-two reset while the countdown loads.
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-
-        if (FalconnectSocketManager::instance->shouldDisconnect) return;
+        // This runs on the emulation update path. Never stall it while the freshly-started UDP
+        // worker establishes its first exchange; DataThread owns the timed failure path.
+        if (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data))
+            return;
         FalconnectSocketManager::instance->shouldSendData = true;
 
         // Use one local sample for the whole received server snapshot to compare its timing data
@@ -547,12 +543,15 @@ void FalconnectManager::Update() {
                     };
                     patcher->SetRacerData(delayed_data.racer_num, delayed_data.block, true,
                                           delayed_center_position);
+                    patcher->EnableAIControlFor(delayed_data.racer_num, 1);
                 }
 
                 if (!defers_received_data && (delayed_data_to_apply.empty() && accepts_received_data)) {
                     patcher->SetRacerData(racer_num, racer_block,
                                           true,
                                           center_position);
+
+                    patcher->EnableAIControlFor(racer_num, 1);
                 }
             }
         }

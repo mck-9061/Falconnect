@@ -352,7 +352,23 @@ void FalconnectSocketManager::SocketThread() {
                     (static_cast<u16>(static_cast<u8>(buffer[4])) << 8) |
                     static_cast<u8>(buffer[5]);
 
-                // Setup UDP
+                // A CONNECTED packet can move this client to a new race and therefore a new
+                // UDP port block. Retire every old worker before replacing the descriptor: an
+                // old recvfrom() must never wake up and start consuming packets from this race.
+                m_race_data_generation.fetch_add(1);
+                shouldRunDataThread = false;
+                m_has_sent_race_data_for_generation = false;
+                lastPacketNum = 0;
+                hasReceivedAnyDataEver = false;
+                for (RacerMemoryBlock*& frame : framesToSend)
+                    frame = nullptr;
+                {
+                    const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
+                    m_received_race_data = {};
+                    m_received_race_data_ready = false;
+                }
+
+                // Setup UDP for the newly allocated race.
 #ifdef _WIN32
                 if (serverUdpSocket != -1) closesocket(serverUdpSocket);
 #else
@@ -526,8 +542,6 @@ void FalconnectSocketManager::SocketThread() {
                     m_received_race_data_ready = false;
                 }
 
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-
                 shouldRunDataThread = true;
                 std::thread readThread(&FalconnectSocketManager::DataThread, this, race_generation);
                 readThread.detach();
@@ -588,12 +602,22 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
     while (shouldRunDataThread.load() && m_race_data_generation.load() == race_generation) {
         shouldSendData = false;
 
-        if (FalconnectManager::instance->currentState != GameState::RACING) continue;
+        // START_RACE arrives on the socket thread before the emulation update applies the
+        // countdown and switches to RACING. Yield here instead of busy-spinning through that
+        // transition, which can starve the game thread on a subsequent race.
+        if (FalconnectManager::instance->currentState != GameState::RACING) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
         SendUdpPingIfDue();
         // Send our frames
         sentCount++;
 
         while (framesToSend[0] == nullptr) {
+            if (!shouldRunDataThread.load() ||
+                m_race_data_generation.load() != race_generation) {
+                return;
+            }
             // INFO_LOG_FMT(FALCONNECT, "Bad frame!");
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

@@ -50,7 +50,12 @@ public class UDPHandlerThread extends Thread {
           udpSocket.setSoTimeout(5000);
           udpSocket.receive(datagramPacket);
 
-          clientConnection.lastReceivedUdpPort = datagramPacket.getPort();
+          int sourcePort = datagramPacket.getPort();
+          if (clientConnection.lastReceivedUdpPort != sourcePort) {
+            System.out.println("Received UDP from player " + clientConnection.playerNum +
+                " source port " + sourcePort + " on server port " + udpSocket.getLocalPort());
+            clientConnection.lastReceivedUdpPort = sourcePort;
+          }
 
           byte messageType = data[0];
           byte[] packetData = java.util.Arrays.copyOf(data, datagramPacket.getLength());

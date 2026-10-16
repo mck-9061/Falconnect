@@ -18,10 +18,19 @@ public class FullDataMessage extends FromClientMessage {
   public void ProcessMessage() {
     List<byte[]> allData = new ArrayList<>();
     if (data.length < RaceDataFormat.PACKET_HEADER_BYTES ||
-        (data.length - RaceDataFormat.PACKET_HEADER_BYTES) % RaceDataFormat.RACER_DATA_BYTES != 0) return;
+        (data.length - RaceDataFormat.PACKET_HEADER_BYTES) % RaceDataFormat.RACER_DATA_BYTES != 0) {
+      origin.logRacePacketRejection("invalid length " + data.length);
+      return;
+    }
+    origin.noteRacePacketObserved();
     int cpuCount = (data.length - RaceDataFormat.PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
     List<Byte> cpuIndices = clientCpuIndicesForPacket(cpuCount);
-    if (cpuIndices == null) return;
+    if (cpuIndices == null) {
+      origin.logRacePacketRejection("CPU slots=" + cpuCount + ", expected current=" +
+          origin.getCpuRacerIndices().size() + " or previous=" +
+          origin.getPreviousCpuRacerIndices().size());
+      return;
+    }
 
     int count = (data[1] & 0xff) << 24;
     count |= (data[2] & 0xff) << 16;
@@ -42,8 +51,11 @@ public class FullDataMessage extends FromClientMessage {
     // Sequence validation, publication and duplicate tracking share the same lock as the
     // START_RACE reset. This prevents an in-flight packet from the prior race reintroducing its
     // sequence after that reset.
-    origin.acceptReceivedRaceData(allData, cpuIndices, count,
-      DUPLICATE_RACE_DATA_TIMEOUT_MILLIS);//System.out.println("Skipping old packet: " + count + ". Latest packet: " + origin.getLastReceivedCount());
+    if (!origin.acceptReceivedRaceData(allData, cpuIndices, count,
+        DUPLICATE_RACE_DATA_TIMEOUT_MILLIS)) {
+      origin.logRacePacketRejection("sequence=" + count + ", latest=" +
+          origin.getLastReceivedCount());
+    }
 
 
     //System.out.println("Received data starting with " + data[1]);

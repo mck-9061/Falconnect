@@ -40,6 +40,10 @@ public class FalconnectClientConnection {
   private int lastReceivedCount;
   private boolean awaitingInitialRacePacket;
   public volatile long lastUdpPacketReceivedAt;
+  // A packet can briefly carry the prior CPU-slot count while a reassignment control message is
+  // in flight. Track transport liveness separately from accepted racer data so that transition
+  // cannot look like a disconnected client.
+  public volatile long lastUdpRacePacketObservedAt;
   public volatile boolean cpuReallocationNeeded;
   public volatile boolean cpuRestorationNeeded;
   public volatile boolean hasReceivedRaceData;
@@ -50,6 +54,7 @@ public class FalconnectClientConnection {
   private List<Byte> homeCpuRacerIndices = new ArrayList<>();
   private byte[] lastPlayerRacerData;
   private long duplicatePlayerRacerDataSince;
+  private long lastRacePacketRejectionLogAt;
 
   public boolean hasUpdated = false;
   public volatile boolean disconnected = false;
@@ -153,6 +158,7 @@ public class FalconnectClientConnection {
     CloseUdpSocket();
     if (disconnected) return;
     udpSocket = new DatagramSocket(udpPort);
+    System.out.println("Bound UDP for player " + playerNum + " on port " + udpPort);
   }
 
   public synchronized void CloseUdpSocket() {
@@ -219,9 +225,24 @@ public class FalconnectClientConnection {
     recordPlayerRacerData(racerData.getFirst(), duplicateTimeoutMillis);
     hasUpdated = true;
     lastUdpPacketReceivedAt = System.currentTimeMillis();
+    if (!hasReceivedRaceData) {
+      System.out.println("Accepted first race packet from player " + playerNum +
+          " sequence=" + sourceSequence + " UDP=" + udpPort);
+    }
     hasReceivedRaceData = true;
     if (cpuHandoffActive) cpuRestorationNeeded = true;
     return true;
+  }
+
+  public void noteRacePacketObserved() {
+    lastUdpRacePacketObservedAt = System.currentTimeMillis();
+  }
+
+  public synchronized void logRacePacketRejection(String reason) {
+    long now = System.currentTimeMillis();
+    if (now - lastRacePacketRejectionLogAt < 1_000) return;
+    lastRacePacketRejectionLogAt = now;
+    System.out.println("Ignoring race packet from player " + playerNum + ": " + reason);
   }
 
   public synchronized int getLastReceivedCount() {

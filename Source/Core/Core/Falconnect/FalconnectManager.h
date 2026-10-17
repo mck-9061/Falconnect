@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "GXMemoryPatcher.h"
+#include "Core/Falconnect/RacerInterpolator.h"
 #include "Core/Core.h"
 
 enum class GameState : int {
@@ -51,6 +52,7 @@ private:
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
     u16 displayedForceRaceStartCountdownSeconds = 0;
+    std::array<Falconnect::RacerInterpolator, 30> m_racer_interpolators;
     u32 m_last_local_race_frame_count = 0;
     std::chrono::steady_clock::time_point m_local_race_frame_last_advanced{};
     bool m_local_race_frame_count_started = false;

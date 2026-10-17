@@ -184,7 +184,7 @@ void FalconnectManager::Update() {
         patcher->DisableOptionsMenuControl();
 
         // Disable AI control
-        patcher->DisableAIControl();
+        //patcher->DisableAIControl();
 
         // Disable countdown
         patcher->DisableCountdown();
@@ -225,6 +225,8 @@ void FalconnectManager::Update() {
                      FalconnectSocketManager::instance->playerNumber);
         currentState = GameState::RACE_LOADED;
         readCounter = 0;
+        for (auto& interpolator : m_racer_interpolators)
+            interpolator.Reset();
         m_last_local_race_frame_count = 0;
         m_local_race_frame_last_advanced = {};
         m_local_race_frame_count_started = false;
@@ -335,8 +337,8 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Update frames to send
         const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
-        for (const u8 cpuRacer : cpu_racer_indices)
-            patcher->EnableAIControlFor(cpuRacer, 1);
+        // for (const u8 cpuRacer : cpu_racer_indices)
+        //     patcher->EnableAIControlFor(cpuRacer, 1);
 
         std::vector<RacerMemoryBlock> frames;
         const auto sample_racer = [&](u8 racer) {
@@ -359,10 +361,11 @@ void FalconnectManager::Update() {
         FalconnectSocketManager::ReceivedRaceData received_race_data;
         // This runs on the emulation update path. Never stall it while the freshly-started UDP
         // worker establishes its first exchange; DataThread owns the timed failure path.
-        FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
+        const bool received_snapshot =
+            FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
 
-        // Use one local sample for the whole received server snapshot to compare its timing data
-        // against each remote racer. Accepted racer positions are written as received.
+        // Finish detection uses authoritative received timing. Each remote racer separately
+        // advances its interpolation timeline once per emulated frame below.
         const u32 local_frame_count = frames.front().raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
 
@@ -370,18 +373,18 @@ void FalconnectManager::Update() {
         // We receive server snapshots more often than GX renders frames, so only interpret it as
         // stopped after a full second without an advance. This gives the game AI control of the
         // finished local machine while the player waits for the rest of the field.
-        if (local_frame_count > m_last_local_race_frame_count) {
-            m_last_local_race_frame_count = local_frame_count;
-            m_local_race_frame_last_advanced = received_snapshot_time;
-            m_local_race_frame_count_started = true;
-        } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
-                   received_snapshot_time - m_local_race_frame_last_advanced >=
-                       std::chrono::seconds(1)) {
-            patcher->EnableAIControlFor(0, 1);
-            m_local_racer_ai_enabled = true;
-            INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
-                         local_frame_count);
-        }
+        // if (local_frame_count > m_last_local_race_frame_count) {
+        //     m_last_local_race_frame_count = local_frame_count;
+        //     m_local_race_frame_last_advanced = received_snapshot_time;
+        //     m_local_race_frame_count_started = true;
+        // } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
+        //            received_snapshot_time - m_local_race_frame_last_advanced >=
+        //                std::chrono::seconds(1)) {
+        //     patcher->EnableAIControlFor(0, 1);
+        //     m_local_racer_ai_enabled = true;
+        //     INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
+        //                  local_frame_count);
+        // }
 
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
         const u8 human_racer_count = std::min<u8>(
@@ -419,7 +422,6 @@ void FalconnectManager::Update() {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
             const auto& received_racer = received_race_data.racers[i];
             if (received_racer.valid) {
-                const auto racer_num = received_racer.racer_index;
                 const auto& racer_block = received_racer.block;
 
                 // racer_index is remapped for this client's GX memory. The received array slot
@@ -433,18 +435,22 @@ void FalconnectManager::Update() {
                     update_human_finish_state(source_racer_slot, racer_block.raceTimeFrameCount);
                 }
 
-                if (!received_racer.pending ||
-                    FalconnectSocketManager::instance->OwnsCpuRacer(racer_num))
-                    continue;
-
-                const std::array<u32, 3> center_position = {
-                    racer_block.centerPosition[0],
-                    racer_block.centerPosition[1],
-                    racer_block.centerPosition[2],
-                };
-                patcher->SetRacerData(racer_num, racer_block, true, center_position);
-                patcher->EnableAIControlFor(racer_num, 1);
             }
+
+            const u8 racer_num = i == 0 ? local_human_racer : static_cast<u8>(i);
+            auto& interpolator = m_racer_interpolators[i];
+            if (i == local_human_racer ||
+                FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) ||
+                (received_snapshot && !received_racer.valid)) {
+                interpolator.Reset();
+                continue;
+            }
+
+            const auto update = interpolator.Step(
+                received_racer.valid && received_racer.pending ? &received_racer.block : nullptr,
+                static_cast<u8>(received_racer.source_sequence >> 24));
+            if (update)
+                patcher->SetRacerData(racer_num, update->block, update->write_position, update->center);
         }
 
         // Once the server has timed out or removed a remote player, their record becomes absent

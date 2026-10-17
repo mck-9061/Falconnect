@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class FalconnectRace extends Thread {
-  private static final long UDP_TIMEOUT_MILLIS = 5_000;
+  private static final long UDP_TIMEOUT_MILLIS = 15_000;
   private static final long CPU_HANDOFF_TIMEOUT_MILLIS = 750;
   private int maxCpusPerClient;
   private Integer trackOverride;

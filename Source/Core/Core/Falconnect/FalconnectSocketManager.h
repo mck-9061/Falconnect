@@ -60,7 +60,8 @@ public:
             if (valid && (sequence >> 24) == (source_sequence >> 24) &&
                 (sequence & 0x00ffffff) <= (source_sequence & 0x00ffffff))
                 return;
-            pending = pending || !valid || incoming.GetSocketData() != block.GetSocketData();
+            pending = pending || !valid || (sequence >> 24) != (source_sequence >> 24) ||
+                      incoming.GetSocketData() != block.GetSocketData();
             block = incoming;
             racer_index = index;
             source_sequence = sequence;

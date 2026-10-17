@@ -472,7 +472,7 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
         for (u32 i = 0; i < patchData.timingData.size(); i++)
             manager.Write_U32(patchData.timingData[i],
                               secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
-        // raceTimeFrameCount is packet metadata for the jitter filter. Do not overwrite the
+        // raceTimeFrameCount is packet metadata for interpolation. Do not overwrite the
         // game's total-time counter at +0x744.
     }
 

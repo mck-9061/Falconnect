@@ -1963,7 +1963,7 @@ void MainWindow::OnPlayRecording()
   }
 
   QString dtm_file = DolphinFileDialog::getOpenFileName(
-      this, tr("Select the Recording File to Play"), QString(), tr("Dolphin TAS Movies (*.dtm)"));
+      this, tr("Select the Recording File to Play"), QString(), tr("Falconnect Dolphin TAS Movies (*.dtm)"));
 
   if (dtm_file.isEmpty())
     return;
@@ -2041,7 +2041,7 @@ void MainWindow::OnExportRecording()
   const Core::CPUThreadGuard guard(m_system);
 
   QString dtm_file = DolphinFileDialog::getSaveFileName(
-      this, tr("Save Recording File As"), QString(), tr("Dolphin TAS Movies (*.dtm)"));
+      this, tr("Save Recording File As"), QString(), tr("Falconnect Dolphin TAS Movies (*.dtm)"));
   if (!dtm_file.isEmpty())
     m_system.GetMovie().SaveRecording(dtm_file.toStdString());
 }
@@ -2061,34 +2061,7 @@ void MainWindow::OnRequestGolfControl()
 
 void MainWindow::ShowTASInput()
 {
-  for (int i = 0; i < num_gc_controllers; i++)
-  {
-    const auto si_device = Config::Get(Config::GetInfoForSIDevice(i));
-    if (si_device == SerialInterface::SIDEVICE_GC_GBA_EMULATED)
-    {
-      m_gba_tas_input_windows[i]->show();
-      m_gba_tas_input_windows[i]->raise();
-      m_gba_tas_input_windows[i]->activateWindow();
-    }
-    else if (si_device != SerialInterface::SIDEVICE_NONE &&
-             si_device != SerialInterface::SIDEVICE_GC_GBA)
-    {
-      m_gc_tas_input_windows[i]->show();
-      m_gc_tas_input_windows[i]->raise();
-      m_gc_tas_input_windows[i]->activateWindow();
-    }
-  }
-
-  for (int i = 0; i < num_wii_controllers; i++)
-  {
-    if (Config::Get(Config::GetInfoForWiimoteSource(i)) == WiimoteSource::Emulated &&
-        (!Core::IsRunning(m_system) || m_system.IsWii()))
-    {
-      m_wii_tas_input_windows[i]->show();
-      m_wii_tas_input_windows[i]->raise();
-      m_wii_tas_input_windows[i]->activateWindow();
-    }
-  }
+  // TAS input is disabled in Falconnect.
 }
 
 void MainWindow::OnConnectWiiRemote(int id)

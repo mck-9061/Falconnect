@@ -70,6 +70,10 @@ void HotkeyScheduler::Stop()
 
 static bool IsHotkey(int id, bool held = false)
 {
+  // Also ignore persisted bindings for features removed from the UI.
+  if ((id >= HK_LOAD_STATE_SLOT_1 && id <= HK_DECREMENT_SELECTED_STATE_SLOT) ||
+      (id >= HK_DECREASE_EMULATION_SPEED && id <= HK_FRAME_ADVANCE_RESET_SPEED))
+    return false;
   return HotkeyManagerEmu::IsPressed(id, held);
 }
 

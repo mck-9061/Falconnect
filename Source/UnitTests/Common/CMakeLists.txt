@@ -1,3 +1,5 @@
+add_dolphin_test(FalconnectImportTest FalconnectImportTest.cpp)
+add_dolphin_test(FalconnectPolicyTest FalconnectPolicyTest.cpp)
 add_dolphin_test(AssemblerTest AssemblerTest.cpp)
 add_dolphin_test(BitFieldTest BitFieldTest.cpp)
 add_dolphin_test(BitSetTest BitSetTest.cpp)

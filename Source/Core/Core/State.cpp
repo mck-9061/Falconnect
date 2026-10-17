@@ -221,38 +221,12 @@ static bool CheckIfStateLoadIsAllowed(Core::System& system)
 
 static bool LoadFromBuffer(Core::System& system, std::span<u8> buffer)
 {
-  u8* ptr = buffer.data();
-  PointerWrap p(&ptr, buffer.size(), PointerWrap::Mode::Read);
-  DoState(system, p);
-  return p.IsReadMode();
+  return false;
 }
 
 // Returns the required size, or 0 on failure.
 static std::size_t SaveToBuffer(Core::System& system, Common::UniqueBuffer<u8>& buffer)
 {
-  // Attempt to save to our provided buffer as-is.
-  // If buffer isn't large enough, PointerWrap transitions to MeasureMode,
-  //  and then we have our measurement for a second attempt.
-  u8* ptr = buffer.data();
-  PointerWrap pointer_wrap(&ptr, buffer.size(), PointerWrap::Mode::Write);
-  DoState(system, pointer_wrap);
-  const auto measured_size = pointer_wrap.GetOffsetFromPreviousPosition(buffer.data());
-
-  if (pointer_wrap.IsWriteMode())
-  {
-    s_last_state_size = measured_size;
-    return measured_size;
-  }
-
-  if (measured_size > buffer.size())
-  {
-    DEBUG_LOG_FMT(CORE, "SaveToBuffer: Growing buffer from size {} to measured size {}",
-                  buffer.size(), measured_size);
-    buffer.reset(measured_size);
-    return SaveToBuffer(system, buffer);
-  }
-
-  // Buffer was large enough but we still failed for some other reason.
   return 0;
 }
 
@@ -495,10 +469,7 @@ static void SaveAsFromCore(Core::System& system, std::string filename)
 
 void SaveAs(Core::System& system, std::string filename)
 {
-  Core::RunOnCPUThread(
-      system, [&system, filename = std::move(filename), lock = GetStateSaveTaskLock()]() mutable {
-        SaveAsFromCore(system, std::move(filename));
-      });
+  // Savestates are disabled in Falconnect.
 }
 
 static bool GetVersionFromLZO(StateHeader& header, File::IOFile& f)
@@ -868,12 +839,7 @@ static void LoadAsFromCore(Core::System& system, std::string filename)
 
 void LoadAs(Core::System& system, std::string filename)
 {
-  if (!CheckIfStateLoadIsAllowed(system))
-    return;
-
-  Core::RunOnCPUThread(system, [&system, filename = std::move(filename)]() mutable {
-    LoadAsFromCore(system, std::move(filename));
-  });
+  // Savestates are disabled in Falconnect.
 }
 
 void SetOnAfterLoadCallback(AfterLoadCallbackFunc callback)
@@ -952,42 +918,13 @@ void SaveFirstSaved(Core::System& system)
 // Load the last state before loading the state
 void UndoLoadState(Core::System& system)
 {
-  if (!CheckIfStateLoadIsAllowed(system))
-    return;
-
-  Core::RunOnCPUThread(system, [&system] {
-    if (s_undo_load_buffer.empty())
-    {
-      PanicAlertFmtT("There is nothing to undo!");
-      return;
-    }
-
-    auto& movie = system.GetMovie();
-    if (movie.IsMovieActive())
-    {
-      // Note: Only the CPU thread writes to "undo.dtm".
-      const std::string dtmpath = File::GetUserPath(D_STATESAVES_IDX) + "undo.dtm";
-      if (File::Exists(dtmpath))
-      {
-        LoadFromBuffer(system, s_undo_load_buffer);
-        movie.LoadInput(dtmpath);
-      }
-      else
-      {
-        PanicAlertFmtT("No undo.dtm found, aborting undo load state to prevent movie desyncs");
-      }
-    }
-    else
-    {
-      LoadFromBuffer(system, s_undo_load_buffer);
-    }
-  });
+  // Savestates are disabled in Falconnect.
 }
 
 // Load the state that the last save state overwritten on
 void UndoSaveState(Core::System& system)
 {
-  LoadAs(system, File::GetUserPath(D_STATESAVES_IDX) + "lastState.sav");
+  // Savestates are disabled in Falconnect.
 }
 
 }  // namespace State

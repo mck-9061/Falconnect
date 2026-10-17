@@ -51,6 +51,7 @@ std::optional<System> GetSystemFromName(const std::string& system);
 const std::string& GetLayerName(LayerType layer);
 LayerType GetActiveLayerForConfig(const Location&);
 
+std::optional<std::string> GetFalconnectOverride(const Location&);
 std::optional<std::string> GetAsString(const Location&);
 
 template <typename T>

@@ -214,8 +214,46 @@ LayerType GetActiveLayerForConfig(const Location& config)
   return LayerType::Base;
 }
 
+std::optional<std::string> GetFalconnectOverride(const Location& config)
+{
+  if (config.system == System::Main && config.section == "General")
+  {
+    if (config.key == "GDBPort")
+      return "-1";
+    if (config.key == "GDBSocket")
+      return "";
+  }
+  if (config.system == System::GFX && config.section == "Hacks" && config.key == "VISkip")
+    return "False";
+  if (config.system == System::GFX && config.section == "Settings" &&
+      (config.key == "WireFrame" || config.key == "DisableFog" || config.key == "EnableMods"))
+    return "False";
+  if (config.system == System::FreeLook && config.key == "Enabled")
+    return "False";
+  if (config.system != System::Main || config.section != "Core")
+    return std::nullopt;
+  if (config.key == "SkipIPL")
+    return "True";
+  for (const char* key : {"EnableCheats", "MMU", "PauseOnPanic", "OverclockEnable",
+                          "VIOverclockEnable", "RAMOverrideEnable", "FastDiscSpeed",
+                          "CorrectTimeDrift", "RushFramePresentation"})
+  {
+    if (config.key == key)
+      return "False";
+  }
+  for (const char* key : {"EmulationSpeed", "Overclock", "VIOverclock", "SyncGpuOverclock"})
+  {
+    if (config.key == key)
+      return "1.0";
+  }
+  return std::nullopt;
+}
+
 std::optional<std::string> GetAsString(const Location& config)
 {
+  if (auto value = GetFalconnectOverride(config))
+    return value;
+
   std::optional<std::string> result;
   ReadLock lock(s_layers_rw_lock);
 

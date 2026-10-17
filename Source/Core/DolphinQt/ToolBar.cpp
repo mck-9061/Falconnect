@@ -83,9 +83,9 @@ void ToolBar::OnDebugModeToggled(bool enabled)
   m_step_action->setVisible(enabled);
   m_step_over_action->setVisible(enabled);
   m_step_out_action->setVisible(enabled);
-  m_skip_action->setVisible(enabled);
+  m_skip_action->setVisible(false);
   m_show_pc_action->setVisible(enabled);
-  m_set_pc_action->setVisible(enabled);
+  m_set_pc_action->setVisible(false);
 
   const bool paused = Core::GetState(Core::System::GetInstance()) == Core::State::Paused;
   m_step_action->setEnabled(paused);

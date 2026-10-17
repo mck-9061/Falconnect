@@ -670,8 +670,7 @@ void CodeWidget::StepOut()
 
 void CodeWidget::Skip()
 {
-  m_system.GetPPCState().pc += 4;
-  ShowPC();
+  // Changing the program counter is disabled in Falconnect.
 }
 
 void CodeWidget::ShowPC()
@@ -682,8 +681,7 @@ void CodeWidget::ShowPC()
 
 void CodeWidget::SetPC()
 {
-  m_system.GetPPCState().pc = m_code_view->GetAddress();
-  Update();
+  // Code inspection is read-only in Falconnect.
 }
 
 void CodeWidget::ToggleBreakpoint()

@@ -683,6 +683,9 @@ void CodeViewWidget::OnContextMenu()
   restore_action->setEnabled(running &&
                              m_system.GetPowerPC().GetDebugInterface().HasEnabledPatch(addr));
 
+  for (auto* action : {insert_blr_action, insert_nop_action, replace_action, assemble_action,
+                       restore_action, ppc_action})
+    action->setVisible(false);
   menu->exec(QCursor::pos());
   Update();
 }

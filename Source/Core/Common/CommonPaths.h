@@ -12,23 +12,23 @@
 
 // The normal user directory
 #ifdef _WIN32
-#define NORMAL_USER_DIR "Dolphin Emulator"
+#define NORMAL_USER_DIR "Falconnect Dolphin"
 #elif defined(__APPLE__)
-#define NORMAL_USER_DIR "Library/Application Support/Dolphin"
+#define NORMAL_USER_DIR "Library/Application Support/Falconnect Dolphin"
 #elif defined(ANDROID)
-#define NORMAL_USER_DIR "/sdcard/dolphin-emu"
+#define NORMAL_USER_DIR "/sdcard/falconnect-dolphin"
 #else
-#define NORMAL_USER_DIR "dolphin-emu"
+#define NORMAL_USER_DIR "falconnect-dolphin"
 #endif
 
 // The portable user directory
 #ifdef _WIN32
-#define PORTABLE_USER_DIR "User"
+#define PORTABLE_USER_DIR "FalconnectUser"
 #elif defined(__APPLE__)
-#define PORTABLE_USER_DIR "User"
-#define EMBEDDED_USER_DIR "Contents/Resources/User"
+#define PORTABLE_USER_DIR "FalconnectUser"
+#define EMBEDDED_USER_DIR "Contents/Resources/FalconnectUser"
 #else
-#define PORTABLE_USER_DIR "user"
+#define PORTABLE_USER_DIR "falconnect-user"
 #define EMBEDDED_USER_DIR PORTABLE_USER_DIR
 #endif
 

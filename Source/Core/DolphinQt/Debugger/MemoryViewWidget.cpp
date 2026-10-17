@@ -168,27 +168,8 @@ public:
 
   void OnDirectTableEdit(const int row, const int column, const QString& text)
   {
-    QTableWidgetItem* item = this->item(row, column);
-    MemoryViewWidget::Type type =
-        static_cast<MemoryViewWidget::Type>(item->data(USER_ROLE_VALUE_TYPE).toInt());
-    std::vector<u8> bytes = m_view->ConvertTextToBytes(type, text);
-
-    u32 address = item->data(USER_ROLE_CELL_ADDRESS).toUInt();
-    u32 end_address = address + static_cast<u32>(bytes.size()) - 1;
-    AddressSpace::Accessors* accessors = AddressSpace::GetAccessors(m_view->GetAddressSpace());
-    {
-      const Core::CPUThreadGuard guard(m_view->m_system);
-
-      if (!bytes.empty() && accessors->IsValidAddress(guard, address) &&
-          accessors->IsValidAddress(guard, end_address))
-      {
-        for (const u8 c : bytes)
-          accessors->WriteU8(guard, address++, c);
-      }
-    }
-
-    m_view->UpdateDispatcher(MemoryViewWidget::UpdateType::Values);
-  }
+  // Memory inspection is read-only in Falconnect.
+}
 
 private:
   MemoryViewWidget* m_view;
@@ -414,7 +395,7 @@ void MemoryViewWidget::CreateTable()
 
   // Data item
   auto item = QTableWidgetItem(INVALID_MEMORY);
-  item.setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsEditable);
+  item.setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
   item.setData(USER_ROLE_IS_ROW_BREAKPOINT_CELL, false);
 
   for (int i = 0; i < rows; i++)

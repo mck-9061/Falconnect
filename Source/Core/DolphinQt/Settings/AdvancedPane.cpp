@@ -146,6 +146,7 @@ void AdvancedPane::CreateLayout()
   auto* clock_override_layout = new QVBoxLayout();
   clock_override->setLayout(clock_override_layout);
   main_layout->addWidget(clock_override);
+  clock_override->hide();
 
   m_cpu_clock_override_checkbox =
       new ConfigBool(tr("Enable Emulated CPU Clock Override"), Config::MAIN_OVERCLOCK_ENABLE);
@@ -191,6 +192,7 @@ void AdvancedPane::CreateLayout()
   auto* vi_rate_override_layout = new QVBoxLayout();
   vi_rate_override->setLayout(vi_rate_override_layout);
   main_layout->addWidget(vi_rate_override);
+  vi_rate_override->hide();
 
   m_vi_rate_override_checkbox =
       new ConfigBool(tr("Enable VBI Frequency Override"), Config::MAIN_VI_OVERCLOCK_ENABLE);
@@ -237,6 +239,7 @@ void AdvancedPane::CreateLayout()
   auto* ram_override_layout = new QVBoxLayout();
   ram_override->setLayout(ram_override_layout);
   main_layout->addWidget(ram_override);
+  ram_override->hide();
 
   m_ram_override_checkbox =
       new ConfigBool(tr("Enable Emulated Memory Size Override"), Config::MAIN_RAM_OVERRIDE_ENABLE);
@@ -316,7 +319,7 @@ void AdvancedPane::CreateLayout()
          "your current system time."
          "<br><br><dolphin_emphasis>If unsure, leave this unchecked.</dolphin_emphasis>"));
 
-  auto* reset_group = new QGroupBox(tr("Reset Dolphin Settings"));
+  auto* reset_group = new QGroupBox(tr("Reset Falconnect Dolphin Settings"));
   reset_group->setLayout(new QVBoxLayout());
   main_layout->addWidget(reset_group);
 
@@ -401,8 +404,8 @@ void AdvancedPane::Update()
 void AdvancedPane::OnResetButtonClicked()
 {
   if (ModalMessageBox::question(
-          this, tr("Reset Dolphin Settings"),
-          tr("Are you sure you want to restore all Dolphin settings to their default "
+          this, tr("Reset Falconnect Dolphin Settings"),
+          tr("Are you sure you want to restore all Falconnect Dolphin settings to their default "
              "values? This action cannot be undone!\n"
              "All customizations or changes you have made will be lost.\n\n"
              "Do you want to proceed?"),

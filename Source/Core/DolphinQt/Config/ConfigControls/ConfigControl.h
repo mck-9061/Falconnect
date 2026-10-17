@@ -6,6 +6,7 @@
 #include <QFont>
 #include <QMouseEvent>
 
+#include "Common/Config/Config.h"
 #include "Common/Config/Enums.h"
 #include "Common/Config/Layer.h"
 #include "DolphinQt/Settings.h"
@@ -25,17 +26,23 @@ public:
       : m_location(location), m_layer(layer)
   {
     ConnectConfig();
+    if (Config::GetFalconnectOverride(location))
+      Derived::hide();
   }
   ConfigControl(const QString& label, const Config::Location& location, Config::Layer* layer)
       : Derived(label), m_location(location), m_layer(layer)
   {
     ConnectConfig();
+    if (Config::GetFalconnectOverride(location))
+      Derived::hide();
   }
   ConfigControl(const Qt::Orientation& orient, const Config::Location& location,
                 Config::Layer* layer)
       : Derived(orient), m_location(location), m_layer(layer)
   {
     ConnectConfig();
+    if (Config::GetFalconnectOverride(location))
+      Derived::hide();
   }
 
   const Config::Location GetLocation() const { return m_location; }
@@ -60,7 +67,7 @@ protected:
   {
     // Avoid OnConfigChanged -> option changed to current config's value -> unnecessary save ->
     // ConfigChanged.
-    if (m_updating)
+    if (m_updating || Config::GetFalconnectOverride(m_location))
       return;
 
     if (m_layer != nullptr)

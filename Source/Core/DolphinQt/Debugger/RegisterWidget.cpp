@@ -112,8 +112,7 @@ void RegisterWidget::ConnectWidgets()
 
 void RegisterWidget::OnItemChanged(QTableWidgetItem* item)
 {
-  if (!item->data(DATA_TYPE).isNull() && !m_updating)
-    static_cast<RegisterColumn*>(item)->SetValue();
+  // Registers are read-only in Falconnect.
 }
 
 void RegisterWidget::OnDebugFontChanged(const QFont& font)

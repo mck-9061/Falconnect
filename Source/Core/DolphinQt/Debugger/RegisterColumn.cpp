@@ -15,8 +15,7 @@ RegisterColumn::RegisterColumn(RegisterType type, std::function<u64()> get,
   RefreshValue();
   Update();
 
-  setFlags(m_set_register == nullptr ? flags() ^ Qt::ItemIsEditable :
-                                       Qt::ItemIsEditable | Qt::ItemIsEnabled);
+  setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
   setData(DATA_TYPE, static_cast<quint32>(type));
 }
 
@@ -53,40 +52,6 @@ u64 RegisterColumn::GetValue() const
 
 void RegisterColumn::SetValue()
 {
-  u64 value = 0;
-
-  bool valid = false;
-
-  switch (m_display)
-  {
-  case RegisterDisplay::Hex:
-    value = text().toULongLong(&valid, 16);
-    break;
-  case RegisterDisplay::SInt32:
-    value = text().toInt(&valid);
-    break;
-  case RegisterDisplay::UInt32:
-    value = text().toUInt(&valid);
-    break;
-  case RegisterDisplay::Float:
-  {
-    float f = text().toFloat(&valid);
-    std::memcpy(&value, &f, sizeof(u32));
-    break;
-  }
-  case RegisterDisplay::Double:
-  {
-    double f = text().toDouble(&valid);
-    std::memcpy(&value, &f, sizeof(u64));
-    break;
-  }
-  }
-
-  if (!valid)
-    ModalMessageBox::critical(nullptr, QObject::tr("Error"), QObject::tr("Invalid input provided"));
-  else
-    m_set_register(value);
-
   RefreshValue();
 }
 

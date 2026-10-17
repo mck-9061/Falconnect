@@ -305,7 +305,7 @@ void GameList::UpdateColumnVisibility()
 void GameList::MakeEmptyView()
 {
   const QString refreshing_msg = tr("Refreshing...");
-  const QString empty_msg = tr("Dolphin could not find any GameCube/Wii ISOs or WADs.\n"
+  const QString empty_msg = tr("Falconnect Dolphin could not find NTSC F-Zero GX (GFZE01).\n"
                                "Double-click here to set a games directory...");
 
   m_empty = new QLabel(this);

@@ -44,6 +44,7 @@
 #include "InputCommon/GCAdapter.h"
 
 #include "UICommon/DiscordPresence.h"
+#include "UICommon/FalconnectProfile.h"
 
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -126,6 +127,7 @@ static void RefreshConfig()
 
 void Init()
 {
+  const auto import_result = ImportInstalledDolphinProfile();
   Core::RestoreWiiSettings(Core::RestoreReason::CrashRecovery);
 
   Config::Init();
@@ -139,6 +141,8 @@ void Init()
   g_Config.Init();
   Discord::Init();
   Common::Log::LogManager::Init();
+  if (import_result == ProfileImportResult::Failed)
+    ERROR_LOG_FMT(COMMON, "Dolphin profile import did not complete; it will retry next startup.");
   VideoBackendBase::ActivateBackend(Config::Get(Config::MAIN_GFX_BACKEND));
   Statistics::Init();
 
@@ -306,6 +310,8 @@ void SetUserDirectory(std::string custom_path)
 {
   if (!custom_path.empty())
   {
+    // Treat --user as a parent, so even a Dolphin profile remains untouched.
+    custom_path += DIR_SEP "FalconnectUser";
     File::CreateFullPath(custom_path + DIR_SEP);
     File::SetUserPath(D_USER_IDX, std::move(custom_path));
     return;
@@ -316,17 +322,17 @@ void SetUserDirectory(std::string custom_path)
   // Detect where the User directory is. There are five different cases
   // (on top of the command line flag, which overrides all this):
   // 1. GetExeDirectory()\portable.txt exists
-  //    -> Use GetExeDirectory()\User
-  // 2. HKCU\Software\Dolphin Emulator\LocalUserConfig exists and is true
-  //    -> Use GetExeDirectory()\User
-  // 3. HKCU\Software\Dolphin Emulator\UserConfigPath exists
+  //    -> Use GetExeDirectory()\FalconnectUser
+  // 2. HKCU\Software\Falconnect Dolphin\LocalUserConfig exists and is true
+  //    -> Use GetExeDirectory()\FalconnectUser
+  // 3. HKCU\Software\Falconnect Dolphin\UserConfigPath exists
   //    -> Use this as the user directory path
-  // 4. My Documents\Dolphin Emulator exists (default user folder before PR 10708)
+  // 4. My Documents\Falconnect Dolphin exists (default user folder before PR 10708)
   //    -> Use this as the user directory path
   // 5. AppData\Roaming exists
-  //    -> Use AppData\Roaming\Dolphin Emulator as the User directory path
+  //    -> Use AppData\Roaming\Falconnect Dolphin as the User directory path
   // 6. Default
-  //    -> Use GetExeDirectory()\User
+  //    -> Use GetExeDirectory()\FalconnectUser
 
   // Get AppData path in case we need it.
   wil::unique_cotaskmem_string appdata;
@@ -337,7 +343,7 @@ void SetUserDirectory(std::string custom_path)
   wil::unique_hkey hkey;
   DWORD local = 0;
   std::unique_ptr<TCHAR[]> configPath;
-  if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software\\Dolphin Emulator"), 0, KEY_QUERY_VALUE,
+  if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software\\Falconnect Dolphin"), 0, KEY_QUERY_VALUE,
                    hkey.put()) == ERROR_SUCCESS)
   {
     DWORD size = sizeof(local);
@@ -391,7 +397,7 @@ void SetUserDirectory(std::string custom_path)
     // they will use this as the User directory instead.
     // (If we're in this case, then this key doesn't exist, so it's OK to set it.)
     std::wstring wstr_path = UTF8ToWString(user_path);
-    RegSetKeyValueW(HKEY_CURRENT_USER, TEXT("Software\\Dolphin Emulator"), TEXT("UserConfigPath"),
+    RegSetKeyValueW(HKEY_CURRENT_USER, TEXT("Software\\Falconnect Dolphin"), TEXT("UserConfigPath"),
                     REG_SZ, wstr_path.c_str(),
                     static_cast<DWORD>((wstr_path.size() + 1) * sizeof(wchar_t)));
   }
@@ -406,7 +412,7 @@ void SetUserDirectory(std::string custom_path)
   }
   else
   {
-    const char* env_path = getenv("DOLPHIN_EMU_USERPATH");
+    const char* env_path = getenv("FALCONNECT_DOLPHIN_USERPATH");
     const char* home = getenv("HOME");
     if (!home)
       home = getenv("PWD");
@@ -416,20 +422,20 @@ void SetUserDirectory(std::string custom_path)
 
     // On a non-Apple and non-Android POSIX system, there are 4 cases:
     // 1. GetExeDirectory()/portable.txt exists
-    //    -> Use GetExeDirectory()/User
-    // 2. $DOLPHIN_EMU_USERPATH is set
-    //    -> Use $DOLPHIN_EMU_USERPATH
-    // 3. ~/.dolphin-emu directory exists, and we're not in flatpak
-    //    -> Use ~/.dolphin-emu
+    //    -> Use the separate Falconnect portable user directory
+    // 2. $FALCONNECT_DOLPHIN_USERPATH is set
+    //    -> Use $FALCONNECT_DOLPHIN_USERPATH/FalconnectUser
+    // 3. ~/.falconnect-dolphin directory exists, and we're not in flatpak
+    //    -> Use ~/.falconnect-dolphin
     // 4. Default
     //    -> Use XDG basedir, see
     //    http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
     //
     // On macOS:
     // 1. GetExeDirectory()/portable.txt exists
-    //    -> Use GetExeDirectory()/User
-    // 2. $DOLPHIN_EMU_USERPATH is set
-    //    -> Use $DOLPHIN_EMU_USERPATH
+    //    -> Use the separate Falconnect portable user directory
+    // 2. $FALCONNECT_DOLPHIN_USERPATH is set
+    //    -> Use $FALCONNECT_DOLPHIN_USERPATH/FalconnectUser
     // 3. Default
     //
     // On Android, custom_path is set, so this code path is never reached.
@@ -440,7 +446,7 @@ void SetUserDirectory(std::string custom_path)
     }
     else if (env_path)
     {
-      user_path = env_path;
+      user_path = std::string(env_path) + DIR_SEP "FalconnectUser";
     }
 #if defined(__APPLE__) || defined(ANDROID)
     else

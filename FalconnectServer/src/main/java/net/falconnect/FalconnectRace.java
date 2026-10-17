@@ -66,6 +66,10 @@ public class FalconnectRace extends Thread {
     return List.copyOf(clients);
   }
 
+  public synchronized boolean HasClient(FalconnectClientConnection client) {
+    return clients.contains(client);
+  }
+
   public synchronized void setMachineOverride(MachineSelection selection) {
     requireWaitingForReady();
     machineOverride = selection;
@@ -242,12 +246,20 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized void AddClient(FalconnectClientConnection client) {
+    // EndRace can have already moved a connection into its next lobby while a RESET from the
+    // old race is still completing. Keep that second allocation from adding the same object
+    // twice, which would give it two player slots in this race.
+    if (clients.contains(client)) {
+      client.setRace(this);
+      return;
+    }
     client.udpPort = getUdpPort(client.playerNum);
     clients.add(client);
     client.setRace(this);
   }
 
   public synchronized boolean TryAddClient(FalconnectClientConnection client) {
+    if (clients.contains(client)) return true;
     if (!HasSpace() || gameState != GameState.WAITING_FOR_READY) return false;
     AddClient(client);
     return true;

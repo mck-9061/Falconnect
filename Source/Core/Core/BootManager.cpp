@@ -22,6 +22,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
+#include "Common/MsgHandler.h"
 
 #include "Core/AchievementManager.h"
 #include "Core/Boot/Boot.h"
@@ -50,6 +51,15 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
 {
   if (!boot)
     return false;
+
+  const auto* disc = std::get_if<BootParameters::Disc>(&boot->parameters);
+  if (!disc || !disc->volume || disc->volume->GetGameID() != "GFZE01" ||
+      !boot->riivolution_patches.empty() || boot->boot_session_data.GetSavestatePath())
+  {
+    PanicAlertFmt("Falconnect Dolphin only supports an unpatched NTSC F-Zero GX (GFZE01) disc, "
+                  "without a savestate.");
+    return false;
+  }
 
   SConfig& StartUp = SConfig::GetInstance();
 

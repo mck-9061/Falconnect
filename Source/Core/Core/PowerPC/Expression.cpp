@@ -39,12 +39,6 @@ static T HostRead(const Core::CPUThreadGuard& guard, u32 address)
   return PowerPC::MMU::HostRead<T>(guard, address);
 }
 
-template <typename T>
-static void HostWrite(const Core::CPUThreadGuard& guard, T var, u32 address)
-{
-  PowerPC::MMU::HostWrite<T>(guard, var, address);
-}
-
 template <typename T, typename U = T>
 static double HostReadFunc(expr_func* f, vec_expr_t* args, void* c)
 {
@@ -54,19 +48,6 @@ static double HostReadFunc(expr_func* f, vec_expr_t* args, void* c)
 
   Core::CPUThreadGuard guard(Core::System::GetInstance());
   return std::bit_cast<T>(HostRead<U>(guard, address));
-}
-
-template <typename T, typename U = T>
-static double HostWriteFunc(expr_func* f, vec_expr_t* args, void* c)
-{
-  if (vec_len(args) != 2)
-    return 0;
-  const T var = static_cast<T>(expr_eval(&vec_nth(args, 0)));
-  const u32 address = static_cast<u32>(expr_eval(&vec_nth(args, 1)));
-
-  Core::CPUThreadGuard guard(Core::System::GetInstance());
-  HostWrite<U>(guard, std::bit_cast<U>(var), address);
-  return var;
 }
 
 template <typename T, typename U = T>
@@ -144,7 +125,7 @@ static double StreqFunc(expr_func* f, vec_expr_t* args, void* c)
   return strs[0] == strs[1];
 }
 
-static std::array<expr_func, 23> g_expr_funcs{{
+static std::array<expr_func, 18> g_expr_funcs{{
     // For internal storage and comparisons, everything is auto-converted to Double.
     // If u64 ints are added, this could produce incorrect results.
     {"read_u8", HostReadFunc<u8>},
@@ -155,11 +136,6 @@ static std::array<expr_func, 23> g_expr_funcs{{
     {"read_s32", HostReadFunc<s32, u32>},
     {"read_f32", HostReadFunc<float, u32>},
     {"read_f64", HostReadFunc<double, u64>},
-    {"write_u8", HostWriteFunc<u8>},
-    {"write_u16", HostWriteFunc<u16>},
-    {"write_u32", HostWriteFunc<u32>},
-    {"write_f32", HostWriteFunc<float, u32>},
-    {"write_f64", HostWriteFunc<double, u64>},
     {"u8", CastFunc<u8>},
     {"s8", CastFunc<s8, u8>},
     {"u16", CastFunc<u16>},
@@ -372,7 +348,7 @@ double Expression::Evaluate(Core::System& system) const
 
   double result = expr_eval(m_expr.get());
 
-  SynchronizeBindings(system, SynchronizeDirection::To);
+  // Conditions may inspect registers, but must never write their assignments back.
 
   Reporting(result);
 

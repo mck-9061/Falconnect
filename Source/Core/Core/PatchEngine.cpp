@@ -176,43 +176,7 @@ void SavePatchSection(Common::IniFile* local_ini, const std::vector<Patch>& patc
 
 void LoadPatches()
 {
-  const auto& sconfig = SConfig::GetInstance();
-  Common::IniFile merged = sconfig.LoadGameIni();
-  Common::IniFile globalIni = sconfig.LoadDefaultGameIni();
-  Common::IniFile localIni = sconfig.LoadLocalGameIni();
-
-  LoadPatchSection("OnFrame", &s_on_frame, globalIni, localIni);
-
-#ifdef USE_RETRO_ACHIEVEMENTS
-  AchievementManager::GetInstance().FilterApprovedPatches(s_on_frame, sconfig.GetGameID(),
-                                                          sconfig.GetRevision());
-#endif  // USE_RETRO_ACHIEVEMENTS
-
-  // Check if I'm syncing Codes
-  if (Config::Get(Config::SESSION_CODE_SYNC_OVERRIDE))
-  {
-    Gecko::SetSyncedCodesAsActive();
-    ActionReplay::SetSyncedCodesAsActive();
-  }
-  else
-  {
-    Gecko::SetActiveCodes(Gecko::LoadCodes(globalIni, localIni), sconfig.GetGameID(),
-                          sconfig.GetRevision());
-    ActionReplay::LoadAndApplyCodes(globalIni, localIni, sconfig.GetGameID(),
-                                    sconfig.GetRevision());
-  }
-
-  const size_t enabled_patch_count =
-      std::ranges::count_if(s_on_frame, [](Patch patch) { return patch.enabled; });
-  if (enabled_patch_count > 0)
-  {
-    OSD::AddMessage(fmt::format("{} game patch(es) enabled", enabled_patch_count),
-                    OSD::Duration::NORMAL);
-  }
-
-  const size_t enabled_cheat_count = ActionReplay::CountEnabledCodes() + Gecko::CountEnabledCodes();
-  if (enabled_cheat_count > 0)
-    OSD::AddMessage(fmt::format("{} cheat(s) enabled", enabled_cheat_count), OSD::Duration::NORMAL);
+  // Only the built-in GX patcher may change game code in Falconnect.
 }
 
 static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Patch>& patches)
@@ -325,31 +289,6 @@ static void ApplyStartupPatches(Core::System& system)
 
 bool ApplyFramePatches(Core::System& system)
 {
-  const auto& ppc_state = system.GetPPCState();
-
-  ASSERT(Core::IsCPUThread());
-  Core::CPUThreadGuard guard(system);
-
-  // Because we're using the VI Interrupt to time this instead of patching the game with a
-  // callback hook we can end up catching the game in an exception vector.
-  // We deal with this by returning false so that SystemTimers will reschedule us in a few cycles
-  // where we can try again after the CPU hopefully returns back to the normal instruction flow.
-  if (!ppc_state.msr.DR || !ppc_state.msr.IR || !IsStackValid(guard))
-  {
-    DEBUG_LOG_FMT(ACTIONREPLAY,
-                  "Need to retry later. CPU configuration is currently incorrect. PC = {:#010x}, "
-                  "MSR = {:#010x}",
-                  ppc_state.pc, ppc_state.msr.Hex);
-    return false;
-  }
-
-  ApplyPatches(guard, s_on_frame);
-  ApplyMemoryPatches(guard, s_on_frame_memory);
-
-  // Run the Gecko code handler
-  Gecko::RunCodeHandler(guard);
-  ActionReplay::RunAllActive(guard);
-
   return true;
 }
 

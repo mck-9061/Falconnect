@@ -25,6 +25,7 @@
 #include "Core/AchievementManager.h"
 #include "Core/CommonTitles.h"
 #include "Core/Config/MainSettings.h"
+#include "Core/ConfigLoaders/BaseConfigLoader.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Debugger/RSO.h"
@@ -65,6 +66,7 @@
 #include "DolphinQt/Updater.h"
 
 #include "UICommon/AutoUpdate.h"
+#include "UICommon/FalconnectProfile.h"
 #include "UICommon/GameFile.h"
 
 #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
@@ -76,7 +78,7 @@ QPointer<MenuBar> MenuBar::s_menu_bar;
 QString MenuBar::GetSignatureSelector() const
 {
   return QStringLiteral("%1 (*.dsy);; %2 (*.csv);; %3 (*.mega)")
-      .arg(tr("Dolphin Signature File"), tr("Dolphin Signature CSV File"),
+      .arg(tr("Falconnect Dolphin Signature File"), tr("Falconnect Dolphin Signature CSV File"),
            tr("WiiTools Signature MEGA File"));
 }
 
@@ -89,6 +91,7 @@ MenuBar::MenuBar(QWidget* parent) : QMenuBar(parent)
   AddMovieMenu();
   AddOptionsMenu();
   AddToolsMenu();
+  AddFalconnectMenu();
   AddViewMenu();
   AddJITMenu();
   AddSymbolsMenu();
@@ -132,7 +135,7 @@ void MenuBar::OnEmulationStateChanged(Core::State state)
 
   const bool hardcore = AchievementManager::GetInstance().IsHardcoreModeActive();
   m_state_load_menu->setEnabled(running && !hardcore);
-  m_frame_advance_action->setEnabled(running && !hardcore);
+  m_frame_advance_action->setVisible(false);
 
   // Movie
   m_recording_read_only->setEnabled(running);
@@ -274,14 +277,109 @@ void MenuBar::AddFileMenu()
   m_exit_action->setShortcuts({QKeySequence::Quit, QKeySequence(Qt::ALT | Qt::Key_F4)});
 }
 
+void MenuBar::AddFalconnectMenu()
+{
+  auto* menu = addMenu(tr("&Falconnect"));
+  menu->addAction(tr("Falconnect Player Name…"), this, [this] {
+    bool accepted = false;
+    const QString name = QInputDialog::getText(
+        this, tr("Falconnect Player Name"),
+        tr("Name sent on your next server connection (1–32 ASCII characters).\n"
+           "Leave blank to use your GX license name:"), QLineEdit::Normal,
+        QString::fromStdString(Config::Get(Config::MAIN_FALCONNECT_NAME)), &accepted);
+    if (!accepted)
+      return;
+    const QString trimmed = name.trimmed();
+    const auto bytes = trimmed.toUtf8();
+    if (bytes.size() > 32 || std::any_of(bytes.begin(), bytes.end(),
+                                      [](unsigned char c) { return c < 32 || c > 126; }))
+    {
+      ModalMessageBox::warning(this, tr("Invalid name"),
+                               tr("Use at most 32 printable ASCII characters."));
+      return;
+    }
+    Config::SetBase(Config::MAIN_FALCONNECT_NAME, trimmed.toStdString());
+    Config::Save();
+  });
+
+
+  const auto import_profile = [this](UICommon::ProfileImportKind kind) {
+    if (Core::IsRunningOrStarting(Core::System::GetInstance()))
+      return;
+    auto source = UICommon::FindDolphinProfile();
+    if (!source)
+    {
+      const auto folder = DolphinFileDialog::getExistingDirectory(
+          this, tr("Select Regular Dolphin User Folder"), QDir::homePath());
+      if (folder.isEmpty())
+        return;
+      source = UICommon::DolphinProfilePaths{folder.toStdString(),
+                                             QString(folder + QStringLiteral("/Config")).toStdString()};
+    }
+    Config::Save();
+    const auto result = UICommon::ImportDolphinProfile(
+        *source, {File::GetUserPath(D_USER_IDX), File::GetUserPath(D_CONFIG_IDX)}, kind, true);
+    // Replace the layer so removed storage overrides cannot linger or be saved back on exit.
+    Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
+    if (result != UICommon::ProfileImportResult::Imported)
+    {
+      ModalMessageBox::warning(this, tr("Import Incomplete"),
+          tr("Could not finish importing from %1. Check folder access and free disk space. "
+             "Some files may already have been copied; you can retry the import.")
+              .arg(QString::fromStdString(source->user)));
+      return;
+    }
+    ModalMessageBox::information(this, tr("Import Complete"),
+        kind == UICommon::ProfileImportKind::Settings ?
+            tr("Dolphin settings were imported. Restart Falconnect Dolphin to apply all "
+               "controller and graphics settings. Gameplay restrictions remain enforced.") :
+            tr("Dolphin GameCube saves were imported. They will be used the next time you start GX. "
+               "Previous saves are kept in a GC.before-import folder inside your Falconnect profile."));
+  };
+  auto* settings = menu->addAction(tr("Force-Import Dolphin Settings…"), this,
+      [import_profile] { import_profile(UICommon::ProfileImportKind::Settings); });
+  settings->setToolTip(tr("Replace matching Falconnect settings with regular Dolphin settings."));
+  auto* saves = menu->addAction(tr("Force-Import Dolphin Saves…"), this,
+      [import_profile] { import_profile(UICommon::ProfileImportKind::Saves); });
+  saves->setToolTip(tr("Replace matching Falconnect GameCube saves with copies from regular Dolphin."));
+  auto* gx_save = menu->addAction(tr("Import GX Save from File…"), this, [this] {
+    if (Core::IsRunningOrStarting(Core::System::GetInstance()))
+      return;
+    const auto filename = DolphinFileDialog::getOpenFileName(
+        this, tr("Import NTSC F-Zero GX Save"), QDir::homePath(),
+        tr("GameCube Save Files (*.gci *.gcs *.sav)"));
+    if (filename.isEmpty())
+      return;
+    Config::Save();
+    const bool imported = UICommon::ImportGXSaveToProfile(filename.toStdString(),
+        {File::GetUserPath(D_USER_IDX), File::GetUserPath(D_CONFIG_IDX)});
+    Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
+    if (!imported)
+    {
+      ModalMessageBox::warning(this, tr("Import Failed"),
+          tr("Select a valid NTSC F-Zero GX (GFZE01) GCI, GCS, or SAV file, and check that "
+             "the Falconnect save folder is writable."));
+      return;
+    }
+    ModalMessageBox::information(this, tr("GX Save Imported"),
+        tr("The imported GX save will be used in Slot A the next time you start GX."));
+  });
+  const auto update = [settings, saves, gx_save](Core::State state) {
+    const bool enabled = state == Core::State::Uninitialized;
+    for (auto* action : {settings, saves, gx_save})
+      action->setEnabled(enabled);
+  };
+  connect(&Settings::Instance(), &Settings::EmulationStateChanged, this, update);
+  update(Core::GetState(Core::System::GetInstance()));
+}
+
 void MenuBar::AddToolsMenu()
 {
   QMenu* tools_menu = addMenu(tr("&Tools"));
-
   tools_menu->addAction(tr("&Resource Pack Manager"), this,
                         [this] { emit ShowResourcePackManager(); });
 
-  tools_menu->addAction(tr("&Cheats Manager"), this, [this] { emit ShowCheatsManager(); });
+
 
   tools_menu->addAction(tr("FIFO Player"), this, &MenuBar::ShowFIFOPlayer);
 
@@ -401,6 +499,9 @@ void MenuBar::AddEmulationMenu()
   AddStateLoadMenu(emu_menu);
   AddStateSaveMenu(emu_menu);
   AddStateSlotMenu(emu_menu);
+  m_state_load_menu->menuAction()->setVisible(false);
+  m_state_save_menu->menuAction()->setVisible(false);
+  m_state_slot_menu->menuAction()->setVisible(false);
   UpdateStateSlotMenu();
 
   for (QMenu* menu : {m_state_load_menu, m_state_save_menu, m_state_slot_menu})
@@ -645,7 +746,7 @@ void MenuBar::AddOptionsMenu()
   m_controllers_action =
       options_menu->addAction(tr("&Controller Settings"), this, &MenuBar::ConfigureControllers);
   options_menu->addAction(tr("&Hotkey Settings"), this, &MenuBar::ConfigureHotkeys);
-  options_menu->addAction(tr("&Free Look Settings"), this, &MenuBar::ConfigureFreelook);
+
 
   options_menu->addSeparator();
 
@@ -843,7 +944,7 @@ void MenuBar::AddShowRegionsMenu(QMenu* view_menu)
 void MenuBar::AddMovieMenu()
 {
   auto* const movie_menu{new QtUtils::NonAutodismissibleMenu(tr("&Movie"), this)};
-  addMenu(movie_menu);
+  // Retain actions for existing signal wiring, but omit the movie/TAS menu.
   m_recording_start =
       movie_menu->addAction(tr("Start Re&cording Input"), this, [this] { emit StartRecording(); });
   m_recording_play =
@@ -1770,7 +1871,7 @@ void MenuBar::LoadOtherSymbolMap()
 {
   const QString file = DolphinFileDialog::getOpenFileName(
       this, tr("Load Map File"), QString::fromStdString(File::GetUserPath(D_MAPS_IDX)),
-      tr("Dolphin Map File (*.map)"));
+      tr("Falconnect Dolphin Map File (*.map)"));
 
   if (file.isEmpty())
     return;
@@ -1787,7 +1888,7 @@ void MenuBar::LoadBadSymbolMap()
 {
   const QString file = DolphinFileDialog::getOpenFileName(
       this, tr("Load Map File"), QString::fromStdString(File::GetUserPath(D_MAPS_IDX)),
-      tr("Dolphin Map File (*.map)"));
+      tr("Falconnect Dolphin Map File (*.map)"));
 
   if (file.isEmpty())
     return;
@@ -1806,7 +1907,7 @@ void MenuBar::SaveSymbolMapAs()
   const QString file = DolphinFileDialog::getSaveFileName(
       this, tr("Save Map File"),
       QString::fromStdString(File::GetUserPath(D_MAPS_IDX) + "/" + title_id_str + ".map"),
-      tr("Dolphin Map File (*.map)"));
+      tr("Falconnect Dolphin Map File (*.map)"));
 
   if (file.isEmpty())
     return;

@@ -175,24 +175,24 @@ void PPCDebugInterface::ClearWatches()
 
 void PPCDebugInterface::SetPatch(const Core::CPUThreadGuard& guard, u32 address, u32 value)
 {
-  m_patches.SetPatch(guard, address, value);
+  // Read-only debugger in Falconnect.
 }
 
 void PPCDebugInterface::SetPatch(const Core::CPUThreadGuard& guard, u32 address,
                                  std::vector<u8> value)
 {
-  m_patches.SetPatch(guard, address, std::move(value));
+  // Read-only debugger in Falconnect.
 }
 
 void PPCDebugInterface::SetFramePatch(const Core::CPUThreadGuard& guard, u32 address, u32 value)
 {
-  m_patches.SetFramePatch(guard, address, value);
+  // Read-only debugger in Falconnect.
 }
 
 void PPCDebugInterface::SetFramePatch(const Core::CPUThreadGuard& guard, u32 address,
                                       std::vector<u8> value)
 {
-  m_patches.SetFramePatch(guard, address, std::move(value));
+  // Read-only debugger in Falconnect.
 }
 
 const std::vector<Common::Debug::MemoryPatch>& PPCDebugInterface::GetPatches() const
@@ -207,7 +207,7 @@ void PPCDebugInterface::UnsetPatch(const Core::CPUThreadGuard& guard, u32 addres
 
 void PPCDebugInterface::EnablePatch(const Core::CPUThreadGuard& guard, std::size_t index)
 {
-  m_patches.EnablePatch(guard, index);
+  // Read-only debugger in Falconnect.
 }
 
 void PPCDebugInterface::DisablePatch(const Core::CPUThreadGuard& guard, std::size_t index)
@@ -232,7 +232,7 @@ void PPCDebugInterface::ClearPatches(const Core::CPUThreadGuard& guard)
 
 void PPCDebugInterface::ApplyExistingPatch(const Core::CPUThreadGuard& guard, std::size_t index)
 {
-  m_patches.ApplyExistingPatch(guard, index);
+  // Read-only debugger in Falconnect.
 }
 
 Common::Debug::Threads PPCDebugInterface::GetThreads(const Core::CPUThreadGuard& guard) const
@@ -501,7 +501,7 @@ u32 PPCDebugInterface::GetPC() const
 
 void PPCDebugInterface::SetPC(u32 address)
 {
-  m_system.GetPPCState().pc = address;
+  // Read-only debugger in Falconnect.
 }
 
 void PPCDebugInterface::RunTo(u32 address)

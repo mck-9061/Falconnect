@@ -159,6 +159,17 @@ public class FalconnectServer {
     if (client.disconnected) return;
     System.out.println("Allocating " + client.socket.getRemoteSocketAddress() + "...");
 
+    // Reset and EndRace can both attempt to allocate the same live connection. The race that
+    // wins first is already the client's new lobby, so a later attempt must be a no-op rather
+    // than appending a second copy (or placing it in another lobby).
+    for (FalconnectRace race : currentRaces) {
+      if (race.HasClient(client)) {
+        client.setRace(race);
+        System.out.println("Client is already allocated to an existing race");
+        return;
+      }
+    }
+
     if (currentRaces.isEmpty()) {
     //if (false) {
       // Start a new race

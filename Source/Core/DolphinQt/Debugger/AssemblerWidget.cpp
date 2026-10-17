@@ -370,6 +370,7 @@ void AssemblerWidget::CreateWidgets()
   m_inject = m_toolbar->addAction(tr("Inject"), this, &AssemblerWidget::OnInject);
   m_save = m_toolbar->addAction(tr("Save"), this, &AssemblerWidget::OnSave);
 
+  m_inject->setVisible(false);
   m_inject->setEnabled(false);
   m_save->setEnabled(false);
   m_assemble->setEnabled(false);

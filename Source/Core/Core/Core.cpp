@@ -143,7 +143,7 @@ bool GetIsThrottlerTempDisabled()
 
 void SetIsThrottlerTempDisabled(bool disable)
 {
-  s_is_throttler_temp_disabled = disable;
+  s_is_throttler_temp_disabled = false;
 }
 
 void FrameUpdateOnCPUThread()
@@ -1019,26 +1019,7 @@ void HostDispatchJobs(Core::System& system)
 // NOTE: Host Thread
 void DoFrameStep(Core::System& system)
 {
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-  {
-    OSD::AddMessage("Frame stepping is disabled in RetroAchievements hardcore mode");
-    return;
-  }
-
-  std::lock_guard lock(s_core_mutex);
-
-  if (GetState(system) == State::Paused)
-  {
-    // if already paused, frame advance for 1 frame
-    s_stop_frame_step = false;
-    s_frame_step = true;
-    SetState(system, State::Running, false);
-  }
-  else if (!s_frame_step)
-  {
-    // if not paused yet, pause immediately instead
-    SetState(system, State::Paused);
-  }
+  // Frame advance is disabled in Falconnect.
 }
 
 void UpdateInputGate(bool require_focus, bool require_full_focus)

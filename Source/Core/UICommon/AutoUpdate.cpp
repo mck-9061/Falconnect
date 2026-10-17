@@ -142,11 +142,8 @@ std::string GenerateChangelog(const picojson::array& versions)
 
 bool AutoUpdateChecker::SystemSupportsAutoUpdates()
 {
-#if defined(AUTOUPDATE) && defined(OS_SUPPORTS_UPDATER)
-  return true;
-#else
+  // Upstream updates would replace this restricted Falconnect build.
   return false;
-#endif
 }
 
 static std::string GetPlatformID()

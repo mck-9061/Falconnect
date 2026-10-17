@@ -385,6 +385,9 @@ static u64 GetDiscEndOffset(const DiscIO::VolumeDisc& disc)
 void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
                            std::optional<std::vector<std::string>> auto_disc_change_paths = {})
 {
+  if (disc && disc->GetGameID() != "GFZE01")
+    return;
+
   bool had_disc = IsDiscInside();
   bool has_disc = static_cast<bool>(disc);
 

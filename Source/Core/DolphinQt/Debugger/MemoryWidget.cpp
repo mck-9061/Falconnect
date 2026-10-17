@@ -280,7 +280,7 @@ void MemoryWidget::CreateWidgets()
   QMenu* menu_import = new QMenu(tr("&Import"), menubar);
   menu_import->addAction(tr("&Load file to current address"), this,
                          &MemoryWidget::OnSetValueFromFile);
-  menubar->addMenu(menu_import);
+  menu_import->deleteLater();
 
   // View Menu
   auto* auto_update_action =
@@ -371,7 +371,7 @@ void MemoryWidget::ConnectWidgets()
 
   connect(m_input_combo, &QComboBox::currentIndexChanged, this,
           &MemoryWidget::ValidateAndPreviewInputValue);
-  connect(m_set_value, &QPushButton::clicked, this, &MemoryWidget::OnSetValue);
+  m_set_value->hide();
 
   connect(m_find_next, &QPushButton::clicked, this, &MemoryWidget::OnFindNextValue);
   connect(m_find_previous, &QPushButton::clicked, this, &MemoryWidget::OnFindPreviousValue);
@@ -740,100 +740,12 @@ QByteArray MemoryWidget::GetInputData() const
 
 void MemoryWidget::OnSetValue()
 {
-  if (!Core::IsRunning(m_system))
-    return;
-
-  auto target_addr = GetTargetAddress();
-
-  if (!target_addr.is_good_address)
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Bad address provided."));
-    return;
-  }
-
-  if (!target_addr.is_good_offset)
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Bad offset provided."));
-    return;
-  }
-
-  const QByteArray bytes = GetInputData();
-
-  // Invalid input will give an empty array.
-  if (bytes.isEmpty())
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Bad value provided."));
-    return;
-  }
-
-  const Core::CPUThreadGuard guard(m_system);
-
-  AddressSpace::Accessors* accessors = AddressSpace::GetAccessors(m_memory_view->GetAddressSpace());
-  u32 end_address = target_addr.address + static_cast<u32>(bytes.size()) - 1;
-
-  if (!accessors->IsValidAddress(guard, target_addr.address) ||
-      !accessors->IsValidAddress(guard, end_address))
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Target address range is invalid."));
-    return;
-  }
-
-  for (const char c : bytes)
-    accessors->WriteU8(guard, target_addr.address++, static_cast<u8>(c));
-
-  Update();
+  // Memory inspection is read-only in Falconnect.
 }
 
 void MemoryWidget::OnSetValueFromFile()
 {
-  if (!Core::IsRunning(m_system))
-    return;
-
-  auto target_addr = GetTargetAddress();
-
-  if (!target_addr.is_good_address)
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Bad address provided."));
-    return;
-  }
-
-  if (!target_addr.is_good_offset)
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Bad offset provided."));
-    return;
-  }
-
-  QString path = QFileDialog::getOpenFileName(this, tr("Select a file"), QDir::currentPath(),
-                                              tr("All files (*)"));
-  if (path.isNull())
-  {
-    return;
-  }
-
-  File::IOFile f(path.toStdString(), "rb");
-
-  if (!f)
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Unable to open file."));
-    return;
-  }
-
-  const u64 file_length = f.GetSize();
-  std::vector<u8> file_contents(file_length);
-  if (!f.ReadBytes(file_contents.data(), file_length))
-  {
-    ModalMessageBox::critical(this, tr("Error"), tr("Unable to read file."));
-    return;
-  }
-
-  AddressSpace::Accessors* accessors = AddressSpace::GetAccessors(m_memory_view->GetAddressSpace());
-
-  const Core::CPUThreadGuard guard(m_system);
-
-  for (u8 b : file_contents)
-    accessors->WriteU8(guard, target_addr.address++, b);
-
-  Update();
+  // Memory inspection is read-only in Falconnect.
 }
 
 void MemoryWidget::RefreshLabelBox()

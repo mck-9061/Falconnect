@@ -282,6 +282,8 @@ int GameListModel::columnCount(const QModelIndex& parent) const
 bool GameListModel::ShouldDisplayGameListItem(int index) const
 {
   const UICommon::GameFile& game = *m_games[index];
+  if (game.GetGameID() != "GFZE01")
+    return false;
 
   if (!m_term.isEmpty())
   {

@@ -219,6 +219,8 @@ void WatchWidget::Update()
     for (int column = 0; column < NUM_COLUMNS; column++)
     {
       auto* item = items[column];
+      if (column != COLUMN_INDEX_LABEL && column != COLUMN_INDEX_ADDRESS)
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
       item->setData(Qt::UserRole, i);
       item->setData(Qt::UserRole + 1, column);
       m_table->setItem(i, column, item);
@@ -381,6 +383,9 @@ void WatchWidget::OnItemChanged(QTableWidgetItem* item)
   int row = item->data(Qt::UserRole).toInt();
   int column = item->data(Qt::UserRole + 1).toInt();
 
+  if (column == COLUMN_INDEX_HEX || column == COLUMN_INDEX_DECIMAL || column == COLUMN_INDEX_LOCK)
+    return;
+
   if (row == -1)
   {
     if (!item->text().isEmpty())
@@ -454,15 +459,7 @@ void WatchWidget::OnItemChanged(QTableWidgetItem* item)
 
 void WatchWidget::LockWatchAddress(const Core::CPUThreadGuard& guard, u32 address)
 {
-  const std::string memory_data_as_string = PowerPC::MMU::HostGetString(guard, address, 4);
-
-  std::vector<u8> bytes;
-  for (const char c : memory_data_as_string)
-  {
-    bytes.push_back(static_cast<u8>(c));
-  }
-
-  m_system.GetPowerPC().GetDebugInterface().SetFramePatch(guard, address, bytes);
+  // Memory inspection is read-only in Falconnect.
 }
 
 void WatchWidget::DeleteSelectedWatches()

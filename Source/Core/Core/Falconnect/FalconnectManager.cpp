@@ -1,3 +1,5 @@
+#include "Common/Config/Config.h"
+#include "Core/Config/MainSettings.h"
 #include "FalconnectManager.h"
 
 #include <algorithm>
@@ -127,7 +129,10 @@ void FalconnectManager::Update() {
 
               FalconnectSocketManager::instance = new FalconnectSocketManager();
 
-              FalconnectSocketManager::instance->name = patcher->memoryReader->ReadName();
+              const std::string configured_name = Config::Get(Config::MAIN_FALCONNECT_NAME);
+              FalconnectSocketManager::instance->name = configured_name.empty() ?
+                  patcher->memoryReader->ReadName() :
+                  std::vector<u8>(configured_name.begin(), configured_name.end());
 
               std::thread socketThread(&FalconnectSocketManager::SocketThread, FalconnectSocketManager::instance);
 

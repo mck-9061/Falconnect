@@ -902,70 +902,7 @@ void MovieManager::ReadHeader()
 bool MovieManager::PlayInput(const std::string& movie_path,
                              std::optional<std::string>* savestate_path)
 {
-  if (m_play_mode != PlayMode::None)
-    return false;
-
-  File::IOFile recording_file(movie_path, "rb");
-  if (!recording_file.ReadArray(&m_temp_header, 1))
-    return false;
-
-  if (!IsMovieHeader(m_temp_header.filetype))
-  {
-    PanicAlertFmtT("Invalid recording file");
-    return false;
-  }
-
-  ReadHeader();
-
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-    return false;
-
-  m_total_frames = m_temp_header.frameCount;
-  m_total_lag_count = m_temp_header.lagCount;
-  m_total_input_count = m_temp_header.inputCount;
-  m_total_tick_count = m_temp_header.tickCount;
-  m_current_frame = 0;
-  m_current_lag_count = 0;
-  m_current_input_count = 0;
-
-  m_play_mode = PlayMode::Playing;
-
-  // Wiimotes cause desync issues if they're not reset before launching the game
-  ::Wiimote::ResetAllWiimotes();
-
-  Core::UpdateWantDeterminism(m_system);
-
-  m_temp_input.resize(recording_file.GetSize() - 256);
-  recording_file.ReadBytes(m_temp_input.data(), m_temp_input.size());
-  m_current_byte = 0;
-  recording_file.Close();
-
-  // Load savestate (and skip to frame data)
-  if (m_temp_header.bFromSaveState && savestate_path)
-  {
-    const std::string savestate_path_temp = movie_path + ".sav";
-    if (File::Exists(savestate_path_temp))
-    {
-      *savestate_path = savestate_path_temp;
-    }
-    else
-    {
-      PanicAlertFmtT("Movie {0} indicates that it starts from a savestate, but {1} doesn't exist. "
-                     "The movie will likely not sync!",
-                     movie_path, savestate_path_temp);
-    }
-
-    m_recording_from_save_state = true;
-
-#ifdef USE_RETRO_ACHIEVEMENTS
-    // On the chance someone tries to re-enable before the TAS can start
-    Config::SetBase(Config::RA_HARDCORE_ENABLED, false);
-#endif  // USE_RETRO_ACHIEVEMENTS
-
-    LoadInput(movie_path);
-  }
-
-  return true;
+  return false;
 }
 
 void MovieManager::DoState(PointerWrap& p)

@@ -24,7 +24,8 @@ enum class ToServerPacketType : char {
     RESET,
     DISCONNECT,
     NAME,
-    UDP_PING
+    UDP_PING,
+    TRACK_VOTE
 };
 
 #endif //DOLPHIN_EMU_PACKETTYPE_H

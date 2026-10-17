@@ -184,7 +184,7 @@ void FalconnectManager::Update() {
         patcher->DisableOptionsMenuControl();
 
         // Disable AI control
-        //patcher->DisableAIControl();
+        patcher->DisableAIControl();
 
         // Disable countdown
         patcher->DisableCountdown();
@@ -305,8 +305,8 @@ void FalconnectManager::Update() {
             FalconnectSocketManager::instance->hasGridded = true;
 
             // testing
-            //for (const u8 cpuRacer : cpu_racer_indices)
-                //patcher->EnableAIControlFor(1, 29);
+            for (const u8 cpuRacer : cpu_racer_indices)
+                patcher->EnableAIControlFor(cpuRacer, 1);
 
             //patcher->EnableAIControlFor(0, 1);
         }
@@ -337,8 +337,8 @@ void FalconnectManager::Update() {
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Update frames to send
         const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
-        // for (const u8 cpuRacer : cpu_racer_indices)
-        //     patcher->EnableAIControlFor(cpuRacer, 1);
+        for (const u8 cpuRacer : cpu_racer_indices)
+            patcher->EnableAIControlFor(cpuRacer, 1);
 
         std::vector<RacerMemoryBlock> frames;
         const auto sample_racer = [&](u8 racer) {
@@ -373,18 +373,18 @@ void FalconnectManager::Update() {
         // We receive server snapshots more often than GX renders frames, so only interpret it as
         // stopped after a full second without an advance. This gives the game AI control of the
         // finished local machine while the player waits for the rest of the field.
-        // if (local_frame_count > m_last_local_race_frame_count) {
-        //     m_last_local_race_frame_count = local_frame_count;
-        //     m_local_race_frame_last_advanced = received_snapshot_time;
-        //     m_local_race_frame_count_started = true;
-        // } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
-        //            received_snapshot_time - m_local_race_frame_last_advanced >=
-        //                std::chrono::seconds(1)) {
-        //     patcher->EnableAIControlFor(0, 1);
-        //     m_local_racer_ai_enabled = true;
-        //     INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
-        //                  local_frame_count);
-        // }
+        if (local_frame_count > m_last_local_race_frame_count) {
+            m_last_local_race_frame_count = local_frame_count;
+            m_local_race_frame_last_advanced = received_snapshot_time;
+            m_local_race_frame_count_started = true;
+        } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
+                   received_snapshot_time - m_local_race_frame_last_advanced >=
+                       std::chrono::seconds(1)) {
+            patcher->EnableAIControlFor(0, 1);
+            m_local_racer_ai_enabled = true;
+            INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
+                         local_frame_count);
+        }
 
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
         const u8 human_racer_count = std::min<u8>(
@@ -451,6 +451,15 @@ void FalconnectManager::Update() {
                 static_cast<u8>(received_racer.source_sequence >> 24));
             if (update)
                 patcher->SetRacerData(racer_num, update->block, update->write_position, update->center);
+            if (interpolator.HasStarted() && (!update || !update->write_position)) {
+                // Update runs at frame end: GX has already simulated this expected frame.
+                // Capture it now, before the next frame advances, as the next left endpoint.
+                const std::unique_ptr<RacerMemoryBlock> simulated(
+                    patcher->memoryReader->ReadRacerData(racer_num));
+                interpolator.RecordSimulatedPosition({simulated->centerPosition[0],
+                                                     simulated->centerPosition[1],
+                                                     simulated->centerPosition[2]});
+            }
         }
 
         // Once the server has timed out or removed a remote player, their record becomes absent

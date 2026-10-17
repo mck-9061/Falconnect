@@ -24,6 +24,15 @@ public:
 
   void Reset() { *this = {}; }
   double ExpectedFrame() const { return m_expected_frame; }
+  bool HasStarted() const { return m_started; }
+
+  // Called at frame end only when Step did not write a position. Keep the GX position for
+  // this expected frame, rather than stretching a later interpolation back to stale wire data.
+  void RecordSimulatedPosition(const std::array<u32, 3>& center)
+  {
+    if (m_started)
+      m_simulated_anchor = SimulatedAnchor{m_expected_frame, center};
+  }
 
   std::optional<Update> Step(const RacerMemoryBlock* incoming, u8 owner = 0)
   {
@@ -53,6 +62,7 @@ public:
         if (m_samples.size() == 1)
         {
           m_expected_frame = frame;
+          m_simulated_anchor.reset();
           m_ahead_samples = 0;
           return Direct(*incoming);
         }
@@ -72,28 +82,46 @@ public:
     }
 
     // Keep the closest real sample on either side of the expected frame.
+    bool crossed_endpoint = false;
     while (m_samples.size() > 1 && m_samples[1].raceTimeFrameCount <= m_expected_frame)
+    {
       m_samples.pop_front();
+      crossed_endpoint = true;
+    }
     if (m_samples.size() == 1)
     {
       const auto& latest = m_samples.front();
-      if (m_expected_frame == latest.raceTimeFrameCount)
+      if (incoming || crossed_endpoint || m_expected_frame == latest.raceTimeFrameCount)
+      {
+        // The receive stream can stay behind our predicted frame after one missed update.
+        // Recover from its newest authoritative pose instead of suppressing full writes
+        // forever (the patcher's full flag gates rotation and velocity as well as position).
+        // Also commit a buffered endpoint when fractional catch-up steps past it.
+        m_expected_frame = latest.raceTimeFrameCount;
+        m_simulated_anchor.reset();
+        m_ahead_samples = 0;
         return Direct(latest);
-      // Late packets still carry current inputs/state/timing, but cannot supply a future
-      // endpoint. Apply those fields once without rewinding position or extrapolating.
-      if (incoming)
-        return Update{*incoming, {}, false};
+      }
       return std::nullopt;
     }
 
     const auto& left = m_samples[0];
     const auto& right = m_samples[1];
-    const double fraction = (m_expected_frame - left.raceTimeFrameCount) /
-                            (right.raceTimeFrameCount - left.raceTimeFrameCount);
+    double left_frame = left.raceTimeFrameCount;
+    std::array<u32, 3> left_center = {
+        left.centerPosition[0], left.centerPosition[1], left.centerPosition[2]};
+    if (m_simulated_anchor && m_simulated_anchor->frame > left_frame &&
+        m_simulated_anchor->frame < right.raceTimeFrameCount)
+    {
+      left_frame = m_simulated_anchor->frame;
+      left_center = m_simulated_anchor->center;
+    }
+    const double fraction = (m_expected_frame - left_frame) /
+                            (right.raceTimeFrameCount - left_frame);
     Update update{left, {}, true};
     for (std::size_t axis = 0; axis < update.center.size(); ++axis)
     {
-      const float a = std::bit_cast<float>(left.centerPosition[axis]);
+      const float a = std::bit_cast<float>(left_center[axis]);
       const float b = std::bit_cast<float>(right.centerPosition[axis]);
       if (!std::isfinite(a) || !std::isfinite(b))
         return std::nullopt;
@@ -114,6 +142,12 @@ private:
   static constexpr std::size_t MAX_SAMPLES = 128;
   static constexpr unsigned CATCH_UP_SAMPLES = 8;
   static constexpr double MAX_EXTRA_STEP = 0.25;
+  struct SimulatedAnchor
+  {
+    double frame;
+    std::array<u32, 3> center;
+  };
+  std::optional<SimulatedAnchor> m_simulated_anchor;
   std::deque<RacerMemoryBlock> m_samples;
   double m_expected_frame = 0;
   unsigned m_ahead_samples = 0;

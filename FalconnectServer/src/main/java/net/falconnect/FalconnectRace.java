@@ -463,9 +463,9 @@ public class FalconnectRace extends Thread {
     long now = System.currentTimeMillis();
     for (FalconnectClientConnection client : getClients()) {
       if (!client.disconnected && client.state != ClientState.IN_MENUS &&
-          now - client.lastUdpRacePacketObservedAt > UDP_TIMEOUT_MILLIS) {
+          now - client.getLastUdpActivityAt() > UDP_TIMEOUT_MILLIS) {
         System.out.println("Client timed out during race: " + client.playerNum);
-        DisconnectClient(client, "No race data received for 5 seconds.");
+        DisconnectClient(client, "No UDP activity received for 5 seconds.");
       }
     }
   }
@@ -482,7 +482,7 @@ public class FalconnectRace extends Thread {
       }
 
       boolean hasStoppedSendingRaceData = client.hasReceivedRaceData &&
-          now - client.lastUdpPacketReceivedAt > CPU_HANDOFF_TIMEOUT_MILLIS;
+          now - client.getLastAcceptedUdpActivityAt() > CPU_HANDOFF_TIMEOUT_MILLIS;
       if (!client.cpuHandoffActive && hasStoppedSendingRaceData &&
           !client.getCpuRacerIndices().isEmpty()) {
         TransferCpuAssignments(client, true);
@@ -548,7 +548,7 @@ public class FalconnectRace extends Thread {
     // Once the race is running, UDP is the authoritative liveness signal; TCP state changes can
     // lag behind the transition to Course Select.
     return client.hasReceivedRaceData &&
-        now - client.lastUdpPacketReceivedAt <= CPU_HANDOFF_TIMEOUT_MILLIS;
+        now - client.getLastAcceptedUdpActivityAt() <= CPU_HANDOFF_TIMEOUT_MILLIS;
   }
 
   private void RestoreHomeCpuAssignment(FalconnectClientConnection recoveringClient) throws InterruptedException {

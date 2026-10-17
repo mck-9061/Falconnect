@@ -3,8 +3,6 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <deque>
-#include <unordered_map>
 #include <utility>
 
 #include "GXMemoryPatcher.h"
@@ -53,20 +51,6 @@ private:
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
     u16 displayedForceRaceStartCountdownSeconds = 0;
-    using FrameDifferenceSample = std::pair<std::chrono::steady_clock::time_point, s64>;
-    struct DelayedRacerData {
-        RacerMemoryBlock block{};
-        u8 racer_num = 0;
-        s64 updates_remaining = 0;
-    };
-    static constexpr auto FRAME_DIFFERENCE_WINDOW = std::chrono::seconds(5);
-    // A received snapshot updates position and rotation when its frame delay matches the rolling
-    // five-second mode, or after a matching number of update deferrals when it is newer.
-    std::array<std::deque<FrameDifferenceSample>, 30> m_remote_frame_differences{};
-    std::array<std::unordered_map<s64, std::size_t>, 30> m_remote_frame_difference_counts{};
-    std::array<s64, 30> m_modal_frame_differences{};
-    std::array<bool, 30> m_has_modal_frame_difference{};
-    std::array<std::deque<DelayedRacerData>, 30> m_delayed_newer_racer_data{};
     u32 m_last_local_race_frame_count = 0;
     std::chrono::steady_clock::time_point m_local_race_frame_last_advanced{};
     bool m_local_race_frame_count_started = false;

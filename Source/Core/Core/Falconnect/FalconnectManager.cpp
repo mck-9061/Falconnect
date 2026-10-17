@@ -4,6 +4,7 @@
 #include <bit>
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <thread>
 
 #include <fmt/format.h>
@@ -224,14 +225,6 @@ void FalconnectManager::Update() {
                      FalconnectSocketManager::instance->playerNumber);
         currentState = GameState::RACE_LOADED;
         readCounter = 0;
-        for (auto& frame_differences : m_remote_frame_differences)
-            frame_differences.clear();
-        for (auto& frame_difference_counts : m_remote_frame_difference_counts)
-            frame_difference_counts.clear();
-        m_has_modal_frame_difference.fill(false);
-        m_modal_frame_differences.fill(0);
-        for (auto& delayed_racer_data : m_delayed_newer_racer_data)
-            delayed_racer_data.clear();
         m_last_local_race_frame_count = 0;
         m_local_race_frame_last_advanced = {};
         m_local_race_frame_count_started = false;
@@ -304,15 +297,6 @@ void FalconnectManager::Update() {
 
             const auto cpu_racer_indices = FalconnectSocketManager::instance->GetCpuRacerIndices();
 
-            for (u8 i = 0; i < cpu_racer_indices.size(); i++) {
-                const u8 cpuRacer = cpu_racer_indices[i];
-                FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
-                // INFO_LOG_FMT(FALCONNECT, "Sent frame {}", i);
-            }
-
-            FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-            // INFO_LOG_FMT(FALCONNECT, "Sent all frames!");
-
             INFO_LOG_FMT(FALCONNECT, "LOAD gridded player={} owned_cpus={}",
                          FalconnectSocketManager::instance->playerNumber, cpu_racer_indices.size());
             currentState = GameState::RACE_GRIDDED;
@@ -354,14 +338,15 @@ void FalconnectManager::Update() {
         for (const u8 cpuRacer : cpu_racer_indices)
             patcher->EnableAIControlFor(cpuRacer, 1);
 
-         FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(0), 0);
-
-         for (u8 i = 0; i < cpu_racer_indices.size(); i++) {
-             //INFO_LOG_FMT(FALCONNECT, "Reading racer at index {}", FalconnectSocketManager::instance->cpuStartIndex + i);
-             const u8 cpuRacer = cpu_racer_indices[i];
-             FalconnectSocketManager::instance->SendFrame(patcher->memoryReader->ReadRacerData(cpuRacer), i + 1);
-         }
-        //INFO_LOG_FMT(FALCONNECT, "Frame sent");
+        std::vector<RacerMemoryBlock> frames;
+        const auto sample_racer = [&](u8 racer) {
+            const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
+            frames.push_back(*block);
+        };
+        sample_racer(0);
+        for (const u8 racer : cpu_racer_indices)
+            sample_racer(racer);
+        FalconnectSocketManager::instance->PublishRaceData(frames, cpu_racer_indices);
 
         const u16 ping = FalconnectSocketManager::instance->ping.load();
         const u16 packetRate = FalconnectSocketManager::instance->packetRate.load();
@@ -374,14 +359,11 @@ void FalconnectManager::Update() {
         FalconnectSocketManager::ReceivedRaceData received_race_data;
         // This runs on the emulation update path. Never stall it while the freshly-started UDP
         // worker establishes its first exchange; DataThread owns the timed failure path.
-        if (!FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data))
-            return;
-        FalconnectSocketManager::instance->shouldSendData = true;
+        FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
 
         // Use one local sample for the whole received server snapshot to compare its timing data
         // against each remote racer. Accepted racer positions are written as received.
-        const RacerMemoryBlock* our_actual_data = patcher->memoryReader->ReadRacerData(0);
-        const u32 local_frame_count = our_actual_data->raceTimeFrameCount;
+        const u32 local_frame_count = frames.front().raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
 
         // GX stops increasing the local race-time frame counter once the local racer finishes.
@@ -451,108 +433,17 @@ void FalconnectManager::Update() {
                     update_human_finish_state(source_racer_slot, racer_block.raceTimeFrameCount);
                 }
 
-                if (FalconnectSocketManager::instance->OwnsCpuRacer(racer_num)) {
-                    m_delayed_newer_racer_data[i].clear();
+                if (!received_racer.pending ||
+                    FalconnectSocketManager::instance->OwnsCpuRacer(racer_num))
                     continue;
-                }
-
-                const s64 frame_difference = static_cast<s64>(racer_block.raceTimeFrameCount) -
-                    static_cast<s64>(local_frame_count);
-                auto& modal_frame_difference = m_modal_frame_differences[i];
-                const bool race_frame_count_started = local_frame_count > 0 &&
-                                                     racer_block.raceTimeFrameCount > 0;
-                bool accepts_received_data = true;
-                bool defers_received_data = false;
-                std::deque<DelayedRacerData> delayed_data_to_apply;
-                auto& delayed_racer_data = m_delayed_newer_racer_data[i];
-
-                if (race_frame_count_started) {
-                    for (auto delayed_data = delayed_racer_data.begin();
-                         delayed_data != delayed_racer_data.end();) {
-                        if (--delayed_data->updates_remaining <= 0) {
-                            delayed_data_to_apply.push_back(*delayed_data);
-                            delayed_data = delayed_racer_data.erase(delayed_data);
-                        } else {
-                            ++delayed_data;
-                        }
-                    }
-
-                    auto& frame_differences = m_remote_frame_differences[i];
-                    // Rejected snapshots enter the window before we calculate the mode. This
-                    // lets a sustained change in ping become the new accepted delay.
-                    frame_differences.emplace_back(received_snapshot_time, frame_difference);
-                    auto& frame_difference_counts = m_remote_frame_difference_counts[i];
-                    ++frame_difference_counts[frame_difference];
-
-                    while (!frame_differences.empty() &&
-                           received_snapshot_time - frame_differences.front().first >
-                               FRAME_DIFFERENCE_WINDOW) {
-                        const s64 expired_difference = frame_differences.front().second;
-                        auto expired_count = frame_difference_counts.find(expired_difference);
-                        if (--expired_count->second == 0)
-                            frame_difference_counts.erase(expired_count);
-                        frame_differences.pop_front();
-                    }
-
-                    std::size_t maximum_count = 0;
-                    for (const auto& [difference, count] : frame_difference_counts)
-                        maximum_count = std::max(maximum_count, count);
-
-                    const auto modal_count = frame_difference_counts.find(modal_frame_difference);
-                    if (!m_has_modal_frame_difference[i] ||
-                        modal_count == frame_difference_counts.end() ||
-                        modal_count->second < maximum_count) {
-                        for (const auto& [difference, count] : frame_difference_counts) {
-                            if (count == maximum_count) {
-                                modal_frame_difference = difference;
-                                break;
-                            }
-                        }
-                        m_has_modal_frame_difference[i] = true;
-                    }
-
-                    accepts_received_data = frame_difference == modal_frame_difference;
-
-                    // A smaller difference is a newer snapshot. Hold it for exactly the number
-                    // of updates by which it is newer, so it reaches the game at the modal delay.
-                    defers_received_data = frame_difference < modal_frame_difference;
-                    if (defers_received_data) {
-                        delayed_racer_data.push_back({
-                            racer_block,
-                            racer_num,
-                            modal_frame_difference - frame_difference,
-                        });
-                    }
-                } else {
-                    delayed_racer_data.clear();
-                }
 
                 const std::array<u32, 3> center_position = {
                     racer_block.centerPosition[0],
                     racer_block.centerPosition[1],
                     racer_block.centerPosition[2],
                 };
-
-                // Apply every snapshot whose delay has elapsed. A current snapshot that is
-                // itself delayed is not written until its own delay expires.
-                for (const DelayedRacerData& delayed_data : delayed_data_to_apply) {
-                    const std::array<u32, 3> delayed_center_position = {
-                        delayed_data.block.centerPosition[0],
-                        delayed_data.block.centerPosition[1],
-                        delayed_data.block.centerPosition[2],
-                    };
-                    patcher->SetRacerData(delayed_data.racer_num, delayed_data.block, true,
-                                          delayed_center_position);
-                    patcher->EnableAIControlFor(delayed_data.racer_num, 1);
-                }
-
-                if (!defers_received_data && (delayed_data_to_apply.empty() && accepts_received_data)) {
-                    patcher->SetRacerData(racer_num, racer_block,
-                                          true,
-                                          center_position);
-
-                    patcher->EnableAIControlFor(racer_num, 1);
-                }
+                patcher->SetRacerData(racer_num, racer_block, true, center_position);
+                patcher->EnableAIControlFor(racer_num, 1);
             }
         }
 
@@ -606,36 +497,6 @@ void FalconnectManager::Update() {
 
         std::string race_status = "Falconnect | Ping: " + ping_display + " | PR: " +
                                   std::to_string(packetRate) + "p/s";
-        long double total_variance = 0;
-        std::size_t remote_player_count = 0;
-        for (u8 player_racer = 0;
-             player_racer < FalconnectSocketManager::instance->totalPlayerCount;
-             player_racer++) {
-            if (player_racer == local_human_racer)
-                continue;
-
-            const auto& frame_differences = m_remote_frame_differences[player_racer];
-            if (frame_differences.empty())
-                continue;
-
-            long double mean = 0;
-            for (const FrameDifferenceSample& sample : frame_differences)
-                mean += sample.second;
-            mean /= frame_differences.size();
-
-            long double variance = 0;
-            for (const FrameDifferenceSample& sample : frame_differences) {
-                const long double difference_from_mean = sample.second - mean;
-                variance += difference_from_mean * difference_from_mean;
-            }
-            total_variance += variance / frame_differences.size();
-            remote_player_count++;
-        }
-        if (remote_player_count != 0) {
-            // Mean population variance keeps the score comparable as players join or leave.
-            const long double connection_stability = total_variance / remote_player_count;
-            race_status += fmt::format(" | CS: {:.2f}", connection_stability);
-        }
         patcher->SetRenderedText(race_status);
 
         // Check if we've exited the race to the menu

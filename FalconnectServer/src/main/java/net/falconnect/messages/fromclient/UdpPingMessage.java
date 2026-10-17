@@ -15,6 +15,7 @@ public class UdpPingMessage extends FromClientMessage {
   public void ProcessMessage() {
     if (data.length != 5) return;
 
+    origin.noteUdpHeartbeat();
     data[0] = (byte) ToClientPacketType.UDP_PONG.ordinal();
     try {
       origin.SendUdpPacket(data);

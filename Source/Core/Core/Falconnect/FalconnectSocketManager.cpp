@@ -76,9 +76,25 @@ void FalconnectSocketManager::Start() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-void FalconnectSocketManager::SendFrame(RacerMemoryBlock *frame, const u8 index) {
-    framesToSend[index] = frame;
-    doneFirst = true;
+void FalconnectSocketManager::PublishRaceData(const std::vector<RacerMemoryBlock>& frames,
+                                              const std::vector<u8>& cpu_indices)
+{
+    const std::lock_guard<std::mutex> assignment_lock(m_cpu_assignment_mutex);
+    if (cpu_indices != m_cpu_racer_indices || frames.size() != cpu_indices.size() + 1)
+        return;
+
+    std::vector<u8> payload;
+    payload.reserve(frames.size() * RacerMemoryBlock::SOCKET_DATA_SIZE);
+    for (const auto& frame : frames) {
+        const auto bytes = frame.GetSocketData();
+        payload.insert(payload.end(), bytes.begin(), bytes.end());
+    }
+    const std::lock_guard<std::mutex> lock(m_outgoing_mutex);
+    if (payload == m_last_published_data)
+        return;
+    m_last_published_data = payload;
+    m_outgoing_frames.push_back(std::move(payload));
+    m_outgoing_changed.notify_one();
 }
 
 bool FalconnectSocketManager::OwnsCpuRacer(const u8 racer) const
@@ -101,7 +117,7 @@ bool FalconnectSocketManager::ConsumeReceivedRaceData(ReceivedRaceData* received
 
     *received_data = m_received_race_data;
     for (ReceivedRacerData& received_racer : m_received_race_data.racers)
-        received_racer.position_updated = false;
+        received_racer.pending = false;
     m_received_race_data_ready = false;
     return true;
 }
@@ -134,16 +150,17 @@ void FalconnectSocketManager::SetCpuRacerIndices(std::vector<u8> indices)
             if (received_racer.valid && received_racer.racer_index == racer)
             {
                 received_racer.valid = false;
-                received_racer.position_updated = false;
+                received_racer.pending = false;
             }
         }
     }
 
-    // CPU records are positional in an outgoing UDP packet. Do not send frames prepared for the
-    // previous assignment under the new assignment's slot IDs; wait for the next game update to
-    // populate a fresh set.
-    for (std::size_t i = 1; i < std::size(framesToSend); i++)
-        framesToSend[i] = nullptr;
+    // Discard snapshots captured under the previous positional CPU assignment.
+    {
+        const std::lock_guard<std::mutex> outgoing_lock(m_outgoing_mutex);
+        m_outgoing_frames.clear();
+        m_last_published_data.clear();
+    }
 
     ourCpus = static_cast<u8>(indices.size());
     m_cpu_racer_indices = std::move(indices);
@@ -360,8 +377,12 @@ void FalconnectSocketManager::SocketThread() {
                 m_has_sent_race_data_for_generation = false;
                 lastPacketNum = 0;
                 hasReceivedAnyDataEver = false;
-                for (RacerMemoryBlock*& frame : framesToSend)
-                    frame = nullptr;
+                {
+                    const std::lock_guard<std::mutex> lock(m_outgoing_mutex);
+                    m_outgoing_frames.clear();
+                    m_last_published_data.clear();
+                }
+                m_outgoing_changed.notify_all();
                 {
                     const std::lock_guard<std::mutex> lock(m_received_race_data_mutex);
                     m_received_race_data = {};
@@ -570,7 +591,7 @@ void FalconnectSocketManager::SocketThread() {
 
 void FalconnectSocketManager::SendUdpPingIfDue()
 {
-    constexpr auto ping_interval = std::chrono::seconds(2);
+    constexpr auto ping_interval = std::chrono::milliseconds(250);
     const auto now = std::chrono::steady_clock::now();
     std::array<char, RACE_PACKET_HEADER_SIZE> data{};
 
@@ -596,115 +617,35 @@ void FalconnectSocketManager::SendUdpPingIfDue()
 }
 
 void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
-    u32 sentCount = 0;
-    auto last_timing_log = std::chrono::steady_clock::time_point{};
-
+    u32 sent_count = 0;
     while (shouldRunDataThread.load() && m_race_data_generation.load() == race_generation) {
-        shouldSendData = false;
-
-        // START_RACE arrives on the socket thread before the emulation update applies the
-        // countdown and switches to RACING. Yield here instead of busy-spinning through that
-        // transition, which can starve the game thread on a subsequent race.
-        if (FalconnectManager::instance->currentState != GameState::RACING) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
-        }
         SendUdpPingIfDue();
-        // Send our frames
-        sentCount++;
-
-        while (framesToSend[0] == nullptr) {
-            if (!shouldRunDataThread.load() ||
-                m_race_data_generation.load() != race_generation) {
-                return;
-            }
-            // INFO_LOG_FMT(FALCONNECT, "Bad frame!");
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-
-        // A newer START_RACE can arrive while waiting for a frame. Do not let this retired
-        // worker send even one packet from its old sequence into the new race.
-        if (m_race_data_generation.load() != race_generation)
-            break;
-
-        //INFO_LOG_FMT(FALCONNECT, "Sending...");
-
-        // Send frame to be sent to remote
-        lockFrameToSend = true;
-
-        char data[CLIENT_FULL_RACE_PACKET_SIZE] = { 0 };
-        data[0] = static_cast<char>(FromServerPacketType::FULL_DATA);
-
-        data[1] = static_cast<char>((sentCount >> 24) & 0xff);
-        data[2] = static_cast<char>((sentCount >> 16) & 0xff);
-        data[3] = static_cast<char>((sentCount >> 8) & 0xff);
-        data[4] = static_cast<char>(sentCount & 0xff);
-
-        const auto cpu_racer_indices = GetCpuRacerIndices();
-        const std::size_t racer_count = cpu_racer_indices.size() + 1;
-        const auto now = std::chrono::steady_clock::now();
-        const bool log_timing = now - last_timing_log >= std::chrono::seconds(1);
-        if (log_timing) last_timing_log = now;
-        bool missing_frame = false;
-        for (u8 frame_index = 0; frame_index < racer_count; frame_index++) {
-            if (framesToSend[frame_index] == nullptr) {
-                if (log_timing)
-                    INFO_LOG_FMT(FALCONNECT,
-                                 "TIMING TX player={} seq={} action=missing-frame slot={} racers={}",
-                                 playerNumber, sentCount, frame_index, racer_count);
-                missing_frame = true;
-                break;
-            }
-        }
-        if (missing_frame) {
-            lockFrameToSend = false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::unique_lock<std::mutex> lock(m_outgoing_mutex);
+        // The timeout only services liveness pings; race packets are change-driven.
+        m_outgoing_changed.wait_for(lock, std::chrono::milliseconds(100), [&] {
+            return !m_outgoing_frames.empty() || !shouldRunDataThread.load() ||
+                   m_race_data_generation.load() != race_generation;
+        });
+        if (!shouldRunDataThread.load() || m_race_data_generation.load() != race_generation)
+            return;
+        if (m_outgoing_frames.empty())
             continue;
-        }
 
-        int i = 0;
-        int j = 1;
-        for (const RacerMemoryBlock* frame : framesToSend) {
-            if (j > racer_count) break;
-
-            const std::vector<u8> dataToSend = frame->GetSocketData();
-
-            std::memcpy(data + RACE_PACKET_HEADER_SIZE + i, dataToSend.data(), dataToSend.size());
-
-            if (log_timing) {
-                const u8 local_racer = j == 1 ? 0 : cpu_racer_indices[j - 2];
-                const u8 server_racer = j == 1 ? playerNumber - 1 : local_racer;
-                INFO_LOG_FMT(FALCONNECT,
-                             "TIMING TX player={} seq={} slot={} kind={} local_racer={} "
-                             "server_racer={} lap_data=[{:08x},{:08x},{:08x}] total_time_frames={}",
-                             playerNumber, sentCount, j - 1, j == 1 ? "human" : "cpu", local_racer,
-                             server_racer, frame->timingData[0], frame->timingData[1],
-                             frame->timingData[2], frame->raceTimeFrameCount);
-            }
-
-            i += RacerMemoryBlock::SOCKET_DATA_SIZE;
-            j++;
-        }
-
-        lockFrameToSend = false;
-
-        const auto sent_bytes = sendto(serverUdpSocket,
-            data,
-            static_cast<int>(ClientRacePacketSize(racer_count)),
-            0,
-            reinterpret_cast<sockaddr *>(&serverUdpAddress),
+        auto payload = std::move(m_outgoing_frames.front());
+        m_outgoing_frames.pop_front();
+        std::vector<u8> data(RACE_PACKET_HEADER_SIZE + payload.size());
+        data[0] = static_cast<u8>(FromServerPacketType::FULL_DATA);
+        ++sent_count;
+        data[1] = static_cast<u8>(sent_count >> 24);
+        data[2] = static_cast<u8>(sent_count >> 16);
+        data[3] = static_cast<u8>(sent_count >> 8);
+        data[4] = static_cast<u8>(sent_count);
+        std::copy(payload.begin(), payload.end(), data.begin() + RACE_PACKET_HEADER_SIZE);
+        const auto sent_bytes = sendto(serverUdpSocket, reinterpret_cast<const char*>(data.data()),
+            static_cast<int>(data.size()), 0, reinterpret_cast<sockaddr*>(&serverUdpAddress),
             sizeof(serverUdpAddress));
-
-        if (sent_bytes == static_cast<int>(ClientRacePacketSize(racer_count)) &&
-            m_race_data_generation.load() == race_generation) {
+        if (sent_bytes == static_cast<int>(data.size()))
             m_has_sent_race_data_for_generation = true;
-        }
-
-        if (log_timing)
-            INFO_LOG_FMT(FALCONNECT, "TIMING TX RESULT player={} seq={} sent_bytes={} expected_bytes={}",
-                         playerNumber, sentCount, sent_bytes, ClientRacePacketSize(racer_count));
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
     }
 }
 
@@ -858,30 +799,7 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
             } else {
                 const std::unique_ptr<RacerMemoryBlock> block(
                     RacerMemoryBlock::CreateFromSocketData(racerData));
-                ReceivedRacerData& received_racer = m_received_race_data.racers[i];
-                const u8 source_player = static_cast<u8>(source_sequence >> 24);
-                const u32 source_packet_sequence = source_sequence & 0x00ffffff;
-                if (received_racer.valid) {
-                    const u8 previous_source_player =
-                        static_cast<u8>(received_racer.source_sequence >> 24);
-                    const u32 previous_source_packet_sequence =
-                        received_racer.source_sequence & 0x00ffffff;
-                    if (source_player == previous_source_player &&
-                        source_packet_sequence <= previous_source_packet_sequence) {
-                        continue;
-                    }
-                }
-
-                const bool position_changed = !received_racer.valid ||
-                    block->centerPosition[0] != received_racer.block.centerPosition[0] ||
-                    block->centerPosition[1] != received_racer.block.centerPosition[1] ||
-                    block->centerPosition[2] != received_racer.block.centerPosition[2];
-
-                received_racer.block = *block;
-                received_racer.racer_index = usedIndex;
-                received_racer.source_sequence = source_sequence;
-                received_racer.valid = true;
-                received_racer.position_updated = received_racer.position_updated || position_changed;
+                m_received_race_data.racers[i].Queue(*block, usedIndex, source_sequence);
             }
         }
 

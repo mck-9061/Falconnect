@@ -4,6 +4,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <condition_variable>
+#include <deque>
 #include <mutex>
 #include <queue>
 #include <string>
@@ -50,7 +52,20 @@ public:
         u8 racer_index = 0;
         u32 source_sequence = 0;
         bool valid = false;
-        bool position_updated = false;
+        // One pending slot per racer: a newer change replaces a not-yet-applied change.
+        bool pending = false;
+
+        void Queue(const RacerMemoryBlock& incoming, u8 index, u32 sequence)
+        {
+            if (valid && (sequence >> 24) == (source_sequence >> 24) &&
+                (sequence & 0x00ffffff) <= (source_sequence & 0x00ffffff))
+                return;
+            pending = pending || !valid || incoming.GetSocketData() != block.GetSocketData();
+            block = incoming;
+            racer_index = index;
+            source_sequence = sequence;
+            valid = true;
+        }
     };
 
     struct ReceivedRaceData
@@ -60,13 +75,13 @@ public:
 
     std::thread socketThread[1];
 
-    bool lockFrameToSend = false;
 
     void SocketThread();
     void DataThread(u32 race_generation);
     void SendDataThread(u32 race_generation);
     void SendUdpPingIfDue();
-    void SendFrame(RacerMemoryBlock *frame, u8 index);
+    void PublishRaceData(const std::vector<RacerMemoryBlock>& frames,
+                         const std::vector<u8>& cpu_indices);
     std::vector<u8> GetCpuRacerIndices() const;
     void SetCpuRacerIndices(std::vector<u8> indices);
     void SetSelectedCustomMachineData(std::vector<u8> machine_data);
@@ -94,7 +109,6 @@ public:
     std::atomic<bool> raceLoadRequested{false};
     u8 raceRacerId = 6;
     bool shouldDisconnect = false;
-    bool shouldSendData = false;
     bool hasReceivedAnyDataEver = false;
 
     std::atomic<u16> ping{0};
@@ -122,14 +136,16 @@ private:
     void NotifyServerWhenGridded() const;
     void NotifyServerWhenReadyToLoad() const;
 
-    RacerMemoryBlock* framesToSend[30] = {};
+    std::mutex m_outgoing_mutex;
+    std::condition_variable m_outgoing_changed;
+    std::deque<std::vector<u8>> m_outgoing_frames;
+    std::vector<u8> m_last_published_data;
 
     int localSocket = 0;
     int serverSocket = -1;
     int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
     bool hasStarted = false;
-    bool doneFirst = false;
 
     mutable std::mutex m_course_settings_mutex;
     Falconnect::CourseSettings m_course_settings;

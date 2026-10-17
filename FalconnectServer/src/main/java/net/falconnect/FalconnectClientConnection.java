@@ -40,6 +40,7 @@ public class FalconnectClientConnection {
   private int lastReceivedCount;
   private boolean awaitingInitialRacePacket;
   public volatile long lastUdpPacketReceivedAt;
+  private volatile long lastUdpHeartbeatAt;
   // A packet can briefly carry the prior CPU-slot count while a reassignment control message is
   // in flight. Track transport liveness separately from accepted racer data so that transition
   // cannot look like a disconnected client.
@@ -222,7 +223,7 @@ public class FalconnectClientConnection {
     latestReceivedRaceData = new ReceivedRaceData(List.copyOf(racerData),
         List.copyOf(cpuRacerIndices), sourceSequence);
     lastReceivedCount = sourceSequence;
-    recordPlayerRacerData(racerData.getFirst(), duplicateTimeoutMillis);
+    // Unchanged human data is normal when only an owned CPU changed.
     hasUpdated = true;
     lastUdpPacketReceivedAt = System.currentTimeMillis();
     if (!hasReceivedRaceData) {
@@ -232,6 +233,19 @@ public class FalconnectClientConnection {
     hasReceivedRaceData = true;
     if (cpuHandoffActive) cpuRestorationNeeded = true;
     return true;
+  }
+
+  public synchronized void noteUdpHeartbeat() {
+    lastUdpHeartbeatAt = System.currentTimeMillis();
+    if (hasReceivedRaceData && cpuHandoffActive) cpuRestorationNeeded = true;
+  }
+
+  public long getLastUdpActivityAt() {
+    return Math.max(lastUdpHeartbeatAt, lastUdpRacePacketObservedAt);
+  }
+
+  public long getLastAcceptedUdpActivityAt() {
+    return Math.max(lastUdpHeartbeatAt, lastUdpPacketReceivedAt);
   }
 
   public void noteRacePacketObserved() {
@@ -290,6 +304,7 @@ public class FalconnectClientConnection {
   }
 
   public synchronized void resetRaceDataTracking() {
+    lastUdpHeartbeatAt = 0;
     latestReceivedRaceData = ReceivedRaceData.empty();
     lastReceivedCount = 0;
     awaitingInitialRacePacket = true;

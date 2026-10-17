@@ -30,6 +30,8 @@ public class FalconnectClientConnection {
   public byte playerNum;
   public byte racerId;
   public byte selectedCourse;
+  // Course voting is deliberately separate from final machine/settings readiness.
+  public volatile boolean hasVotedTrack;
   public byte[] customMachineData;
   public byte[] name;
   public byte numCpus;

@@ -17,6 +17,7 @@ public class FalconnectServer {
   private volatile int maxConcurrentRaces = 3;
   private volatile int maxCpusPerClient = 3;
   private volatile int countdownSeconds = 20;
+  private volatile int trackVoteCountdownSeconds = 20;
 
   public ServerSocket socket;
   private final List<FalconnectRace> currentRaces = new ArrayList<>();
@@ -47,10 +48,16 @@ public class FalconnectServer {
   public int getMaxCpusPerClient() { return maxCpusPerClient; }
 
   public int getCountdownSeconds() { return countdownSeconds; }
+  public int getTrackVoteCountdownSeconds() { return trackVoteCountdownSeconds; }
 
   public void setCountdownSeconds(int value) {
     requireRange(value, 1, 3600, "Countdown seconds");
     countdownSeconds = value;
+  }
+
+  public void setTrackVoteCountdownSeconds(int value) {
+    requireRange(value, 1, 3600, "Track vote countdown seconds");
+    trackVoteCountdownSeconds = value;
   }
 
   public TrackSettings getTrackSettings(int trackId) { return TrackTable.get(trackId); }
@@ -100,6 +107,9 @@ public class FalconnectServer {
     race.selectRandomTrack();
     return race.getTrackOverride();
   }
+
+  public synchronized void skipTrackVoteCountdown(int gameId) { findGame(gameId).skipTrackVoteCountdown(); }
+  public synchronized void skipReadyCountdown(int gameId) { findGame(gameId).skipReadyCountdown(); }
 
   private FalconnectRace findGame(int gameId) {
     for (FalconnectRace race : currentRaces) {

@@ -126,12 +126,8 @@ void GXMemoryPatcher::SetPracticeModeText(std::string text) const {
     manager.Write_U32(textPosition, pointerAddress);
 }
 
-void GXMemoryPatcher::SetPlayersReadyText(const u8 ready, const u8 total,
-                                          const u16 force_start_countdown_seconds) const {
+void GXMemoryPatcher::SetPlayerReadyText(const std::string& text) const {
     //const u32 textPosition = referencePointer + 0x1ae8b8;
-    std::string text = std::to_string(ready) + "/" + std::to_string(total) + " players ready";
-    if (force_start_countdown_seconds > 0)
-        text += " | Starts in: " + std::to_string(force_start_countdown_seconds) + "s";
     const std::vector<u32> ascii = stringToUint32Array(text);
     constexpr u32 textPosition = 0x8042f0f0;
     constexpr u8 textBufferWords = 64;

@@ -33,6 +33,7 @@ public class MessageHandlerThread extends Thread {
     messageTypes.put((byte) 0x3, ResetMessage.class);
     messageTypes.put((byte) 0x4, DisconnectMessage.class);
     messageTypes.put((byte) 0x5, NameMessage.class);
+    messageTypes.put((byte) 0x7, TrackVoteMessage.class);
   }
 
   public void run() {

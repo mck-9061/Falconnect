@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <utility>
 
 #include "GXMemoryPatcher.h"
@@ -52,6 +53,12 @@ private:
     u8 displayedReadyPlayerCount = 0;
     u8 displayedTotalPlayerCount = 0;
     u16 displayedForceRaceStartCountdownSeconds = 0;
+    u8 displayedLobbyPhase = 0xff;
+    std::string displayedTrackName;
+    bool m_track_vote_submitted = false;
+    // The course-confirmation state remains set briefly while GX returns to the machine menu.
+    // Do not treat that stale state as a machine confirmation.
+    bool m_wait_for_machine_menu = false;
     std::array<Falconnect::RacerInterpolator, 30> m_racer_interpolators;
     u32 m_last_local_race_frame_count = 0;
     std::chrono::steady_clock::time_point m_local_race_frame_last_advanced{};

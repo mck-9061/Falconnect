@@ -303,6 +303,15 @@ void FalconnectSocketManager::NotifyServerWhenReadyToLoad() const {
     send(serverSocket, data2, FULL_RACE_PACKET_SIZE, 0);
 }
 
+void FalconnectSocketManager::SendTrackVote(const u8 course) {
+    if (shouldDisconnect || !shouldRun || raceLoadRequested)
+        return;
+    char data[FULL_RACE_PACKET_SIZE] = {0};
+    data[0] = static_cast<char>(ToServerPacketType::TRACK_VOTE);
+    data[1] = static_cast<char>(course);
+    send(serverSocket, data, FULL_RACE_PACKET_SIZE, 0);
+}
+
 void FalconnectSocketManager::SocketThread() {
     Start();
     // The manager still needs this object's connection result to report a failed handshake.
@@ -489,12 +498,17 @@ void FalconnectSocketManager::SocketThread() {
             }
 
             case FromServerPacketType::LOBBY_STATUS: {
-                readyPlayerCount = static_cast<u8>(buffer[1]);
-                totalPlayerCount = static_cast<u8>(buffer[2]);
+                lobbyPhase = static_cast<u8>(buffer[1]);
+                readyPlayerCount = static_cast<u8>(buffer[2]);
+                totalPlayerCount = static_cast<u8>(buffer[3]);
                 forceRaceStartCountdownSeconds =
-                    (static_cast<u16>(static_cast<u8>(buffer[3])) << 8) |
-                    static_cast<u16>(static_cast<u8>(buffer[4]));
-                INFO_LOG_FMT(FALCONNECT, "Lobby status: {}/{} players ready, force start in {}s",
+                    (static_cast<u16>(static_cast<u8>(buffer[4])) << 8) |
+                    static_cast<u16>(static_cast<u8>(buffer[5]));
+                const std::size_t name_length = std::min<std::size_t>(static_cast<u8>(buffer[6]),
+                    sizeof(buffer) - 7);
+                selectedTrackName.assign(buffer + 7, buffer + 7 + name_length);
+                INFO_LOG_FMT(FALCONNECT, "Lobby status: phase={} {}/{} complete, countdown={}s",
+                             lobbyPhase,
                              readyPlayerCount, totalPlayerCount, forceRaceStartCountdownSeconds);
                 break;
             }

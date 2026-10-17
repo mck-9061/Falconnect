@@ -106,18 +106,35 @@ void FalconnectManager::Update() {
           (displayedReadyPlayerCount != FalconnectSocketManager::instance->readyPlayerCount ||
            displayedTotalPlayerCount != FalconnectSocketManager::instance->totalPlayerCount ||
            displayedForceRaceStartCountdownSeconds !=
-               FalconnectSocketManager::instance->forceRaceStartCountdownSeconds)) {
-          patcher->SetPlayersReadyText(FalconnectSocketManager::instance->readyPlayerCount,
-                                       FalconnectSocketManager::instance->totalPlayerCount,
-                                       FalconnectSocketManager::instance->forceRaceStartCountdownSeconds);
+               FalconnectSocketManager::instance->forceRaceStartCountdownSeconds ||
+           displayedLobbyPhase != FalconnectSocketManager::instance->lobbyPhase ||
+           displayedTrackName != FalconnectSocketManager::instance->selectedTrackName)) {
+          const auto* socket = FalconnectSocketManager::instance;
+          std::string status;
+          if (socket->lobbyPhase == 0) {
+            status = "Vote for track! | " + std::to_string(socket->readyPlayerCount) + "/" +
+                std::to_string(socket->totalPlayerCount) + " votes";
+          } else {
+            status = "Select machine! | Track: " + socket->selectedTrackName + " | " +
+                std::to_string(socket->readyPlayerCount) + "/" +
+                std::to_string(socket->totalPlayerCount) + " ready";
+            patcher->ReEnableMenuControl();
+          }
+          if (socket->forceRaceStartCountdownSeconds > 0)
+            status += " | " + std::to_string(socket->forceRaceStartCountdownSeconds) + "s";
+          patcher->SetPlayerReadyText(status);
           displayedReadyPlayerCount = FalconnectSocketManager::instance->readyPlayerCount;
           displayedTotalPlayerCount = FalconnectSocketManager::instance->totalPlayerCount;
           displayedForceRaceStartCountdownSeconds =
               FalconnectSocketManager::instance->forceRaceStartCountdownSeconds;
+          displayedLobbyPhase = socket->lobbyPhase;
+          displayedTrackName = socket->selectedTrackName;
       }
 
       if (!patcher->memoryReader->ReadSettingsSelectedFlag())
       {
+        if (m_track_vote_submitted)
+          m_wait_for_machine_menu = false;
         log("Waiting for all settings to be chosen...");
 
           // Connect to server
@@ -177,6 +194,19 @@ void FalconnectManager::Update() {
         return;
       }
 
+      if (!m_track_vote_submitted) {
+        FalconnectSocketManager::instance->SendTrackVote(
+            patcher->memoryReader->ReadSelectedCourse());
+        patcher->FullyDisableMenuControl();
+        m_track_vote_submitted = true;
+        m_wait_for_machine_menu = true;
+        currentState = GameState::IN_PRACTICE;
+        return;
+      }
+
+      if (m_wait_for_machine_menu)
+        return;
+
       if (currentState == GameState::IN_PRACTICE)
         currentState = GameState::SETTINGS_SELECTED;
     }
@@ -185,8 +215,8 @@ void FalconnectManager::Update() {
         (server_requested_start && currentState != GameState::READY_TO_LOAD)) {
         log("Setting up...");
 
-        // Disable menu control
-        patcher->DisableOptionsMenuControl();
+        // Lock the selected machine/settings until the server starts the race.
+        patcher->FullyDisableMenuControl();
 
         // Disable AI control
         patcher->DisableAIControl();

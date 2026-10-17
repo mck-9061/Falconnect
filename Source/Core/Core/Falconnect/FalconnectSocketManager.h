@@ -88,6 +88,7 @@ public:
     void SetSelectedCustomMachineData(std::vector<u8> machine_data);
     bool UsesSelectedCustomMachine() const;
     void SetRemoteCustomMachineData(std::vector<u8> machine_data);
+    void SendTrackVote(u8 course);
     std::vector<u8> GetCustomMachineDataForRace() const;
     void HandleConnectionLost();
     // Wake the TCP reader immediately when Dolphin is no longer running the game. Merely setting
@@ -122,6 +123,8 @@ public:
     u8 readyPlayerCount = 0;
     u8 totalPlayerCount = 0;
     u16 forceRaceStartCountdownSeconds = 0;
+    u8 lobbyPhase = 0;
+    std::string selectedTrackName;
     u8 cpuStartIndex = 1;
     std::vector<u8> name;
     std::vector<std::vector<u8>> names;

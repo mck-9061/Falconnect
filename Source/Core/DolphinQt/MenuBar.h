@@ -161,6 +161,7 @@ private:
 
   void AddOptionsMenu();
   void AddToolsMenu();
+  void AddFalconnectMenu();
   void AddHelpMenu();
   void AddMovieMenu();
   void AddJITMenu();

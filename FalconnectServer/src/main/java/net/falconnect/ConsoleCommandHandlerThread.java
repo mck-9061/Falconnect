@@ -39,7 +39,8 @@ public class ConsoleCommandHandlerThread extends Thread {
           output.println("Limits: " + server.getMaxConcurrentRaces() + " games, "
               + server.getMaxClientsPerRace() + " players per game, "
               + server.getMaxCpusPerClient() + " CPUs per client for upcoming races.");
-          output.println("Ready countdown: " + server.getCountdownSeconds() + " seconds.");
+          output.println("Track vote countdown: " + server.getTrackVoteCountdownSeconds()
+              + " seconds. Machine countdown: " + server.getCountdownSeconds() + " seconds.");
           output.println("-----Server game and player listing-----");
           for (FalconnectRace race : server.getRaces()) {
             Integer track = race.getTrackOverride();
@@ -83,8 +84,26 @@ public class ConsoleCommandHandlerThread extends Thread {
         case "countdown":
           requireArguments(args, 1, "countdown <seconds>");
           server.setCountdownSeconds(Integer.parseInt(args[1]));
-          output.println("Ready countdown set to " + server.getCountdownSeconds()
+          output.println("Machine countdown set to " + server.getCountdownSeconds()
               + " seconds from the first ready player, including waiting games.");
+          break;
+        case "trackcountdown":
+          requireArguments(args, 1, "trackcountdown <seconds>");
+          server.setTrackVoteCountdownSeconds(Integer.parseInt(args[1]));
+          output.println("Track vote countdown set to " + server.getTrackVoteCountdownSeconds()
+              + " seconds from the first vote, including waiting games.");
+          break;
+        case "skiptrack":
+        case "skipvote":
+          requireArguments(args, 1, opcode + " <game-id>");
+          server.skipTrackVoteCountdown(Integer.parseInt(args[1]));
+          output.println("Skipped the track vote countdown for game " + args[1] + ".");
+          break;
+        case "skipready":
+        case "skipcountdown":
+          requireArguments(args, 1, opcode + " <game-id>");
+          server.skipReadyCountdown(Integer.parseInt(args[1]));
+          output.println("Skipped the machine countdown for game " + args[1] + ".");
           break;
         case "maxcpus":
           requireArguments(args, 1, "maxcpus <count>");
@@ -172,7 +191,7 @@ public class ConsoleCommandHandlerThread extends Thread {
         + FalconnectServer.MAX_SUPPORTED_RACES + "); existing games continue.");
     output.println("maxplayers <count>                Set player limit per game (2-30); existing players stay.");
     output.println("kickall                           Kick every player and close every game; server stays online.");
-    output.println("track <game-id> <track-id|random|clear>   Override a waiting game's track, or restore voting.");
+    output.println("track <game-id> <track-id|random|clear>   Override a waiting game's track and skip voting, or restore voting.");
     output.println("                                  Track IDs: 0-255, decimal or 0x-prefixed hexadecimal.");
     output.println("                                  random selects a compatible track from TrackTable now.");
     output.println("machine <game-id> <id|random|clear> Force all humans and CPUs to one machine, unique random machines, or restore selections.");
@@ -186,7 +205,10 @@ public class ConsoleCommandHandlerThread extends Thread {
     output.println("                                  0 grants boost from the start; boost lap cannot exceed the lap count.");
     output.println("                                  Incompatible track votes keep the game waiting until settings are corrected.");
     output.println("maxcpus <count>                   Set CPUs per client (0-29) for races not yet loading.");
-    output.println("countdown <seconds>              Force load after the first ready player (1-3600 seconds; default 20).");
+    output.println("trackcountdown <seconds>         Choose a voted track after the first vote (1-3600 seconds; default 20).");
+    output.println("skiptrack <game-id>              Skip that game's track vote countdown now.");
+    output.println("countdown <seconds>              Start after the first machine selection (1-3600 seconds; default 20).");
+    output.println("skipready <game-id>              Skip that game's machine-selection countdown now.");
     output.println("help                              List commands and arguments.");
     output.println("Settings last until server restart. Game IDs come from list and may be reused after closure.");
   }

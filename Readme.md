@@ -4,8 +4,7 @@ A work-in-progress fork of the Dolphin emulator, exclusively for use with F-Zero
 multiplayer functionality.
 
 ## Status
-Basic core multiplayer with up to 30 players is working. After I've finished testing and done some UI and logic flow work to make
-it usable, I'll open up alpha testing. No exact timeframe on this as I'm currently moving house.
+Alpha testing is underway! Join the Falconnect Discord to join in: https://discord.gg/pfSRRxr4ZR
 
 ## Planned features
 - Full 30 player online multiplayer races

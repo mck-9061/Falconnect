@@ -210,6 +210,7 @@ public class ConsoleCommandHandlerThread extends Thread {
     output.println("countdown <seconds>              Start after the first machine selection (1-3600 seconds; default 20).");
     output.println("skipready <game-id>              Skip that game's machine-selection countdown now.");
     output.println("help                              List commands and arguments.");
-    output.println("Settings last until server restart. Game IDs come from list and may be reused after closure.");
+    output.println("Global limits and countdowns persist in falconnect-server.properties. "
+        + "Game IDs come from list and may be reused after closure.");
   }
 }

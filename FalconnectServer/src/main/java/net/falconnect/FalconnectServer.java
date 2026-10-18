@@ -4,14 +4,20 @@ import net.falconnect.messages.toclient.ConnectedMessage;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 public class FalconnectServer {
   public static final int UDP_PORT_BASE = 9000;
   // Reserve a full grid per game, independent of the configurable admission limit.
   public static final int UDP_PORTS_PER_RACE = RaceDataFormat.MAX_RACERS;
   public static final int MAX_SUPPORTED_RACES = (UDP_PORT_BASE - 1024) / UDP_PORTS_PER_RACE;
+  public static final Path DEFAULT_CONFIGURATION_PATH = Path.of("falconnect-server.properties");
 
   private volatile int maxClientsPerRace = 6;
   private volatile int maxConcurrentRaces = 3;
@@ -21,11 +27,12 @@ public class FalconnectServer {
 
   public ServerSocket socket;
   private final List<FalconnectRace> currentRaces = new ArrayList<>();
+  private final Path configurationPath;
   private AcceptClientConnectionThread acceptClientConnectionThread;
   private ConsoleCommandHandlerThread consoleCommandHandlerThread;
 
   public FalconnectServer() throws IOException {
-    this(null);
+    this(null, DEFAULT_CONFIGURATION_PATH);
     socket = new ServerSocket(8000);
     System.out.println("Server socket created");
 
@@ -38,9 +45,17 @@ public class FalconnectServer {
 
   // Separate construction from listener startup for embedded use and command tests.
   FalconnectServer(ServerSocket socket) {
+    this(socket, null);
+  }
+
+  // A supplied path is used by configuration tests and embedded deployments. Null keeps the
+  // in-memory-only behaviour needed by command tests.
+  FalconnectServer(ServerSocket socket, Path configurationPath) {
     // Validate every editable table row before starting any network threads.
     TrackTable.get(0);
     this.socket = socket;
+    this.configurationPath = configurationPath;
+    if (configurationPath != null) loadConfiguration();
   }
 
   public int getMaxClientsPerRace() { return maxClientsPerRace; }
@@ -53,11 +68,13 @@ public class FalconnectServer {
   public void setCountdownSeconds(int value) {
     requireRange(value, 1, 3600, "Countdown seconds");
     countdownSeconds = value;
+    saveConfiguration();
   }
 
   public void setTrackVoteCountdownSeconds(int value) {
     requireRange(value, 1, 3600, "Track vote countdown seconds");
     trackVoteCountdownSeconds = value;
+    saveConfiguration();
   }
 
   public TrackSettings getTrackSettings(int trackId) { return TrackTable.get(trackId); }
@@ -65,16 +82,97 @@ public class FalconnectServer {
   public synchronized void setMaxClientsPerRace(int value) {
     requireRange(value, 2, RaceDataFormat.MAX_RACERS, "Maximum players per game");
     maxClientsPerRace = value;
+    saveConfiguration();
   }
 
   public synchronized void setMaxConcurrentRaces(int value) {
     requireRange(value, 1, MAX_SUPPORTED_RACES, "Maximum concurrent games");
     maxConcurrentRaces = value;
+    saveConfiguration();
   }
 
   public void setMaxCpusPerClient(int value) {
     requireRange(value, 0, RaceDataFormat.MAX_RACERS - 1, "Maximum CPUs per client");
     maxCpusPerClient = value;
+    saveConfiguration();
+  }
+
+  private void loadConfiguration() {
+    if (!Files.exists(configurationPath)) {
+      saveConfiguration();
+      System.out.println("Created server configuration at " + configurationPath.toAbsolutePath());
+      return;
+    }
+
+    Properties properties = new Properties();
+    try (var reader = Files.newBufferedReader(configurationPath)) {
+      properties.load(reader);
+      int configuredMaxPlayers = configurationValue(properties, "max_players_per_race",
+          maxClientsPerRace);
+      int configuredMaxRaces = configurationValue(properties, "max_concurrent_races",
+          maxConcurrentRaces);
+      int configuredMaxCpus = configurationValue(properties, "max_cpus_per_client",
+          maxCpusPerClient);
+      int configuredCountdown = configurationValue(properties, "ready_countdown_seconds",
+          countdownSeconds);
+      int configuredTrackCountdown = configurationValue(properties, "track_vote_countdown_seconds",
+          trackVoteCountdownSeconds);
+
+      requireRange(configuredMaxPlayers, 2, RaceDataFormat.MAX_RACERS,
+          "Configured maximum players per game");
+      requireRange(configuredMaxRaces, 1, MAX_SUPPORTED_RACES,
+          "Configured maximum concurrent games");
+      requireRange(configuredMaxCpus, 0, RaceDataFormat.MAX_RACERS - 1,
+          "Configured maximum CPUs per client");
+      requireRange(configuredCountdown, 1, 3600, "Configured ready countdown seconds");
+      requireRange(configuredTrackCountdown, 1, 3600,
+          "Configured track vote countdown seconds");
+
+      maxClientsPerRace = configuredMaxPlayers;
+      maxConcurrentRaces = configuredMaxRaces;
+      maxCpusPerClient = configuredMaxCpus;
+      countdownSeconds = configuredCountdown;
+      trackVoteCountdownSeconds = configuredTrackCountdown;
+      System.out.println("Loaded server configuration from " + configurationPath.toAbsolutePath());
+    } catch (IOException | IllegalArgumentException e) {
+      System.out.println("Ignoring invalid server configuration at " + configurationPath.toAbsolutePath()
+          + ": " + e.getMessage());
+    }
+  }
+
+  private static int configurationValue(Properties properties, String key, int defaultValue) {
+    String value = properties.getProperty(key);
+    return value == null ? defaultValue : Integer.parseInt(value.trim());
+  }
+
+  private synchronized void saveConfiguration() {
+    if (configurationPath == null) return;
+
+    Properties properties = new Properties();
+    properties.setProperty("max_players_per_race", Integer.toString(maxClientsPerRace));
+    properties.setProperty("max_concurrent_races", Integer.toString(maxConcurrentRaces));
+    properties.setProperty("max_cpus_per_client", Integer.toString(maxCpusPerClient));
+    properties.setProperty("ready_countdown_seconds", Integer.toString(countdownSeconds));
+    properties.setProperty("track_vote_countdown_seconds", Integer.toString(trackVoteCountdownSeconds));
+
+    Path absolutePath = configurationPath.toAbsolutePath();
+    Path parent = absolutePath.getParent();
+    try {
+      if (parent != null) Files.createDirectories(parent);
+      Path temporaryPath = Files.createTempFile(parent, "falconnect-server-", ".properties");
+      try (var writer = Files.newBufferedWriter(temporaryPath)) {
+        properties.store(writer, " Falconnect server settings");
+      }
+      try {
+        Files.move(temporaryPath, absolutePath, StandardCopyOption.ATOMIC_MOVE,
+            StandardCopyOption.REPLACE_EXISTING);
+      } catch (AtomicMoveNotSupportedException e) {
+        Files.move(temporaryPath, absolutePath, StandardCopyOption.REPLACE_EXISTING);
+      }
+    } catch (IOException e) {
+      System.out.println("Unable to save server configuration to " + absolutePath + ": "
+          + e.getMessage());
+    }
   }
 
   static void requireRange(int value, int min, int max, String name) {

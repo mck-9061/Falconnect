@@ -3,6 +3,8 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -30,17 +32,22 @@ public:
 
     static FalconnectManager* instance;
     void Update();
+    // Socket callbacks run on a separate thread.  Queue their error for Update(), which owns
+    // game-memory reset and UI notification.
+    void RequestResetWithError(std::string message);
 
     GXMemoryPatcher* patcher;
 
     u8 racerIDs[256];
     GameState currentState;
     std::atomic<bool> shouldStart{false};
-    bool shouldReset = false;
+    std::atomic<bool> shouldReset{false};
 
     RacerMemoryBlock* lastWrittenBlocks[29];
 
 private:
+    std::mutex m_reset_error_mutex;
+    std::optional<std::string> m_reset_error;
     void log(const std::string& message);
     std::string lastLogged;
 

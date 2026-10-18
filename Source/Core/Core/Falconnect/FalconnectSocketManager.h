@@ -98,19 +98,19 @@ public:
     bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
     Falconnect::CourseSettings GetCourseSettings() const;
 
-    bool hasConnected = false;
+    std::atomic<bool> hasConnected{false};
     std::string connectionError;
-    bool hasProperlyConnected = false;
-    bool isError = false;
-    bool shouldRun = true;
+    std::atomic<bool> hasProperlyConnected{false};
+    std::atomic<bool> isError{false};
+    std::atomic<bool> shouldRun{true};
     bool isHost = false;
-    bool hasGridded = false;
+    std::atomic<bool> hasGridded{false};
     bool start = false;
     bool exited = false;
     std::atomic<bool> canLoad{false};
     std::atomic<bool> raceLoadRequested{false};
     u8 raceRacerId = 6;
-    bool shouldDisconnect = false;
+    std::atomic<bool> shouldDisconnect{false};
     bool hasReceivedAnyDataEver = false;
 
     std::atomic<u16> ping{0};

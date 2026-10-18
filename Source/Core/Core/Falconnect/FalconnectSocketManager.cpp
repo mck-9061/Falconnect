@@ -226,17 +226,22 @@ void FalconnectSocketManager::HandleConnectionLost()
     if (isError || shouldDisconnect)
         return;
 
-    // INFO_LOG_FMT(FALCONNECT, "Lost connection to Falconnect server");
+    if (FalconnectManager::instance != nullptr)
+    {
+        FalconnectManager::instance->RequestResetWithError(
+            "You lost connection to the Falconnect server.");
+    }
+
+    // Publish the terminal reset before exposing isError.  Otherwise the CPU thread can see the
+    // error and construct a replacement connection in the small window before it sees reset.
     shouldRunDataThread = false;
     shouldDisconnect = true;
     shouldRun = false;
     isError = true;
 
-    if (FalconnectManager::instance != nullptr)
-    {
-        SuccessAlertFmt("You lost connection to the Falconnect server.");
-        FalconnectManager::instance->shouldReset = true;
-    }
+    // This path follows a failed receive, so do not try to send a disconnect frame.  Still shut
+    // down both descriptors to wake any worker that is blocked on them and release the UDP port.
+    RequestDisconnect();
 }
 
 void FalconnectSocketManager::RequestDisconnect()
@@ -244,17 +249,15 @@ void FalconnectSocketManager::RequestDisconnect()
     // This is also called from Core::Stop(), after frame callbacks have stopped. Send the
     // protocol-level disconnect before closing TCP so the server can remove us immediately
     // instead of waiting for a transport timeout.
-    if (shouldDisconnect)
-        return;
+    const bool was_disconnecting = shouldDisconnect.exchange(true);
 
-    if (serverSocket != -1) {
+    if (!was_disconnecting && serverSocket != -1) {
         char data[FULL_RACE_PACKET_SIZE] = {0};
         data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
         send(serverSocket, data, FULL_RACE_PACKET_SIZE, 0);
     }
 
     shouldRunDataThread = false;
-    shouldDisconnect = true;
     shouldRun = false;
 
     // Wake a UDP receiver and release the local ephemeral port now rather than leaving it to a
@@ -354,22 +357,26 @@ void FalconnectSocketManager::SocketThread() {
         // Read data from server
         char buffer[FULL_RACE_PACKET_SIZE] = { 0 };
         if (!recvAll(serverSocket, buffer, sizeof(buffer))) {
+            INFO_LOG_FMT(FALCONNECT, "Falconnect TCP control stream ended before a complete packet");
             HandleConnectionLost();
             break;
         }
 
         switch (static_cast<FromServerPacketType>(buffer[0])) {
             case FromServerPacketType::DISCONNECT: {
-                // INFO_LOG_FMT(FALCONNECT, "Disconnecting!");
                 hasProperlyConnected = true;
                 auto reason = std::string(buffer + 1);
-                SuccessAlertFmt("You have been disconnected from the Falconnect server.\n"
-                                "Reason: {}", reason);
-
-                FalconnectManager::instance->shouldReset = true;
+                INFO_LOG_FMT(FALCONNECT, "Received server DISCONNECT: {}", reason);
+                if (FalconnectManager::instance != nullptr) {
+                    FalconnectManager::instance->RequestResetWithError(
+                        "You have been disconnected from the Falconnect server.\nReason: " + reason);
+                }
                 shouldRun = false;
                 shouldDisconnect = true;
                 isError = true;
+                // The manager will reset on its next update; close the local descriptors now so
+                // no menu/race worker remains blocked while that happens.
+                RequestDisconnect();
                 break;
             }
 
@@ -382,14 +389,15 @@ void FalconnectSocketManager::SocketThread() {
                   if (invalidPacketCount > 50) {
                       // Server probably closed, or we lost connection
                       // INFO_LOG_FMT(FALCONNECT, "Disconnecting!");
-                      {
-                          SuccessAlertFmt("You lost connection to the Falconnect server.");
-                      }
                       std::this_thread::sleep_for(std::chrono::seconds(1));
+                      if (FalconnectManager::instance != nullptr) {
+                          FalconnectManager::instance->RequestResetWithError(
+                              "You lost connection to the Falconnect server.");
+                      }
                       shouldDisconnect = true;
                       shouldRun = false;
                       isError = true;
-                      FalconnectManager::instance->shouldReset = true;
+                      RequestDisconnect();
                   }
                 break;
               }
@@ -625,7 +633,10 @@ void FalconnectSocketManager::SocketThread() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    delete this;
+    // FalconnectManager owns the session lifetime.  In particular, a disconnect queues a reset
+    // for the CPU thread, which may still need to call RequestDisconnect() after this reader has
+    // returned.  Self-destruction here left the global instance pointer dangling and caused a
+    // use-after-free/reconnect crash when the server disappeared or kicked a player.
 }
 
 void FalconnectSocketManager::SendUdpPingIfDue()

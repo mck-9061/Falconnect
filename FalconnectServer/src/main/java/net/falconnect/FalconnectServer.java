@@ -141,6 +141,20 @@ public class FalconnectServer {
     return count;
   }
 
+  // A normal JVM shutdown (including Ctrl-C) should follow the same control path as kickall so
+  // connected clients receive a reason before TCP reaches EOF.  A hard kill still relies on the
+  // client's EOF handling.
+  public synchronized void shutdown() {
+    closeAllGames();
+    if (socket != null && !socket.isClosed()) {
+      try {
+        socket.close();
+      } catch (IOException e) {
+        System.out.println("Unable to close server socket: " + e.getMessage());
+      }
+    }
+  }
+
   public synchronized void RemoveRace(FalconnectRace race) {
     currentRaces.remove(race);
   }

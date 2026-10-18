@@ -33,6 +33,16 @@ void FalconnectManager::log(const std::string& message) {
     }
 }
 
+void FalconnectManager::RequestResetWithError(std::string message)
+{
+    INFO_LOG_FMT(FALCONNECT, "Queuing terminal Falconnect reset: {}", message);
+    {
+        std::lock_guard lock(m_reset_error_mutex);
+        m_reset_error = std::move(message);
+    }
+    shouldReset.store(true);
+}
+
 void FalconnectManager::Update() {
     if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
         log("Not running!");
@@ -42,7 +52,7 @@ void FalconnectManager::Update() {
 
         if (FalconnectSocketManager::instance != nullptr) {
             FalconnectSocketManager::instance->RequestDisconnect();
-            shouldReset = true;
+            shouldReset.store(true);
             FalconnectSocketManager::instance = nullptr;
         }
 
@@ -60,9 +70,14 @@ void FalconnectManager::Update() {
 
     // Patcher ready; wait for practice mode
 
-    if (shouldReset) {
+    if (shouldReset.exchange(false)) {
         log("Resetting...");
-        shouldReset = false;
+        std::optional<std::string> reset_error;
+        {
+            std::lock_guard lock(m_reset_error_mutex);
+            reset_error = std::move(m_reset_error);
+            m_reset_error.reset();
+        }
         m_force_start_pending = false;
         m_force_start_course_write_until = {};
         shouldStart = false;
@@ -70,9 +85,19 @@ void FalconnectManager::Update() {
         patcher->ResetToTitle();
         currentState = GameState::FAILED_TO_CONNECT;
 
+        // Socket and UDP workers are detached.  Wake them before dropping the global handle, but
+        // do not delete their owner here: a worker may still be unwinding from recv()/recvfrom().
+        // The failed session is terminal and cannot be reconnected automatically.
+        if (FalconnectSocketManager::instance != nullptr)
+            FalconnectSocketManager::instance->RequestDisconnect();
         FalconnectSocketManager::instance = nullptr;
         delete patcher;
         patcher = nullptr;
+
+        // UICommon suppresses Information and Warning alerts.  A Critical alert is still shown;
+        // emit it only after reset so its modal dialog cannot prevent the terminal transition.
+        if (reset_error)
+            CriticalAlertFmt("{}", *reset_error);
 
         return;
     }
@@ -148,10 +173,18 @@ void FalconnectManager::Update() {
 
           // Connect to server
           if (FalconnectSocketManager::instance == nullptr || FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
+            // A socket worker can report a terminal disconnect while this update is already in
+            // progress.  Leave the existing failed session alone; the next update will reset it
+            // instead of starting a replacement connection.
+            if (shouldReset.load())
+            {
+                INFO_LOG_FMT(FALCONNECT,
+                             "Skipping reconnect because a terminal Falconnect reset is queued");
+                return;
+            }
+            INFO_LOG_FMT(FALCONNECT, "Creating Falconnect TCP session from the menu");
             patcher->SetPracticeModeText("Connecting to Falconnect server...");
             //patcher->FullyDisableMenuControl();
-
-              delete FalconnectSocketManager::instance;
 
               FalconnectSocketManager::instance = new FalconnectSocketManager();
 
@@ -190,7 +223,7 @@ void FalconnectManager::Update() {
                   const auto& connection_error = FalconnectSocketManager::instance->connectionError;
                   SuccessAlertFmt("Failed to connect to Falconnect server!{}{}",
                                   connection_error.empty() ? "" : "\n", connection_error);
-                  shouldReset = true;
+                  shouldReset.store(true);
 
                   return;
               }
@@ -560,10 +593,10 @@ void FalconnectManager::Update() {
                 for (int i = 0; i < 15; i++) mode = patcher->memoryReader->ReadGameMode();
 
                 if (mode != 3) {
-                    SuccessAlertFmt("You disconnected from the race.");
+                    PanicAlertFmt("You disconnected from the race.");
                     FalconnectSocketManager::instance->RequestDisconnect();
                     currentState = GameState::NOT_IN_PRACTICE;
-                    shouldReset = true;
+                    shouldReset.store(true);
                 } else {
                     currentState = GameState::IN_PRACTICE;
                 }

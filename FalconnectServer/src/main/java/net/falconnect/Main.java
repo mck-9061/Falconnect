@@ -7,5 +7,6 @@ public class Main {
     System.out.println("Starting Falconnect server...");
 
     FalconnectServer server = new FalconnectServer();
+    Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown, "Falconnect shutdown"));
   }
 }

@@ -137,10 +137,14 @@ public class FalconnectClientConnection {
   }
 
   public void Disconnect(String reason) {
+    System.out.println("Sending DISCONNECT to player " + uid + ": " + reason);
     synchronized (toClientStream) {
       try {
         // Deliver the notice before stopping the queued sender. Serialize it with TCP frames.
-        if (!disconnected) new DisconnectMessage(this, reason).SendDataFromThread();
+        if (!disconnected) {
+          new DisconnectMessage(this, reason).SendDataFromThread();
+          System.out.println("Sent DISCONNECT frame to player " + uid);
+        }
       } catch (IOException e) {
         System.out.println("Unable to send disconnect notice to player " + uid);
       } catch (InterruptedException e) {

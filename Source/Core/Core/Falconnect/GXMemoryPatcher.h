@@ -37,9 +37,9 @@ public:
     void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
                       const std::array<u32, 3>& received_center_position);
     void SetCurrentLapTime(u8 racerNum, u64 elapsed_millis) const;
-    // The final-order timing block is a separate 12-byte timer at +0x738.  Keep it on the
-    // server clock as well; SetCurrentLapTime only represents the current lap.
-    void SetRaceTime(u8 racerNum, u64 elapsed_millis) const;
+    // +0x738 stores the accumulated duration of completed laps.  GX combines it with the
+    // current-lap timer to form the displayed/final total.
+    void SetCompletedLapTime(u8 racerNum, u64 elapsed_millis) const;
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;

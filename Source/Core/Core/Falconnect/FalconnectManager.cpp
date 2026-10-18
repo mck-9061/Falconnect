@@ -454,8 +454,9 @@ void FalconnectManager::Update() {
             return server_slot;
         };
 
-        // The server clock owns every timing block.  +0x738 is the total/final-order timer and
-        // +0x6c0 is the current-lap timer.  Never copy either from a remote client's packet.
+        // The server clock owns every timing block.  GX derives its total/final-order time by
+        // adding completed laps at +0x738 to the current lap at +0x6c0; never copy either from
+        // a remote client's packet.
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
@@ -477,7 +478,7 @@ void FalconnectManager::Update() {
                         server_time - m_completed_lap_millis[racer_num] : 0;
                 patcher->SetCurrentLapTime(racer_num,
                                            current_lap_time);
-                patcher->SetRaceTime(racer_num, server_time);
+                patcher->SetCompletedLapTime(racer_num, m_completed_lap_millis[racer_num]);
             };
 
             // Our player and locally controlled CPUs are not present in received_race_data.

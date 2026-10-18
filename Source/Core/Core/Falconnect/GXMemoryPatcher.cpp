@@ -479,7 +479,7 @@ void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u64 elapsed_mil
     manager.Write_U16(milliseconds, timer + 10);
 }
 
-void GXMemoryPatcher::SetRaceTime(const u8 racerNum, const u64 elapsed_millis) const
+void GXMemoryPatcher::SetCompletedLapTime(const u8 racerNum, const u64 elapsed_millis) const
 {
     const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
     if (secondaryAddress == 0)

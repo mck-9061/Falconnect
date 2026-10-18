@@ -501,7 +501,7 @@ u32 PPCDebugInterface::GetPC() const
 
 void PPCDebugInterface::SetPC(u32 address)
 {
-  // Read-only debugger in Falconnect.
+  m_system.GetPPCState().pc = address;
 }
 
 void PPCDebugInterface::RunTo(u32 address)

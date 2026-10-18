@@ -172,7 +172,14 @@ void FalconnectManager::Update() {
         log("Waiting for all settings to be chosen...");
 
           // Connect to server
-          if (FalconnectSocketManager::instance == nullptr || FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
+          // Core::Stop() disconnects the session and stops the frame callbacks before Update()
+          // can clear this pointer.  The next game boot therefore sees the old manager here.
+          // A successfully-handshaken but explicitly disconnected manager is terminal just like
+          // an errored one; otherwise the new game would reuse it and never open a TCP connection.
+          if (FalconnectSocketManager::instance == nullptr ||
+              FalconnectSocketManager::instance->shouldDisconnect ||
+              FalconnectSocketManager::instance->isError ||
+              !FalconnectSocketManager::instance->hasProperlyConnected) {
             // A socket worker can report a terminal disconnect while this update is already in
             // progress.  Leave the existing failed session alone; the next update will reset it
             // instead of starting a replacement connection.

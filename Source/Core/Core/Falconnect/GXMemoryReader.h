@@ -17,6 +17,8 @@ public:
 
     [[nodiscard]] u16 ReadGameMode();
     [[nodiscard]] bool ReadSettingsSelectedFlag() const;
+    // Cup Select is 0/6, Track Select is 5, and a confirmed track briefly changes to 6.
+    [[nodiscard]] u8 ReadMenuSelectionState() const;
     [[nodiscard]] bool ReadIsInRace() const;
     [[nodiscard]] char ReadSelectedRacerID() const;
     [[nodiscard]] bool HasGridded();

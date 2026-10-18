@@ -33,6 +33,8 @@ public class FalconnectRace extends Thread {
   private int lastLobbyPlayerCount = -1;
   private int lastLobbyReadyCount = -1;
   private int lastLobbyForceStartCountdownSeconds = -1;
+  private LobbyPhase lastLobbyPhase;
+  private String lastLobbyTrackName = null;
 
   public volatile GameState gameState;
   public volatile boolean isRunning;
@@ -259,14 +261,10 @@ public class FalconnectRace extends Thread {
 
   private void finishTrackVote(long nowNanos) {
     if (lobbyPhase != LobbyPhase.TRACK_VOTING) return;
-    boolean legacyReadyVote = clients.stream().anyMatch(client -> !client.disconnected &&
-        client.state == ClientState.READY);
-    boolean anyVote = clients.stream().anyMatch(client -> !client.disconnected &&
-        (client.hasVotedTrack || client.state == ClientState.READY));
+    boolean anyVote = clients.stream().anyMatch(client -> !client.disconnected && client.hasVotedTrack);
     if (trackOverride == null && !anyVote) return;
-    if (firstTrackVoteAtNanos == null && legacyReadyVote) firstTrackVoteAtNanos = nowNanos;
     boolean allVoted = !clients.isEmpty() && clients.stream().allMatch(client -> client.disconnected ||
-        client.hasVotedTrack || client.state == ClientState.READY);
+        client.hasVotedTrack);
     boolean expired = skipTrackVoteCountdown || trackOverride != null ||
         (firstTrackVoteAtNanos != null && nowNanos - firstTrackVoteAtNanos >=
             server.getTrackVoteCountdownSeconds() * 1_000_000_000L);
@@ -275,7 +273,7 @@ public class FalconnectRace extends Thread {
       List<TrackSettings> courses = new ArrayList<>();
       if (trackOverride != null) courses.add(resolveTrackSettings(trackOverride, lapCountOverride, boostLapOverride));
       else for (FalconnectClientConnection client : clients)
-        if (!client.disconnected && (client.hasVotedTrack || client.state == ClientState.READY))
+        if (!client.disconnected && client.hasVotedTrack)
           courses.add(resolveTrackSettings(Byte.toUnsignedInt(client.selectedCourse), lapCountOverride, boostLapOverride));
       if (courses.isEmpty()) return;
       selectedTrackSettings = courses.get(new Random().nextInt(courses.size()));
@@ -310,6 +308,8 @@ public class FalconnectRace extends Thread {
       client.setRace(this);
       return;
     }
+    // Connections survive race reallocation. Votes belong to the lobby, never the connection.
+    client.hasVotedTrack = false;
     client.udpPort = getUdpPort(client.playerNum);
     clients.add(client);
     client.setRace(this);
@@ -509,17 +509,21 @@ public class FalconnectRace extends Thread {
 
     int forceStartCountdownSeconds = lobbyPhase == LobbyPhase.TRACK_VOTING ?
         getTrackVoteCountdownSeconds(System.nanoTime()) : getForceStartCountdownSeconds(System.nanoTime());
+    String trackName = selectedTrackSettings == null ? "" : selectedTrackSettings.name();
     if (playerCount == lastLobbyPlayerCount && completedCount == lastLobbyReadyCount &&
-        forceStartCountdownSeconds == lastLobbyForceStartCountdownSeconds) return;
+        forceStartCountdownSeconds == lastLobbyForceStartCountdownSeconds &&
+        lobbyPhase == lastLobbyPhase && trackName.equals(lastLobbyTrackName)) return;
 
     lastLobbyPlayerCount = playerCount;
     lastLobbyReadyCount = completedCount;
     lastLobbyForceStartCountdownSeconds = forceStartCountdownSeconds;
+    lastLobbyPhase = lobbyPhase;
+    lastLobbyTrackName = trackName;
     for (FalconnectClientConnection client : getClients()) {
       if (!client.disconnected)
         new LobbyStatusMessage(client, lobbyPhase.ordinal(), completedCount, playerCount,
             forceStartCountdownSeconds,
-            selectedTrackSettings == null ? "" : selectedTrackSettings.name()).Send();
+            trackName).Send();
     }
   }
 

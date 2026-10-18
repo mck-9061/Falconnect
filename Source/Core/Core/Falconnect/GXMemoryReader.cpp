@@ -38,6 +38,10 @@ bool GXMemoryReader::ReadSettingsSelectedFlag() const {
     return state == 7;
 }
 
+u8 GXMemoryReader::ReadMenuSelectionState() const {
+    return manager.Read_U8(referencePointer + 0x2454e3);
+}
+
 bool GXMemoryReader::ReadIsInRace() const {
     const u16 state = manager.Read_U16(referencePointer + 0x2454e2);
     return state != 0;

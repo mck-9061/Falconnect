@@ -118,7 +118,6 @@ void FalconnectManager::Update() {
             status = "Select machine! | Track: " + socket->selectedTrackName + " | " +
                 std::to_string(socket->readyPlayerCount) + "/" +
                 std::to_string(socket->totalPlayerCount) + " ready";
-            patcher->ReEnableMenuControl();
           }
           if (socket->forceRaceStartCountdownSeconds > 0)
             status += " | " + std::to_string(socket->forceRaceStartCountdownSeconds) + "s";
@@ -131,10 +130,20 @@ void FalconnectManager::Update() {
           displayedTrackName = socket->selectedTrackName;
       }
 
+      const u8 menu_selection_state = patcher->memoryReader->ReadMenuSelectionState();
+      if (menu_selection_state == 5) {
+        // A new Track Select visit starts a new lobby round after the previous race.
+        m_seen_track_select = true;
+        m_track_vote_submitted = false;
+      }
+      if (m_seen_track_select && !m_track_vote_submitted && menu_selection_state == 6) {
+        FalconnectSocketManager::instance->SendTrackVote(
+            patcher->memoryReader->ReadSelectedCourse());
+        m_track_vote_submitted = true;
+      }
+
       if (!patcher->memoryReader->ReadSettingsSelectedFlag())
       {
-        if (m_track_vote_submitted)
-          m_wait_for_machine_menu = false;
         log("Waiting for all settings to be chosen...");
 
           // Connect to server
@@ -194,19 +203,6 @@ void FalconnectManager::Update() {
         return;
       }
 
-      if (!m_track_vote_submitted) {
-        FalconnectSocketManager::instance->SendTrackVote(
-            patcher->memoryReader->ReadSelectedCourse());
-        patcher->FullyDisableMenuControl();
-        m_track_vote_submitted = true;
-        m_wait_for_machine_menu = true;
-        currentState = GameState::IN_PRACTICE;
-        return;
-      }
-
-      if (m_wait_for_machine_menu)
-        return;
-
       if (currentState == GameState::IN_PRACTICE)
         currentState = GameState::SETTINGS_SELECTED;
     }
@@ -215,8 +211,9 @@ void FalconnectManager::Update() {
         (server_requested_start && currentState != GameState::READY_TO_LOAD)) {
         log("Setting up...");
 
-        // Lock the selected machine/settings until the server starts the race.
-        patcher->FullyDisableMenuControl();
+        // Preserve the original options-only lock: the player may still choose a machine while
+        // track voting is underway, but cannot load the race before the server starts it.
+        patcher->DisableOptionsMenuControl();
 
         // Disable AI control
         patcher->DisableAIControl();

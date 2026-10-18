@@ -69,6 +69,10 @@ private:
     std::array<u32, 30> m_last_lap_counts{};
     std::array<u64, 30> m_completed_lap_millis{};
     std::array<bool, 30> m_human_racers_finished{};
+    // Server slots which disappear after sending race data belong to departed players, not
+    // racers which still need to cross the finish line.
+    std::array<std::chrono::steady_clock::time_point, 30> m_human_racer_last_received{};
+    std::chrono::steady_clock::time_point m_human_finish_tracking_started_at{};
     bool m_all_human_racers_finished = false;
     std::chrono::steady_clock::time_point m_all_human_racers_finished_at{};
     bool m_menu_should_reopen_after_finish = false;

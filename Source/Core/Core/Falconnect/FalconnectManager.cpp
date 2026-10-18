@@ -303,6 +303,8 @@ void FalconnectManager::Update() {
         m_last_lap_counts.fill(0);
         m_completed_lap_millis.fill(0);
         m_human_racers_finished.fill(false);
+        m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
+        m_human_finish_tracking_started_at = {};
         m_all_human_racers_finished = false;
         m_all_human_racers_finished_at = {};
         m_menu_should_reopen_after_finish = false;
@@ -387,11 +389,14 @@ void FalconnectManager::Update() {
             // INFO_LOG_FMT(FALCONNECT, "Countdown started");
             INFO_LOG_FMT(FALCONNECT, "LOAD racing player={}",
                          FalconnectSocketManager::instance->playerNumber);
+            m_human_finish_tracking_started_at = std::chrono::steady_clock::now();
             currentState = GameState::RACING;
         }
     }
 
     if (currentState == GameState::RACING) {
+        if (FalconnectSocketManager::instance->ConsumeNamesChanged())
+            patcher->InitialiseNameLabels();
         // Do not leave a pause/results menu over the race. Record that it was actually opened so
         // only those clients receive the course-select menu after the post-finish grace period.
         if (!m_menu_opened_after_finish && patcher->IsMenuOpen()) {
@@ -431,9 +436,18 @@ void FalconnectManager::Update() {
 
         const auto received_snapshot_time = std::chrono::steady_clock::now();
 
-        const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
+        const u8 local_human_server_slot = FalconnectSocketManager::instance->playerNumber - 1;
         const u8 human_racer_count = std::min<u8>(
             FalconnectSocketManager::instance->totalPlayerCount, 30);
+        const auto local_racer_for_server_slot = [local_human_server_slot](const u8 server_slot) {
+            // Every client keeps its own human in GX slot zero and swaps server slot zero with
+            // its own server slot. This must also be used for finish and departure tracking.
+            if (server_slot == local_human_server_slot)
+                return static_cast<u8>(0);
+            if (server_slot == 0)
+                return local_human_server_slot;
+            return server_slot;
+        };
 
         // The server's clock is written only into racers this client controls.  On a new lap,
         // retain the accumulated completed-lap duration so +0x6c0 continues to mean *current*
@@ -449,7 +463,7 @@ void FalconnectManager::Update() {
                 patcher->SetCurrentLapTime(racer_num,
                     received_race_data.server_race_time_millis - m_completed_lap_millis[racer_num]);
             };
-            apply_server_time(local_human_racer);
+            apply_server_time(0);
             for (const u8 racer_num : cpu_racer_indices)
                 apply_server_time(racer_num);
         }
@@ -457,9 +471,24 @@ void FalconnectManager::Update() {
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
             const auto& received_racer = received_race_data.racers[i];
-            const u8 racer_num = i == 0 ? local_human_racer : static_cast<u8>(i);
+            if (received_racer.valid && i < human_racer_count && i != local_human_server_slot) {
+                // A transferred player racer is still present in the packet, but its source
+                // owner is the client now simulating it as a CPU. Its original human slot must
+                // not hold the post-race menu open waiting for that CPU to finish.
+                const u8 source_owner = static_cast<u8>(received_racer.source_sequence >> 24);
+                if (source_owner != static_cast<u8>(i + 1)) {
+                    m_human_racers_finished[i] = true;
+                    INFO_LOG_FMT(FALCONNECT,
+                                 "Remote player slot {} is now CPU-controlled by player {}; "
+                                 "treating original player as departed",
+                                 i, source_owner);
+                } else {
+                    m_human_racer_last_received[i] = received_snapshot_time;
+                }
+            }
+            const u8 racer_num = local_racer_for_server_slot(static_cast<u8>(i));
             auto& interpolator = m_racer_interpolators[i];
-            if (i == local_human_racer ||
+            if (i == local_human_server_slot ||
                 FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) ||
                 (received_snapshot && !received_racer.valid)) {
                 interpolator.Reset();
@@ -484,14 +513,35 @@ void FalconnectManager::Update() {
 
         const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
         for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
-            const u8 local_racer_num = racer_num == 0 ? local_human_racer : racer_num;
+            const u8 local_racer_num = local_racer_for_server_slot(racer_num);
             if (patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps) {
                 m_human_racers_finished[racer_num] = true;
-                if (local_racer_num == local_human_racer && !m_local_racer_ai_enabled) {
+                if (local_racer_num == 0 && !m_local_racer_ai_enabled) {
                     patcher->EnableAIControlFor(0, 1);
                     m_local_racer_ai_enabled = true;
                     INFO_LOG_FMT(FALCONNECT,
                                  "Local racer finished at lap {}; enabling AI control", total_laps);
+                }
+                continue;
+            }
+
+            // A race participant which was removed by the server no longer has a record in the
+            // full-data packet. This is departure bookkeeping, not finish detection: active
+            // racers are still finished only by their secondary-block lap count above.
+            if (racer_num != local_human_server_slot) {
+                const auto last_received = m_human_racer_last_received[racer_num];
+                const bool disappeared_after_sending =
+                    last_received != std::chrono::steady_clock::time_point{} &&
+                    received_snapshot_time - last_received >= std::chrono::seconds(1);
+                const bool never_appeared_after_start =
+                    last_received == std::chrono::steady_clock::time_point{} &&
+                    received_snapshot_time - m_human_finish_tracking_started_at >=
+                        std::chrono::seconds(5);
+                if (disappeared_after_sending || never_appeared_after_start) {
+                    m_human_racers_finished[racer_num] = true;
+                    INFO_LOG_FMT(FALCONNECT,
+                                 "Remote player slot {} left race data; treating it as departed",
+                                 racer_num);
                 }
             }
         }

@@ -5,26 +5,20 @@ import net.falconnect.RaceDataFormat;
 import net.falconnect.ToClientPacketType;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.Arrays;
 
 public class NamesMessage extends ToClientMessage {
   private static final int NAME_BYTES = 32;
 
-  public NamesMessage(FalconnectClientConnection destination, List<FalconnectClientConnection> clients) {
+  public NamesMessage(FalconnectClientConnection destination, byte[][] names) {
     super(destination);
 
     data[0] = (byte) ToClientPacketType.NAMES.ordinal();
 
     int cursor = 1;
-    for (FalconnectClientConnection client : clients) {
-      System.arraycopy(client.name, 0, data, cursor, NAME_BYTES);
-      cursor += NAME_BYTES;
-    }
-
-    for (int racerIndex = clients.size(); racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
-      byte[] cpuName = ("CPU" + (racerIndex - clients.size() + 1))
-          .getBytes(StandardCharsets.US_ASCII);
-      System.arraycopy(cpuName, 0, data, cursor, cpuName.length);
+    for (int racerIndex = 0; racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++) {
+      byte[] name = Arrays.copyOf(names[racerIndex], NAME_BYTES);
+      System.arraycopy(name, 0, data, cursor, NAME_BYTES);
       cursor += NAME_BYTES;
     }
   }

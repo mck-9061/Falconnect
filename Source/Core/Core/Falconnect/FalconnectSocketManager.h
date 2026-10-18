@@ -98,6 +98,7 @@ public:
     void RequestDisconnect();
     bool OwnsCpuRacer(u8 racer) const;
     bool ConsumeReceivedRaceData(ReceivedRaceData* received_data);
+    bool ConsumeNamesChanged();
     Falconnect::CourseSettings GetCourseSettings() const;
 
     std::atomic<bool> hasConnected{false};
@@ -114,6 +115,7 @@ public:
     u8 raceRacerId = 6;
     std::atomic<bool> shouldDisconnect{false};
     bool hasReceivedAnyDataEver = false;
+    std::atomic<bool> m_names_changed{false};
 
     std::atomic<u16> ping{0};
     std::atomic<bool> hasPingSample{false};
@@ -173,6 +175,11 @@ private:
     bool m_has_pending_ping = false;
     mutable std::mutex m_cpu_assignment_mutex;
     std::vector<u8> m_cpu_racer_indices;
+    // CPU_ASSIGNMENT identifies racers in server-grid order. m_cpu_racer_indices contains the
+    // equivalent local GX slots, which differ when a departed human slot is transferred.
+    std::vector<u8> m_cpu_server_racer_indices;
+    bool OwnsServerCpuRacer(u8 racer) const;
+    u8 LocalRacerIndexForServer(u8 server_racer) const;
     mutable std::mutex m_received_race_data_mutex;
     ReceivedRaceData m_received_race_data;
     bool m_received_race_data_ready = false;

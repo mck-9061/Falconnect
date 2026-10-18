@@ -104,6 +104,23 @@ bool FalconnectSocketManager::OwnsCpuRacer(const u8 racer) const
     return std::find(cpu_racer_indices.begin(), cpu_racer_indices.end(), racer) != cpu_racer_indices.end();
 }
 
+bool FalconnectSocketManager::OwnsServerCpuRacer(const u8 racer) const
+{
+    const std::lock_guard<std::mutex> lock(m_cpu_assignment_mutex);
+    return std::find(m_cpu_server_racer_indices.begin(), m_cpu_server_racer_indices.end(), racer) !=
+           m_cpu_server_racer_indices.end();
+}
+
+u8 FalconnectSocketManager::LocalRacerIndexForServer(const u8 server_racer) const
+{
+    const u8 own_server_racer = playerNumber - 1;
+    if (server_racer == own_server_racer)
+        return 0;
+    if (server_racer == 0)
+        return own_server_racer;
+    return server_racer;
+}
+
 Falconnect::CourseSettings FalconnectSocketManager::GetCourseSettings() const
 {
     const std::lock_guard<std::mutex> lock(m_course_settings_mutex);
@@ -123,6 +140,11 @@ bool FalconnectSocketManager::ConsumeReceivedRaceData(ReceivedRaceData* received
     return true;
 }
 
+bool FalconnectSocketManager::ConsumeNamesChanged()
+{
+    return m_names_changed.exchange(false);
+}
+
 std::vector<u8> FalconnectSocketManager::GetCpuRacerIndices() const
 {
     const std::lock_guard<std::mutex> lock(m_cpu_assignment_mutex);
@@ -133,11 +155,15 @@ void FalconnectSocketManager::SetCpuRacerIndices(std::vector<u8> indices)
 {
     const std::lock_guard<std::mutex> lock(m_cpu_assignment_mutex);
     const std::vector<u8> previous_indices = m_cpu_racer_indices;
+    std::vector<u8> local_indices;
+    local_indices.reserve(indices.size());
+    for (const u8 server_racer : indices)
+        local_indices.push_back(LocalRacerIndexForServer(server_racer));
 
     // A newly owned CPU may still have a remote block cached from before the handoff. Leaving it
     // in this cache makes FalconnectManager write that stale remote state over the local AI every
     // frame, so the CPU appears to have an engine but cannot drive correctly.
-    for (const u8 racer : indices)
+    for (const u8 racer : local_indices)
     {
         if (std::find(previous_indices.begin(), previous_indices.end(), racer) !=
             previous_indices.end())
@@ -163,8 +189,9 @@ void FalconnectSocketManager::SetCpuRacerIndices(std::vector<u8> indices)
         m_last_published_data.clear();
     }
 
-    ourCpus = static_cast<u8>(indices.size());
-    m_cpu_racer_indices = std::move(indices);
+    ourCpus = static_cast<u8>(local_indices.size());
+    m_cpu_server_racer_indices = std::move(indices);
+    m_cpu_racer_indices = std::move(local_indices);
     // INFO_LOG_FMT(FALCONNECT, "CPU assignment updated: {} CPU racers", ourCpus);
     for (std::size_t i = 0; i < m_cpu_racer_indices.size(); i++)
         INFO_LOG_FMT(FALCONNECT, "TIMING ASSIGN player={} cpu_slot={} local_racer={} server_racer={}",
@@ -517,6 +544,7 @@ void FalconnectSocketManager::SocketThread() {
 
                     names.push_back(iHateCpp);
                 }
+                m_names_changed = true;
 
                 break;
             }
@@ -804,7 +832,6 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
 
         if (const auto now = std::chrono::steady_clock::now(); now - last_timing_log >= std::chrono::seconds(1)) last_timing_log = now;
 
-        const auto cpu_racer_indices = GetCpuRacerIndices();
         const std::lock_guard<std::mutex> received_data_lock(m_received_race_data_mutex);
         for (u8 i = 0; i < 30; i++) {
             u8 usedIndex = i;
@@ -830,8 +857,7 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
                 continue; // Skip our data
             }
 
-            if (std::ranges::find(cpu_racer_indices, usedIndex) !=
-                cpu_racer_indices.end()) {
+            if (OwnsServerCpuRacer(i)) {
                 // INFO_LOG_FMT(FALCONNECT, "Skipping racer at index {}: Our CPU", i);
                 m_received_race_data.racers[i].valid = false;
                 continue;

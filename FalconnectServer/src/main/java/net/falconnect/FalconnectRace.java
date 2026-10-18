@@ -3,6 +3,7 @@ package net.falconnect;
 import net.falconnect.messages.toclient.*;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class FalconnectRace extends Thread {
@@ -24,6 +25,8 @@ public class FalconnectRace extends Thread {
   private final int portBlockIndex;
 
   private byte[] fullDataPacket;
+  private final byte[][] racerNames = new byte[RaceDataFormat.MAX_RACERS][32];
+  private final Set<Byte> cpuControlledPlayerRacers = Collections.synchronizedSet(new HashSet<>());
   // Starts on the first observed running race frame, rather than on a client's local clock.
   private long raceTimerStartedAtNanos = -1;
   private byte[] cpuRacerIds;
@@ -274,6 +277,10 @@ public class FalconnectRace extends Thread {
       client.udpPort = getUdpPort(client.playerNum);
     }
     GenerateCpuRacerIds();
+    for (FalconnectClientConnection client : clients)
+      racerNames[client.playerNum - 1] = Arrays.copyOf(client.name, 32);
+    for (int racerIndex = clients.size(); racerIndex < RaceDataFormat.MAX_RACERS; racerIndex++)
+      racerNames[racerIndex] = cpuName(racerIndex - clients.size() + 1);
     if (machineOverride != null) {
       raceMachines = machineOverride.generate();
     } else {
@@ -386,6 +393,7 @@ public class FalconnectRace extends Thread {
     client.state = ClientState.IN_MENUS;
     client.resetRaceDataTracking();
     TransferCpuAssignments(client, false);
+    TransferPlayerRacerToCpu(client);
     RemoveClient(client);
     server.AllocateClient(client);
   }
@@ -441,7 +449,7 @@ public class FalconnectRace extends Thread {
                     new CustomMachineDataMessage(client, this);
                 Thread.sleep(20);
                 customMachineDataMessage.Send();
-                NamesMessage namesMessage = new NamesMessage(client, getClients());
+                NamesMessage namesMessage = new NamesMessage(client, getRacerNames());
                 Thread.sleep(20);
                 namesMessage.Send();
                 StatusMessage message = new StatusMessage(client, ToClientPacketType.START);
@@ -715,11 +723,68 @@ public class FalconnectRace extends Thread {
   private void DisconnectClient(FalconnectClientConnection client, String reason) {
     try {
       TransferCpuAssignments(client, false);
+      TransferPlayerRacerToCpu(client);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
 
     client.Disconnect(reason);
+  }
+
+  private synchronized void TransferPlayerRacerToCpu(FalconnectClientConnection source)
+      throws InterruptedException {
+    if (gameState != GameState.RACING) return;
+    final byte playerRacer = (byte) (source.playerNum - 1);
+    if (cpuControlledPlayerRacers.contains(playerRacer)) return;
+
+    long now = System.currentTimeMillis();
+    FalconnectClientConnection recipient = getClients().stream()
+        .filter(other -> other != source && !other.disconnected &&
+            CanReceiveCpuAssignment(other, now))
+        .min(Comparator.comparingInt(other -> other.getCpuRacerIndices().size()))
+        .orElse(null);
+    if (recipient == null) {
+      System.out.println("No active client can take over player racer " + source.playerNum);
+      return;
+    }
+
+    List<Byte> racerIndices = recipient.getCpuRacerIndices();
+    racerIndices.add(playerRacer);
+    recipient.setCpuRacerIndices(racerIndices);
+    synchronized (this) {
+      cpuControlledPlayerRacers.add(playerRacer);
+      racerNames[playerRacer] = withCpuSuffix(racerNames[playerRacer]);
+    }
+    new CpuAssignmentMessage(recipient).Send();
+    BroadcastNames();
+    System.out.println("Transferred departed player " + source.playerNum + " to player " +
+        recipient.playerNum + " as CPU racer " + playerRacer);
+  }
+
+  private synchronized byte[][] getRacerNames() {
+    byte[][] copy = new byte[RaceDataFormat.MAX_RACERS][32];
+    for (int i = 0; i < copy.length; i++) copy[i] = Arrays.copyOf(racerNames[i], 32);
+    return copy;
+  }
+
+  private void BroadcastNames() throws InterruptedException {
+    byte[][] names = getRacerNames();
+    for (FalconnectClientConnection client : getClients())
+      if (!client.disconnected) new NamesMessage(client, names).Send();
+  }
+
+  private static byte[] cpuName(int number) {
+    return ("CPU" + number).getBytes(StandardCharsets.US_ASCII);
+  }
+
+  private static byte[] withCpuSuffix(byte[] name) {
+    byte[] labelled = new byte[32];
+    int length = 0;
+    while (length < name.length && name[length] != 0) length++;
+    byte[] suffix = " (CPU)".getBytes(StandardCharsets.US_ASCII);
+    System.arraycopy(name, 0, labelled, 0, Math.min(length, labelled.length - suffix.length));
+    System.arraycopy(suffix, 0, labelled, Math.min(length, labelled.length - suffix.length), suffix.length);
+    return labelled;
   }
 
   private long packetNum = 0;
@@ -754,8 +819,12 @@ public class FalconnectRace extends Thread {
         if (i == 0) {
           // Player's data
           int racerIndex = client.playerNum - 1;
-          writeRacerRecord(packet, racerIndex, racerData,
-              sourceMetadata(client, receivedRaceData.getSourceSequence()));
+          // Once a human leaves, the replacement owner's CPU frame is authoritative for this
+          // racer slot. Do not let the departed client's final human snapshot overwrite it.
+          if (!cpuControlledPlayerRacers.contains((byte) racerIndex)) {
+            writeRacerRecord(packet, racerIndex, racerData,
+                sourceMetadata(client, receivedRaceData.getSourceSequence()));
+          }
 
           //playerPositions.put(client.playerNum - 1, new HashSet<>());
           // Get racer's position from received data

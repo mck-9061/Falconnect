@@ -453,52 +453,8 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 
-    const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
-    const auto now = std::chrono::steady_clock::now();
-    const bool log_timing = racerNum < m_last_timing_log.size() &&
-        now - m_last_timing_log[racerNum] >= std::chrono::seconds(1);
-
-    std::array<u32, 3> timing_before{};
-
-    if (log_timing && secondaryAddress != 0) {
-        for (u32 i = 0; i < timing_before.size(); i++)
-            timing_before[i] = manager.Read_U32(
-                secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
-    }
-
-    if (secondaryAddress != 0) {
-        for (u32 i = 0; i < patchData.timingData.size(); i++)
-            manager.Write_U32(patchData.timingData[i],
-                              secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
-        // raceTimeFrameCount is packet metadata for interpolation. Do not overwrite the
-        // game's total-time counter at +0x744.
-    }
-
-    if (log_timing) {
-        m_last_timing_log[racerNum] = now;
-        std::array<u32, 3> timing_after{};
-
-        if (secondaryAddress != 0) {
-            for (u32 i = 0; i < timing_after.size(); i++)
-                timing_after[i] = manager.Read_U32(
-                    secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + i * sizeof(u32));
-        }
-
-        INFO_LOG_FMT(FALCONNECT,
-                     "TIMING APPLY local_racer={} secondary={:08x} action={} "
-                     "before=[{:08x},{:08x},{:08x}] received=[{:08x},{:08x},{:08x}] "
-                     "after=[{:08x},{:08x},{:08x}] changed_since_last_write={}",
-                     racerNum, secondaryAddress, secondaryAddress != 0 ? "written" : "invalid-chain",
-                     timing_before[0], timing_before[1], timing_before[2], patchData.timingData[0],
-                     patchData.timingData[1], patchData.timingData[2], timing_after[0], timing_after[1],
-                     timing_after[2], m_has_written_timing[racerNum] &&
-                         timing_before != m_last_written_timing[racerNum]);
-    }
-
-    if (secondaryAddress != 0 && racerNum < m_last_written_timing.size()) {
-        m_last_written_timing[racerNum] = patchData.timingData;
-        m_has_written_timing[racerNum] = true;
-    }
+    // Timing is intentionally not copied from another client here.  Both the current-lap
+    // timer and the final-order timer are written from the server clock by FalconnectManager.
 
     ScheduleInvalidateCacheRange(baseAddress, 388);
 }
@@ -516,6 +472,24 @@ void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u64 elapsed_mil
     const u8 seconds = static_cast<u8>((elapsed_millis / 1000) % 60);
     const u16 milliseconds = static_cast<u16>(elapsed_millis % 1000);
     const u32 timer = secondaryAddress + GXMemoryReader::CURRENT_LAP_TIME_OFFSET;
+    manager.Write_U32(static_cast<u32>(frames), timer);
+    manager.Write_U32(0, timer + 4);  // float fraction of a frame
+    manager.Write_U8(minutes, timer + 8);
+    manager.Write_U8(seconds, timer + 9);
+    manager.Write_U16(milliseconds, timer + 10);
+}
+
+void GXMemoryPatcher::SetRaceTime(const u8 racerNum, const u64 elapsed_millis) const
+{
+    const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
+    if (secondaryAddress == 0)
+        return;
+
+    const u64 frames = std::min<u64>((elapsed_millis * 60) / 1000, std::numeric_limits<u32>::max());
+    const u8 minutes = static_cast<u8>(std::min<u64>(elapsed_millis / 60000, 255));
+    const u8 seconds = static_cast<u8>((elapsed_millis / 1000) % 60);
+    const u16 milliseconds = static_cast<u16>(elapsed_millis % 1000);
+    const u32 timer = secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET;
     manager.Write_U32(static_cast<u32>(frames), timer);
     manager.Write_U32(0, timer + 4);  // float fraction of a frame
     manager.Write_U8(minutes, timer + 8);

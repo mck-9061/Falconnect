@@ -26,7 +26,8 @@ public final class RaceDataFormat {
       4 +  // speed/acceleration values
       1 +  // restore flag
       3 +  // timing data (12 bytes at secondary offset 0x738, used for final order)
-      1;   // race-time frame count (first word of total time at secondary offset 0x744)
+      1 +  // race-time frame count (first word of total time at secondary offset 0x744)
+      1;   // sender-local interpolation frame count
   public static final int RACER_DATA_BYTES = RACER_FIELD_COUNT * Integer.BYTES;
   public static final int RACER_SEQUENCE_BYTES = Integer.BYTES;
   public static final int SERVER_RACER_RECORD_BYTES = RACER_DATA_BYTES + RACER_SEQUENCE_BYTES;
@@ -46,7 +47,9 @@ public final class RaceDataFormat {
   }
 
   public static int raceTimeFrameCount(byte[] racerData) {
-    int offset = (RACER_FIELD_COUNT - 1) * Integer.BYTES;
+    // The final word is the sender-local interpolation timestamp.  The preceding word is the
+    // game's raw race-time frame counter used only for the server's zero-to-positive start gate.
+    int offset = (RACER_FIELD_COUNT - 2) * Integer.BYTES;
     return ((racerData[offset] & 0xff) << 24) |
         ((racerData[offset + 1] & 0xff) << 16) |
         ((racerData[offset + 2] & 0xff) << 8) |

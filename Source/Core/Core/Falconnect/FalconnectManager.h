@@ -65,6 +65,9 @@ private:
     bool m_track_vote_submitted = false;
     bool m_seen_track_select = false;
     std::array<Falconnect::RacerInterpolator, 30> m_racer_interpolators;
+    // Independent of game/server race time; stamped into every locally published pose so
+    // receivers can interpolate against the sender's update cadence.
+    u32 m_interpolation_frame_clock = 0;
     bool m_local_racer_ai_enabled = false;
     std::array<u32, 30> m_last_lap_counts{};
     std::array<u64, 30> m_completed_lap_millis{};

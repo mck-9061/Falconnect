@@ -29,6 +29,10 @@ public class FalconnectRace extends Thread {
   private final Set<Byte> cpuControlledPlayerRacers = Collections.synchronizedSet(new HashSet<>());
   // Starts on the first observed running race frame, rather than on a client's local clock.
   private long raceTimerStartedAtNanos = -1;
+  // A race frame counter is zero during the grid/countdown.  Keep the previous value per
+  // sending player/controlled racer so a non-zero value in an early packet cannot start the
+  // clock before that racer's counter has actually transitioned out of zero.
+  private final Map<Integer, int[]> previousRaceFrameCounts = new HashMap<>();
   private byte[] cpuRacerIds;
   private Long firstReadyAtNanos;
   private Long firstTrackVoteAtNanos;
@@ -903,19 +907,29 @@ public class FalconnectRace extends Thread {
         (sourceSequence & 0x00ff_ffff);
   }
 
-  public synchronized void noteRaceFrameProgress(List<byte[]> racerData) {
+  public synchronized void noteRaceFrameProgress(int playerNumber, List<byte[]> racerData) {
     if (gameState != GameState.RACING || raceTimerStartedAtNanos >= 0) return;
-    for (byte[] data : racerData) {
-      if (RaceDataFormat.raceTimeFrameCount(data) > 0) {
+    int[] previousCounts = previousRaceFrameCounts.computeIfAbsent(
+        playerNumber, ignored -> {
+          int[] counts = new int[RaceDataFormat.MAX_RACERS];
+          Arrays.fill(counts, -1);
+          return counts;
+        });
+    for (int i = 0; i < racerData.size(); ++i) {
+      int frameCount = RaceDataFormat.raceTimeFrameCount(racerData.get(i));
+      if (previousCounts[i] == 0 && frameCount > 0) {
         raceTimerStartedAtNanos = System.nanoTime();
-        System.out.println("Starting authoritative race timer");
+        System.out.println("Starting authoritative race timer after player " + playerNumber +
+            " racer " + i + " advanced from frame zero");
         return;
       }
+      previousCounts[i] = frameCount;
     }
   }
 
   private synchronized void resetRaceTimer() {
     raceTimerStartedAtNanos = -1;
+    previousRaceFrameCounts.clear();
   }
 
   private synchronized int serverRaceTimeMillis() {

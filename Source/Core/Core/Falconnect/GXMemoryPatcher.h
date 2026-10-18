@@ -1,7 +1,6 @@
 #ifndef DOLPHIN_EMU_GXMEMORYPATCHER_H
 #define DOLPHIN_EMU_GXMEMORYPATCHER_H
 #include <array>
-#include <chrono>
 
 #include "GXMemoryReader.h"
 #include "Core/Core.h"
@@ -38,6 +37,9 @@ public:
     void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
                       const std::array<u32, 3>& received_center_position);
     void SetCurrentLapTime(u8 racerNum, u64 elapsed_millis) const;
+    // The final-order timing block is a separate 12-byte timer at +0x738.  Keep it on the
+    // server clock as well; SetCurrentLapTime only represents the current lap.
+    void SetRaceTime(u8 racerNum, u64 elapsed_millis) const;
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;
@@ -65,9 +67,6 @@ public:
 
 private:
     Memory::MemoryManager& manager;
-    std::array<std::chrono::steady_clock::time_point, 30> m_last_timing_log{};
-    std::array<std::array<u32, 3>, 30> m_last_written_timing{};
-    std::array<bool, 30> m_has_written_timing{};
 
     u32 racerBaseAddress;
 

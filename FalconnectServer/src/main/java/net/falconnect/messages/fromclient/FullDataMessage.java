@@ -61,7 +61,7 @@ public class FullDataMessage extends FromClientMessage {
           origin.getLastReceivedCount());
     }
     else if (origin.getRace() != null) {
-      origin.getRace().noteRaceFrameProgress(allData);
+      origin.getRace().noteRaceFrameProgress(origin.playerNum, allData);
     }
 
 

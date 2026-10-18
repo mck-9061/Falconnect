@@ -299,6 +299,7 @@ void FalconnectManager::Update() {
         readCounter = 0;
         for (auto& interpolator : m_racer_interpolators)
             interpolator.Reset();
+        m_interpolation_frame_clock = 0;
         m_local_racer_ai_enabled = false;
         m_last_lap_counts.fill(0);
         m_completed_lap_millis.fill(0);
@@ -395,6 +396,9 @@ void FalconnectManager::Update() {
     }
 
     if (currentState == GameState::RACING) {
+        // This is packet metadata, not the game's race timer.  Every locally controlled racer
+        // in this update gets the same sender-local timestamp before it is relayed by the server.
+        const u32 interpolation_frame = ++m_interpolation_frame_clock;
         if (FalconnectSocketManager::instance->ConsumeNamesChanged())
             patcher->InitialiseNameLabels();
         // Do not leave a pause/results menu over the race. Record that it was actually opened so
@@ -413,6 +417,7 @@ void FalconnectManager::Update() {
         std::vector<RacerMemoryBlock> frames;
         const auto sample_racer = [&](u8 racer) {
             const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
+            block->interpolationFrameCount = interpolation_frame;
             frames.push_back(*block);
         };
         sample_racer(0);
@@ -449,23 +454,42 @@ void FalconnectManager::Update() {
             return server_slot;
         };
 
-        // The server's clock is written only into racers this client controls.  On a new lap,
-        // retain the accumulated completed-lap duration so +0x6c0 continues to mean *current*
-        // lap time rather than the whole race.
+        // The server clock owns every timing block.  +0x738 is the total/final-order timer and
+        // +0x6c0 is the current-lap timer.  Never copy either from a remote client's packet.
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
-                if (lap_count < m_last_lap_counts[racer_num])
+                const u64 server_time = received_race_data.server_race_time_millis;
+                if (lap_count < m_last_lap_counts[racer_num]) {
                     m_completed_lap_millis[racer_num] = 0;
-                else if (lap_count > m_last_lap_counts[racer_num])
-                    m_completed_lap_millis[racer_num] = received_race_data.server_race_time_millis;
+                } else if (lap_count > m_last_lap_counts[racer_num]) {
+                    // At the first observed sample of a new lap, all elapsed server time up to
+                    // that boundary is the completed-lap sum.  This is shared by every client.
+                    m_completed_lap_millis[racer_num] = server_time;
+                }
                 m_last_lap_counts[racer_num] = lap_count;
+                // A restarted/reordered server timestamp must never unsigned-underflow into a
+                // multi-minute display.  Re-anchor the lap clock instead.
+                if (m_completed_lap_millis[racer_num] > server_time)
+                    m_completed_lap_millis[racer_num] = 0;
+                const u64 current_lap_time =
+                    server_time >= m_completed_lap_millis[racer_num] ?
+                        server_time - m_completed_lap_millis[racer_num] : 0;
                 patcher->SetCurrentLapTime(racer_num,
-                    received_race_data.server_race_time_millis - m_completed_lap_millis[racer_num]);
+                                           current_lap_time);
+                patcher->SetRaceTime(racer_num, server_time);
             };
+
+            // Our player and locally controlled CPUs are not present in received_race_data.
             apply_server_time(0);
             for (const u8 racer_num : cpu_racer_indices)
                 apply_server_time(racer_num);
+            // Remote racers are present in server slot order; translate each one into this
+            // client's local GX slot before writing the same authoritative clock.
+            for (u8 server_slot = 0; server_slot < received_race_data.racers.size(); ++server_slot) {
+                if (received_race_data.racers[server_slot].valid)
+                    apply_server_time(local_racer_for_server_slot(server_slot));
+            }
         }
 
         for (int i = 0; i < 30; i++) {

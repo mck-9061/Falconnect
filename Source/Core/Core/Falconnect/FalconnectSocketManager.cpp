@@ -241,12 +241,35 @@ void FalconnectSocketManager::HandleConnectionLost()
 
 void FalconnectSocketManager::RequestDisconnect()
 {
+    // This is also called from Core::Stop(), after frame callbacks have stopped. Send the
+    // protocol-level disconnect before closing TCP so the server can remove us immediately
+    // instead of waiting for a transport timeout.
+    if (shouldDisconnect)
+        return;
+
+    if (serverSocket != -1) {
+        char data[FULL_RACE_PACKET_SIZE] = {0};
+        data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
+        send(serverSocket, data, FULL_RACE_PACKET_SIZE, 0);
+    }
+
     shouldRunDataThread = false;
     shouldDisconnect = true;
     shouldRun = false;
 
+    // Wake a UDP receiver and release the local ephemeral port now rather than leaving it to a
+    // detached worker which will no longer be needed after Stop.
+    if (serverUdpSocket != -1) {
+#ifdef _WIN32
+        closesocket(serverUdpSocket);
+#else
+        close(serverUdpSocket);
+#endif
+        serverUdpSocket = -1;
+    }
+
     // SocketThread normally blocks in recvAll waiting for TCP control packets. Interrupt that
-    // blocking receive so its teardown can close the connection and the server sees EOF.
+    // blocking receive so its teardown can finish after the explicit disconnect frame.
     if (serverSocket == -1)
         return;
 #ifdef _WIN32

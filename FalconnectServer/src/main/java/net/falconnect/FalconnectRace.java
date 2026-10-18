@@ -110,7 +110,13 @@ public class FalconnectRace extends Thread {
     validateOverrides(trackId, lapCountOverride, boostLapOverride);
     trackOverride = trackId;
     // An explicit operator choice is authoritative: do not make the lobby wait for votes.
-    if (trackId != null) finishTrackVote();
+    if (trackId != null && lobbyPhase == LobbyPhase.MACHINE_SELECTION) {
+      // Voting may already have chosen a course. Replace that captured course immediately so a
+      // late operator override has the same effect as one entered during voting.
+      selectedTrackSettings = resolveTrackSettings(trackId, lapCountOverride, boostLapOverride);
+    } else if (trackId != null) {
+      finishTrackVote();
+    }
     else if (lobbyPhase == LobbyPhase.MACHINE_SELECTION) {
       // Restoring voting before loading opens a fresh voting round rather than retaining the
       // course chosen by the former override.
@@ -130,15 +136,28 @@ public class FalconnectRace extends Thread {
   public synchronized void setLapCountOverride(Integer lapCount) {
     requireWaitingForReady();
     if (lapCount != null) FalconnectServer.requireRange(lapCount, 1, 255, "Lap count");
-    validateOverrides(trackOverride, lapCount, boostLapOverride);
+    validateOverrides(activeTrackId(), lapCount, boostLapOverride);
     lapCountOverride = lapCount;
+    refreshSelectedTrackSettings();
   }
 
   public synchronized void setBoostLapOverride(Integer boostLap) {
     requireWaitingForReady();
     if (boostLap != null) FalconnectServer.requireRange(boostLap, 0, 255, "Boost lap");
-    validateOverrides(trackOverride, lapCountOverride, boostLap);
+    validateOverrides(activeTrackId(), lapCountOverride, boostLap);
     boostLapOverride = boostLap;
+    refreshSelectedTrackSettings();
+  }
+
+  private Integer activeTrackId() {
+    if (trackOverride != null) return trackOverride;
+    return selectedTrackSettings == null ? null : selectedTrackSettings.trackId();
+  }
+
+  private void refreshSelectedTrackSettings() {
+    if (selectedTrackSettings != null)
+      selectedTrackSettings = resolveTrackSettings(selectedTrackSettings.trackId(),
+          lapCountOverride, boostLapOverride);
   }
 
   private void requireWaitingForReady() {

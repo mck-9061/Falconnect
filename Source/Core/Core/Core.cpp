@@ -301,6 +301,11 @@ void Stop(Core::System& system)  // - Hammertime!
 
   INFO_LOG_FMT(CONSOLE, "Stop [Main Thread]\t\t---- Shutting down ----");
 
+  // Frame-end callbacks will not run once Stop begins, so notify Falconnect here rather than
+  // relying on FalconnectManager::Update() to observe the powered-down CPU.
+  if (FalconnectSocketManager::instance != nullptr)
+    FalconnectSocketManager::instance->RequestDisconnect();
+
   // Stop the CPU
   INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Stop CPU"));
   system.GetCPU().Stop();

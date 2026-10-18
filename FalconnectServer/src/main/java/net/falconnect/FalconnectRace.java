@@ -187,7 +187,8 @@ public class FalconnectRace extends Thread {
     if (!isRunning || lobbyPhase != LobbyPhase.TRACK_VOTING || !clients.contains(client)) return;
     client.selectedCourse = course;
     client.hasVotedTrack = true;
-    if (firstTrackVoteAtNanos == null) firstTrackVoteAtNanos = System.nanoTime();
+    if (activePlayerCount() >= 2 && firstTrackVoteAtNanos == null)
+      firstTrackVoteAtNanos = System.nanoTime();
   }
 
   public synchronized void skipTrackVoteCountdown() {
@@ -210,6 +211,16 @@ public class FalconnectRace extends Thread {
 
   synchronized Byte PrepareRaceStart(long nowNanos) {
     if (!isRunning || gameState != GameState.WAITING_FOR_READY) return null;
+
+    // A lobby needs another human before either its track-vote or ready countdown can begin.
+    // In particular, do not let a lone player load into a race simply because their countdown
+    // elapsed while they were waiting for somebody to join.
+    if (activePlayerCount() < 2) {
+      firstReadyAtNanos = null;
+      firstTrackVoteAtNanos = null;
+      return null;
+    }
+
     if (lobbyPhase != LobbyPhase.MACHINE_SELECTION) {
       finishTrackVote(nowNanos);
       if (lobbyPhase != LobbyPhase.MACHINE_SELECTION) return null;
@@ -280,8 +291,13 @@ public class FalconnectRace extends Thread {
 
   private void finishTrackVote(long nowNanos) {
     if (lobbyPhase != LobbyPhase.TRACK_VOTING) return;
+    if (activePlayerCount() < 2) {
+      firstTrackVoteAtNanos = null;
+      return;
+    }
     boolean anyVote = clients.stream().anyMatch(client -> !client.disconnected && client.hasVotedTrack);
     if (trackOverride == null && !anyVote) return;
+    if (firstTrackVoteAtNanos == null) firstTrackVoteAtNanos = nowNanos;
     boolean allVoted = !clients.isEmpty() && clients.stream().allMatch(client -> client.disconnected ||
         client.hasVotedTrack);
     boolean expired = skipTrackVoteCountdown || trackOverride != null ||
@@ -547,7 +563,7 @@ public class FalconnectRace extends Thread {
   }
 
   private int getForceStartCountdownSeconds(long nowNanos) {
-    if (firstReadyAtNanos == null) return 0;
+    if (activePlayerCount() < 2 || firstReadyAtNanos == null) return 0;
 
     long countdownNanos = server.getCountdownSeconds() * 1_000_000_000L;
     long remainingNanos = Math.max(0, countdownNanos - (nowNanos - firstReadyAtNanos));
@@ -556,10 +572,18 @@ public class FalconnectRace extends Thread {
   }
 
   private int getTrackVoteCountdownSeconds(long nowNanos) {
-    if (firstTrackVoteAtNanos == null) return 0;
+    if (activePlayerCount() < 2 || firstTrackVoteAtNanos == null) return 0;
     long countdownNanos = server.getTrackVoteCountdownSeconds() * 1_000_000_000L;
     long remainingNanos = Math.max(0, countdownNanos - (nowNanos - firstTrackVoteAtNanos));
     return (int) ((remainingNanos + 999_999_999L) / 1_000_000_000L);
+  }
+
+  private int activePlayerCount() {
+    int count = 0;
+    for (FalconnectClientConnection client : clients) {
+      if (!client.disconnected) count++;
+    }
+    return count;
   }
 
   private void DisconnectTimedOutClients() {

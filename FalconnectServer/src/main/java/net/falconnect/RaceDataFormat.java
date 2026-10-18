@@ -4,7 +4,11 @@ package net.falconnect;
  * Wire layout shared with the C++ RacerMemoryBlock serializer. Each racer value is a 32-bit word.
  */
 public final class RaceDataFormat {
-  public static final int PACKET_HEADER_BYTES = 5;
+  // Client packets contain a type and sequence. Server packets additionally carry the
+  // authoritative race clock, in milliseconds, immediately after that sequence.
+  public static final int CLIENT_PACKET_HEADER_BYTES = 5;
+  public static final int SERVER_PACKET_HEADER_BYTES = 9;
+  public static final int SERVER_RACE_TIME_OFFSET = CLIENT_PACKET_HEADER_BYTES;
   public static final int MAX_RACERS = 30;
   public static final int RACER_FIELD_COUNT =
       1 +  // magic
@@ -27,17 +31,25 @@ public final class RaceDataFormat {
   public static final int RACER_SEQUENCE_BYTES = Integer.BYTES;
   public static final int SERVER_RACER_RECORD_BYTES = RACER_DATA_BYTES + RACER_SEQUENCE_BYTES;
   public static final int CLIENT_FULL_RACE_PACKET_BYTES =
-      PACKET_HEADER_BYTES + (MAX_RACERS * RACER_DATA_BYTES);
+      CLIENT_PACKET_HEADER_BYTES + (MAX_RACERS * RACER_DATA_BYTES);
   public static final int FULL_RACE_PACKET_BYTES =
-      PACKET_HEADER_BYTES + (MAX_RACERS * SERVER_RACER_RECORD_BYTES);
+      SERVER_PACKET_HEADER_BYTES + (MAX_RACERS * SERVER_RACER_RECORD_BYTES);
 
   private RaceDataFormat() {}
 
   public static int packetBytesForRacers(int racerCount) {
-    return PACKET_HEADER_BYTES + (racerCount * RACER_DATA_BYTES);
+    return CLIENT_PACKET_HEADER_BYTES + (racerCount * RACER_DATA_BYTES);
   }
 
   public static int serverRecordOffset(int racerIndex) {
-    return PACKET_HEADER_BYTES + (racerIndex * SERVER_RACER_RECORD_BYTES);
+    return SERVER_PACKET_HEADER_BYTES + (racerIndex * SERVER_RACER_RECORD_BYTES);
+  }
+
+  public static int raceTimeFrameCount(byte[] racerData) {
+    int offset = (RACER_FIELD_COUNT - 1) * Integer.BYTES;
+    return ((racerData[offset] & 0xff) << 24) |
+        ((racerData[offset + 1] & 0xff) << 16) |
+        ((racerData[offset + 2] & 0xff) << 8) |
+        (racerData[offset + 3] & 0xff);
   }
 }

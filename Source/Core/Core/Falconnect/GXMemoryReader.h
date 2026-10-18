@@ -32,6 +32,9 @@ public:
     u32 ReadSecondaryRacerAddress(u8 racerNum) const;
     static constexpr u32 TIMING_DATA_OFFSET = 0x738;
     static constexpr u32 RACE_TIME_FRAME_COUNT_OFFSET = 0x744;
+    static constexpr u32 LAP_COUNT_OFFSET = 0x6b4;
+    static constexpr u32 CURRENT_LAP_TIME_OFFSET = 0x6c0;
+    u32 ReadLapCount(u8 racerNum) const;
 
     u32 referencePointer{};
 

@@ -114,6 +114,11 @@ u32 GXMemoryReader::ReadSecondaryRacerAddress(const u8 racerNum) const {
     return static_cast<u32>(cpuAddress);
 }
 
+u32 GXMemoryReader::ReadLapCount(const u8 racerNum) const {
+    const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
+    return secondaryAddress == 0 ? 0 : manager.Read_U32(secondaryAddress + LAP_COUNT_OFFSET);
+}
+
 std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const
 {
   const u32 baseAddress = manager.Read_U32(referencePointer + 0x227878);

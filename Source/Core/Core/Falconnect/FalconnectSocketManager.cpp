@@ -643,7 +643,7 @@ void FalconnectSocketManager::SendUdpPingIfDue()
 {
     constexpr auto ping_interval = std::chrono::milliseconds(250);
     const auto now = std::chrono::steady_clock::now();
-    std::array<char, RACE_PACKET_HEADER_SIZE> data{};
+    std::array<char, CLIENT_RACE_PACKET_HEADER_SIZE> data{};
 
     {
         const std::lock_guard<std::mutex> lock(m_ping_mutex);
@@ -683,14 +683,14 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
 
         auto payload = std::move(m_outgoing_frames.front());
         m_outgoing_frames.pop_front();
-        std::vector<u8> data(RACE_PACKET_HEADER_SIZE + payload.size());
+        std::vector<u8> data(CLIENT_RACE_PACKET_HEADER_SIZE + payload.size());
         data[0] = static_cast<u8>(FromServerPacketType::FULL_DATA);
         ++sent_count;
         data[1] = static_cast<u8>(sent_count >> 24);
         data[2] = static_cast<u8>(sent_count >> 16);
         data[3] = static_cast<u8>(sent_count >> 8);
         data[4] = static_cast<u8>(sent_count);
-        std::copy(payload.begin(), payload.end(), data.begin() + RACE_PACKET_HEADER_SIZE);
+        std::copy(payload.begin(), payload.end(), data.begin() + CLIENT_RACE_PACKET_HEADER_SIZE);
         const auto sent_bytes = sendto(serverUdpSocket, reinterpret_cast<const char*>(data.data()),
             static_cast<int>(data.size()), 0, reinterpret_cast<sockaddr*>(&serverUdpAddress),
             sizeof(serverUdpAddress));
@@ -733,7 +733,7 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
         if (m_race_data_generation.load() != race_generation)
             break;
 
-        if (received == RACE_PACKET_HEADER_SIZE &&
+        if (received == CLIENT_RACE_PACKET_HEADER_SIZE &&
             buffer[0] == static_cast<char>(FromServerPacketType::UDP_PONG)) {
             const u32 sequence =
                 (static_cast<u32>(static_cast<u8>(buffer[1])) << 24) |
@@ -810,7 +810,7 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
             u8 usedIndex = i;
             if (i == 0) usedIndex = playerNumber - 1;
             const std::size_t record_offset =
-                RACE_PACKET_HEADER_SIZE + (i * SERVER_RACER_RECORD_SIZE);
+                SERVER_RACE_PACKET_HEADER_SIZE + (i * SERVER_RACER_RECORD_SIZE);
 
             const u32 source_sequence =
                 (static_cast<u32>(static_cast<u8>(buffer[record_offset + RacerMemoryBlock::SOCKET_DATA_SIZE])) << 24) |
@@ -853,6 +853,11 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
             }
         }
 
+        m_received_race_data.server_race_time_millis =
+            (static_cast<u32>(static_cast<u8>(buffer[5])) << 24) |
+            (static_cast<u32>(static_cast<u8>(buffer[6])) << 16) |
+            (static_cast<u32>(static_cast<u8>(buffer[7])) << 8) |
+            static_cast<u32>(static_cast<u8>(buffer[8]));
         m_received_race_data_ready = true;
         hasReceivedAnyDataEver = true;
 

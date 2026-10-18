@@ -17,13 +17,13 @@ public class FullDataMessage extends FromClientMessage {
   @Override
   public void ProcessMessage() {
     List<byte[]> allData = new ArrayList<>();
-    if (data.length < RaceDataFormat.PACKET_HEADER_BYTES ||
-        (data.length - RaceDataFormat.PACKET_HEADER_BYTES) % RaceDataFormat.RACER_DATA_BYTES != 0) {
+    if (data.length < RaceDataFormat.CLIENT_PACKET_HEADER_BYTES ||
+        (data.length - RaceDataFormat.CLIENT_PACKET_HEADER_BYTES) % RaceDataFormat.RACER_DATA_BYTES != 0) {
       origin.logRacePacketRejection("invalid length " + data.length);
       return;
     }
     origin.noteRacePacketObserved();
-    int cpuCount = (data.length - RaceDataFormat.PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
+    int cpuCount = (data.length - RaceDataFormat.CLIENT_PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
     List<Byte> cpuIndices = clientCpuIndicesForPacket(cpuCount);
     final boolean cpuLayoutIsStale = cpuIndices == null;
     if (cpuLayoutIsStale) {
@@ -45,7 +45,7 @@ public class FullDataMessage extends FromClientMessage {
       byte[] racerData = new byte[RaceDataFormat.RACER_DATA_BYTES];
       System.arraycopy(
           data,
-          RaceDataFormat.PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
+          RaceDataFormat.CLIENT_PACKET_HEADER_BYTES + (i * RaceDataFormat.RACER_DATA_BYTES),
           racerData,
           0,
           RaceDataFormat.RACER_DATA_BYTES);
@@ -59,6 +59,9 @@ public class FullDataMessage extends FromClientMessage {
         DUPLICATE_RACE_DATA_TIMEOUT_MILLIS)) {
       origin.logRacePacketRejection("sequence=" + count + ", latest=" +
           origin.getLastReceivedCount());
+    }
+    else if (origin.getRace() != null) {
+      origin.getRace().noteRaceFrameProgress(allData);
     }
 
 

@@ -32,18 +32,19 @@ class FalconnectSocketManager {
 public:
     static FalconnectSocketManager* instance;
 
-    static constexpr std::size_t RACE_PACKET_HEADER_SIZE = 5;
+    static constexpr std::size_t CLIENT_RACE_PACKET_HEADER_SIZE = 5;
+    static constexpr std::size_t SERVER_RACE_PACKET_HEADER_SIZE = 9;
     static constexpr std::size_t MAX_RACERS = 30;
     static constexpr std::size_t SERVER_RACER_RECORD_SIZE =
         RacerMemoryBlock::SOCKET_DATA_SIZE + sizeof(u32);
     static constexpr std::size_t FULL_RACE_PACKET_SIZE =
-        RACE_PACKET_HEADER_SIZE + (MAX_RACERS * SERVER_RACER_RECORD_SIZE);
+        SERVER_RACE_PACKET_HEADER_SIZE + (MAX_RACERS * SERVER_RACER_RECORD_SIZE);
     static constexpr std::size_t CLIENT_FULL_RACE_PACKET_SIZE =
-        RACE_PACKET_HEADER_SIZE + (MAX_RACERS * RacerMemoryBlock::SOCKET_DATA_SIZE);
+        CLIENT_RACE_PACKET_HEADER_SIZE + (MAX_RACERS * RacerMemoryBlock::SOCKET_DATA_SIZE);
 
     static constexpr std::size_t ClientRacePacketSize(const std::size_t racer_count)
     {
-      return RACE_PACKET_HEADER_SIZE + (racer_count * RacerMemoryBlock::SOCKET_DATA_SIZE);
+      return CLIENT_RACE_PACKET_HEADER_SIZE + (racer_count * RacerMemoryBlock::SOCKET_DATA_SIZE);
     }
 
     struct ReceivedRacerData
@@ -72,6 +73,7 @@ public:
     struct ReceivedRaceData
     {
         std::array<ReceivedRacerData, MAX_RACERS> racers{};
+        u32 server_race_time_millis = 0;
     };
 
     std::thread socketThread[1];

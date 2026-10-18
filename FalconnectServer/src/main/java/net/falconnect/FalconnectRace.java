@@ -24,6 +24,8 @@ public class FalconnectRace extends Thread {
   private final int portBlockIndex;
 
   private byte[] fullDataPacket;
+  // Starts on the first observed running race frame, rather than on a client's local clock.
+  private long raceTimerStartedAtNanos = -1;
   private byte[] cpuRacerIds;
   private Long firstReadyAtNanos;
   private Long firstTrackVoteAtNanos;
@@ -465,6 +467,7 @@ public class FalconnectRace extends Thread {
             if (allGridded) {
               System.out.println("All clients gridded; sending START_RACE to " + getClients().size() + " clients");
               gameState = GameState.RACING;
+              resetRaceTimer();
               for (FalconnectClientConnection client : getClients()) {
                 client.lastUdpPacketReceivedAt = System.currentTimeMillis();
                 client.lastUdpRacePacketObservedAt = System.currentTimeMillis();
@@ -732,6 +735,11 @@ public class FalconnectRace extends Thread {
     packet[2] = (byte) ((packetNum >>> 16) & 0xff);
     packet[3] = (byte) ((packetNum >>> 8) & 0xff);
     packet[4] = (byte) ((packetNum) & 0xff);
+    int serverRaceTimeMillis = serverRaceTimeMillis();
+    packet[RaceDataFormat.SERVER_RACE_TIME_OFFSET] = (byte) (serverRaceTimeMillis >>> 24);
+    packet[RaceDataFormat.SERVER_RACE_TIME_OFFSET + 1] = (byte) (serverRaceTimeMillis >>> 16);
+    packet[RaceDataFormat.SERVER_RACE_TIME_OFFSET + 2] = (byte) (serverRaceTimeMillis >>> 8);
+    packet[RaceDataFormat.SERVER_RACE_TIME_OFFSET + 3] = (byte) serverRaceTimeMillis;
 
     //HashMap<Integer, Set<Float>> playerPositions = new HashMap<>();
 
@@ -824,6 +832,27 @@ public class FalconnectRace extends Thread {
     // The remaining 24 bits are ample for one race and preserve packet ordering per source.
     return ((client.playerNum & 0xff) << 24) |
         (sourceSequence & 0x00ff_ffff);
+  }
+
+  public synchronized void noteRaceFrameProgress(List<byte[]> racerData) {
+    if (gameState != GameState.RACING || raceTimerStartedAtNanos >= 0) return;
+    for (byte[] data : racerData) {
+      if (RaceDataFormat.raceTimeFrameCount(data) > 0) {
+        raceTimerStartedAtNanos = System.nanoTime();
+        System.out.println("Starting authoritative race timer");
+        return;
+      }
+    }
+  }
+
+  private synchronized void resetRaceTimer() {
+    raceTimerStartedAtNanos = -1;
+  }
+
+  private synchronized int serverRaceTimeMillis() {
+    if (raceTimerStartedAtNanos < 0) return 0;
+    long elapsed = (System.nanoTime() - raceTimerStartedAtNanos) / 1_000_000L;
+    return (int) Math.min(elapsed, 0xffff_ffffL);
   }
 
   public void SendFullDataPacket() throws IOException, InterruptedException {

@@ -37,6 +37,7 @@ public:
     // snapshots still update state and inputs, but leave position and rotation untouched.
     void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
                       const std::array<u32, 3>& received_center_position);
+    void SetCurrentLapTime(u8 racerNum, u64 elapsed_millis) const;
     void SetRacerMachineName(u8 racerNum, const std::vector<u8> &name) const;
     void SetGrid() const;
     void SetCourse(u8 courseID) const;

@@ -299,16 +299,10 @@ void FalconnectManager::Update() {
         readCounter = 0;
         for (auto& interpolator : m_racer_interpolators)
             interpolator.Reset();
-        m_last_local_race_frame_count = 0;
-        m_local_race_frame_last_advanced = {};
-        m_local_race_frame_count_started = false;
         m_local_racer_ai_enabled = false;
-        m_last_human_race_frame_counts.fill(0);
-        m_human_race_frame_last_advanced.fill(std::chrono::steady_clock::time_point{});
-        m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
-        m_human_race_frame_count_started.fill(false);
+        m_last_lap_counts.fill(0);
+        m_completed_lap_millis.fill(0);
         m_human_racers_finished.fill(false);
-        m_human_finish_tracking_started_at = {};
         m_all_human_racers_finished = false;
         m_all_human_racers_finished_at = {};
         m_menu_should_reopen_after_finish = false;
@@ -393,7 +387,6 @@ void FalconnectManager::Update() {
             // INFO_LOG_FMT(FALCONNECT, "Countdown started");
             INFO_LOG_FMT(FALCONNECT, "LOAD racing player={}",
                          FalconnectSocketManager::instance->playerNumber);
-            m_human_finish_tracking_started_at = std::chrono::steady_clock::now();
             currentState = GameState::RACING;
         }
     }
@@ -436,79 +429,34 @@ void FalconnectManager::Update() {
         const bool received_snapshot =
             FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
 
-        // Finish detection uses authoritative received timing. Each remote racer separately
-        // advances its interpolation timeline once per emulated frame below.
-        const u32 local_frame_count = frames.front().raceTimeFrameCount;
         const auto received_snapshot_time = std::chrono::steady_clock::now();
-
-        // GX stops increasing the local race-time frame counter once the local racer finishes.
-        // We receive server snapshots more often than GX renders frames, so only interpret it as
-        // stopped after a full second without an advance. This gives the game AI control of the
-        // finished local machine while the player waits for the rest of the field.
-        if (local_frame_count > m_last_local_race_frame_count) {
-            m_last_local_race_frame_count = local_frame_count;
-            m_local_race_frame_last_advanced = received_snapshot_time;
-            m_local_race_frame_count_started = true;
-        } else if (m_local_race_frame_count_started && !m_local_racer_ai_enabled &&
-                   received_snapshot_time - m_local_race_frame_last_advanced >=
-                       std::chrono::seconds(1)) {
-            patcher->EnableAIControlFor(0, 1);
-            m_local_racer_ai_enabled = true;
-            INFO_LOG_FMT(FALCONNECT, "Local racer frame counter stopped at {}; enabling AI control",
-                         local_frame_count);
-        }
 
         const u8 local_human_racer = FalconnectSocketManager::instance->playerNumber - 1;
         const u8 human_racer_count = std::min<u8>(
             FalconnectSocketManager::instance->totalPlayerCount, 30);
 
-        const auto update_human_finish_state =
-            [&](const u8 racer_num, const u32 racer_frame_count) {
-                if (racer_num >= human_racer_count) return;
-
-                if (racer_frame_count > m_last_human_race_frame_counts[racer_num]) {
-                    m_last_human_race_frame_counts[racer_num] = racer_frame_count;
-                    m_human_race_frame_last_advanced[racer_num] = received_snapshot_time;
-                    m_human_race_frame_count_started[racer_num] = true;
-                    // A delayed fresh packet can prove that an apparent one-second stall was
-                    // network delay rather than a finish. Keep the menu locked in that case.
-                    if (m_human_racers_finished[racer_num] && !m_menu_opened_after_finish) {
-                        m_human_racers_finished[racer_num] = false;
-                        m_all_human_racers_finished = false;
-                        m_all_human_racers_finished_at = {};
-                    }
-                    return;
-                }
-
-                if (m_human_race_frame_count_started[racer_num] &&
-                    received_snapshot_time - m_human_race_frame_last_advanced[racer_num] >=
-                        std::chrono::seconds(1)) {
-                    m_human_racers_finished[racer_num] = true;
-                }
+        // The server's clock is written only into racers this client controls.  On a new lap,
+        // retain the accumulated completed-lap duration so +0x6c0 continues to mean *current*
+        // lap time rather than the whole race.
+        if (received_snapshot) {
+            const auto apply_server_time = [&](const u8 racer_num) {
+                const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
+                if (lap_count < m_last_lap_counts[racer_num])
+                    m_completed_lap_millis[racer_num] = 0;
+                else if (lap_count > m_last_lap_counts[racer_num])
+                    m_completed_lap_millis[racer_num] = received_race_data.server_race_time_millis;
+                m_last_lap_counts[racer_num] = lap_count;
+                patcher->SetCurrentLapTime(racer_num,
+                    received_race_data.server_race_time_millis - m_completed_lap_millis[racer_num]);
             };
-
-        update_human_finish_state(local_human_racer, local_frame_count);
-        m_human_racer_last_received[local_human_racer] = received_snapshot_time;
+            apply_server_time(local_human_racer);
+            for (const u8 racer_num : cpu_racer_indices)
+                apply_server_time(racer_num);
+        }
 
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");
             const auto& received_racer = received_race_data.racers[i];
-            if (received_racer.valid) {
-                const auto& racer_block = received_racer.block;
-
-                // racer_index is remapped for this client's GX memory. The received array slot
-                // remains the authoritative server player slot, so use it to track finishes.
-                // The local racer is sampled directly from GX memory above; CPU slots are not
-                // considered by update_human_finish_state.
-                const u8 source_racer_slot = static_cast<u8>(i);
-                if (source_racer_slot != local_human_racer) {
-                    if (source_racer_slot < human_racer_count)
-                        m_human_racer_last_received[source_racer_slot] = received_snapshot_time;
-                    update_human_finish_state(source_racer_slot, racer_block.raceTimeFrameCount);
-                }
-
-            }
-
             const u8 racer_num = i == 0 ? local_human_racer : static_cast<u8>(i);
             auto& interpolator = m_racer_interpolators[i];
             if (i == local_human_racer ||
@@ -534,23 +482,17 @@ void FalconnectManager::Update() {
             }
         }
 
-        // Once the server has timed out or removed a remote player, their record becomes absent
-        // from each full-data snapshot. They can no longer advance their race timer, so do not
-        // require a finish signal that will never arrive before reopening the menu.
+        const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
         for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
-            if (racer_num == local_human_racer)
-                continue;
-
-            const auto last_received = m_human_racer_last_received[racer_num];
-            const bool never_received_after_start =
-                last_received == std::chrono::steady_clock::time_point{} &&
-                received_snapshot_time - m_human_finish_tracking_started_at >=
-                    std::chrono::seconds(5);
-            const bool record_was_removed =
-                last_received != std::chrono::steady_clock::time_point{} &&
-                received_snapshot_time - last_received >= std::chrono::seconds(1);
-            if (never_received_after_start || record_was_removed) {
+            const u8 local_racer_num = racer_num == 0 ? local_human_racer : racer_num;
+            if (patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps) {
                 m_human_racers_finished[racer_num] = true;
+                if (local_racer_num == local_human_racer && !m_local_racer_ai_enabled) {
+                    patcher->EnableAIControlFor(0, 1);
+                    m_local_racer_ai_enabled = true;
+                    INFO_LOG_FMT(FALCONNECT,
+                                 "Local racer finished at lap {}; enabling AI control", total_laps);
+                }
             }
         }
 

@@ -494,7 +494,7 @@ bool GXMemoryPatcher::SetFinalRaceTime(const u8 racerNum, const u32 frames) cons
     if (racerNum >= 30 || referencePointer == 0)
         return false;
 
-    constexpr u64 time_offset = 0xa7a460;
+    constexpr u64 time_offset = 0x1bdd68;
     constexpr u64 racer_stride = 0xa0;
     const u64 address = static_cast<u64>(referencePointer) + time_offset +
                         static_cast<u64>(racerNum) * racer_stride;

@@ -88,6 +88,11 @@ void FalconnectSocketManager::PublishRaceData(const std::vector<RacerMemoryBlock
     payload.reserve(frames.size() * RacerMemoryBlock::SOCKET_DATA_SIZE);
     for (const auto& frame : frames) {
         const auto bytes = frame.GetSocketData();
+        if (bytes.size() != RacerMemoryBlock::SOCKET_DATA_SIZE) {
+            ERROR_LOG_FMT(FALCONNECT, "Race serializer produced {} bytes; expected {}",
+                          bytes.size(), RacerMemoryBlock::SOCKET_DATA_SIZE);
+            return;
+        }
         payload.insert(payload.end(), bytes.begin(), bytes.end());
     }
     const std::lock_guard<std::mutex> lock(m_outgoing_mutex);

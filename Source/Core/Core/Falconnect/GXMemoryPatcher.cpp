@@ -453,8 +453,7 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 
-    // Timing is intentionally not copied from another client here.  Both the current-lap
-    // timer and the final-order timer are written from the server clock by FalconnectManager.
+    // Timing is applied separately from the owner's race record by FalconnectManager.
 
     ScheduleInvalidateCacheRange(baseAddress, 388);
 }

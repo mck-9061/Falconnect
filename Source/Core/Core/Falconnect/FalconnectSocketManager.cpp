@@ -696,6 +696,9 @@ void FalconnectSocketManager::SendUdpPingIfDue()
 
 void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
     u32 sent_count = 0;
+    std::array<u32, MAX_RACERS> last_sent_lap_counts{};
+    std::array<u32, MAX_RACERS> last_sent_completed_frames{};
+    std::array<u32, MAX_RACERS> last_sent_current_frames{};
     while (shouldRunDataThread.load() && m_race_data_generation.load() == race_generation) {
         SendUdpPingIfDue();
         std::unique_lock<std::mutex> lock(m_outgoing_mutex);
@@ -722,8 +725,35 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
         const auto sent_bytes = sendto(serverUdpSocket, reinterpret_cast<const char*>(data.data()),
             static_cast<int>(data.size()), 0, reinterpret_cast<sockaddr*>(&serverUdpAddress),
             sizeof(serverUdpAddress));
-        if (sent_bytes == static_cast<int>(data.size()))
+        if (sent_bytes == static_cast<int>(data.size())) {
             m_has_sent_race_data_for_generation = true;
+            const auto read_word = [&](const std::size_t slot, const std::size_t word) {
+                const std::size_t offset = CLIENT_RACE_PACKET_HEADER_SIZE +
+                    slot * RacerMemoryBlock::SOCKET_DATA_SIZE + word * sizeof(u32);
+                return (static_cast<u32>(data[offset]) << 24) |
+                    (static_cast<u32>(data[offset + 1]) << 16) |
+                    (static_cast<u32>(data[offset + 2]) << 8) |
+                    static_cast<u32>(data[offset + 3]);
+            };
+            const std::size_t racer_count = std::min<std::size_t>(
+                MAX_RACERS, payload.size() / RacerMemoryBlock::SOCKET_DATA_SIZE);
+            for (std::size_t slot = 0; slot < racer_count; ++slot) {
+                const u32 completed = read_word(slot, 39);
+                const u32 lap = read_word(slot, 42);
+                const u32 current = read_word(slot, 43);
+                if (lap != last_sent_lap_counts[slot] ||
+                    completed != last_sent_completed_frames[slot] ||
+                    static_cast<u64>(current) + 30 < last_sent_current_frames[slot]) {
+                    INFO_LOG_FMT(FALCONNECT,
+                                 "TIMING LAP TX player={} seq={} slot={} lap={} completed={} current={} raw_total={}",
+                                 playerNumber, sent_count, slot, lap, completed, current,
+                                 read_word(slot, 44));
+                }
+                last_sent_lap_counts[slot] = lap;
+                last_sent_completed_frames[slot] = completed;
+                last_sent_current_frames[slot] = current;
+            }
+        }
     }
 }
 

@@ -305,6 +305,12 @@ void FalconnectManager::Update() {
         m_last_lap_counts.fill(0);
         m_completed_lap_frames.fill(0);
         m_last_written_current_lap_frames.fill(0);
+        m_last_sent_lap_counts.fill(0);
+        m_last_sent_completed_frames.fill(0);
+        m_last_received_lap_counts.fill(0);
+        m_last_received_completed_frames.fill(0);
+        m_last_received_current_frames.fill(0);
+        m_last_server_frames = 0;
         m_human_racers_finished.fill(false);
         m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
         m_human_finish_tracking_started_at = {};
@@ -429,6 +435,9 @@ void FalconnectManager::Update() {
         // worker establishes its first exchange; DataThread owns the timed failure path.
         const bool received_snapshot =
             FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
+        if (received_snapshot)
+            m_last_server_frames =
+                (static_cast<u64>(received_race_data.server_race_time_millis) * 60) / 1000;
 
         const auto received_snapshot_time = std::chrono::steady_clock::now();
 
@@ -454,8 +463,28 @@ void FalconnectManager::Update() {
                 if (server_slot != local_human_server_slot &&
                     !FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) &&
                     racer.valid && racer.pending) {
+                    const bool lap_transition =
+                        racer.block.currentLapCount != m_last_received_lap_counts[racer_num] ||
+                        racer.block.timingData[0] != m_last_received_completed_frames[racer_num] ||
+                        static_cast<u64>(racer.block.currentLapFrameCount) + 30 <
+                            m_last_received_current_frames[racer_num];
                     patcher->SetCompletedLapTime(racer_num, racer.block.timingData[0]);
                     patcher->SetCurrentLapTime(racer_num, racer.block.currentLapFrameCount);
+                    if (lap_transition) {
+                        INFO_LOG_FMT(FALCONNECT,
+                                     "TIMING LAP RX player={} server_slot={} local_racer={} "
+                                     "source={:08x} owner_lap={} completed={} current={} "
+                                     "raw_total={} readback_completed={} readback_current={}",
+                                     FalconnectSocketManager::instance->playerNumber, server_slot,
+                                     racer_num, racer.source_sequence, racer.block.currentLapCount,
+                                     racer.block.timingData[0], racer.block.currentLapFrameCount,
+                                     racer.block.raceTimeFrameCount,
+                                     patcher->memoryReader->ReadCompletedLapFrames(racer_num),
+                                     patcher->memoryReader->ReadCurrentLapFrames(racer_num));
+                    }
+                    m_last_received_lap_counts[racer_num] = racer.block.currentLapCount;
+                    m_last_received_completed_frames[racer_num] = racer.block.timingData[0];
+                    m_last_received_current_frames[racer_num] = racer.block.currentLapFrameCount;
                 }
             }
         }
@@ -472,8 +501,7 @@ void FalconnectManager::Update() {
                     completed_frames != m_completed_lap_frames[racer_num])
                     m_completed_lap_frames[racer_num] = completed_frames;
                 m_last_lap_counts[racer_num] = lap_count;
-                const u64 server_frames =
-                    (static_cast<u64>(received_race_data.server_race_time_millis) * 60) / 1000;
+                const u64 server_frames = m_last_server_frames;
                 const u64 lap_frames = server_frames >= m_completed_lap_frames[racer_num] ?
                     server_frames - m_completed_lap_frames[racer_num] : 0;
                 const u32 written_frames =
@@ -493,6 +521,18 @@ void FalconnectManager::Update() {
             const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
             block->timingData[1] = 0;
             block->currentLapFrameCount = m_last_written_current_lap_frames[racer];
+            const u32 lap_count = block->currentLapCount;
+            if (lap_count != m_last_sent_lap_counts[racer] ||
+                block->timingData[0] != m_last_sent_completed_frames[racer]) {
+                INFO_LOG_FMT(FALCONNECT,
+                             "TIMING LAP LOCAL player={} local_racer={} lap={} "
+                             "server_frames={} completed={} written_current={} raw_total={}",
+                             FalconnectSocketManager::instance->playerNumber, racer, lap_count,
+                             m_last_server_frames, block->timingData[0], block->currentLapFrameCount,
+                             block->raceTimeFrameCount);
+            }
+            m_last_sent_lap_counts[racer] = lap_count;
+            m_last_sent_completed_frames[racer] = block->timingData[0];
             block->interpolationFrameCount = interpolation_frame;
             frames.push_back(*block);
         };
@@ -547,7 +587,12 @@ void FalconnectManager::Update() {
         const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
         for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
             const u8 local_racer_num = local_racer_for_server_slot(racer_num);
-            if (patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps) {
+            const bool is_local_racer = racer_num == local_human_server_slot;
+            const bool finished_by_lap = is_local_racer ?
+                patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps :
+                received_race_data.racers[racer_num].valid &&
+                    received_race_data.racers[racer_num].block.currentLapCount >= total_laps;
+            if (finished_by_lap) {
                 m_human_racers_finished[racer_num] = true;
                 if (local_racer_num == 0 && !m_local_racer_ai_enabled) {
                     patcher->EnableAIControlFor(0, 1);
@@ -560,7 +605,7 @@ void FalconnectManager::Update() {
 
             // A race participant which was removed by the server no longer has a record in the
             // full-data packet. This is departure bookkeeping, not finish detection: active
-            // racers are still finished only by their secondary-block lap count above.
+            // remote racers are finished by their owner's relayed lap count above.
             if (racer_num != local_human_server_slot) {
                 const auto last_received = m_human_racer_last_received[racer_num];
                 const bool disappeared_after_sending =

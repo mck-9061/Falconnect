@@ -25,6 +25,7 @@ public:
         4 +  // maxSpeedKmh, acceleration, baseSpeed, maxSpeed
         1 +  // restoreFlag
         3 +  // timingData (12 bytes at secondary offset 0x738, used for final order)
+        1 +  // currentLapCount (secondary offset 0x6b4)
         1 +  // currentLapFrameCount (written at secondary offset 0x6c0)
         1 +  // raceTimeFrameCount (first word of total time at secondary offset 0x744)
         1;   // interpolationFrameCount (sender-local packet timestamp)
@@ -72,6 +73,7 @@ public:
     u32 maxSpeed;
     u32 restoreFlag;
     std::array<u32, 3> timingData{};
+    u32 currentLapCount{};
     u32 currentLapFrameCount{};
     u32 raceTimeFrameCount{};
     u32 interpolationFrameCount{};

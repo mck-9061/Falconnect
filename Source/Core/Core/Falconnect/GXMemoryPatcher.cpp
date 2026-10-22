@@ -459,16 +459,17 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     ScheduleInvalidateCacheRange(baseAddress, 388);
 }
 
-void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u32 frames) const
+bool GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u32 frames) const
 {
     const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
     if (secondaryAddress == 0)
-        return;
+        return false;
 
     // GX updates the display fields from the frame count itself.
     const u32 timer = secondaryAddress + GXMemoryReader::CURRENT_LAP_TIME_OFFSET;
     manager.Write_U32(frames, timer);
     manager.Write_U32(0, timer + 4);
+    return true;
 }
 
 void GXMemoryPatcher::ClearCompletedLapFraction(const u8 racerNum) const

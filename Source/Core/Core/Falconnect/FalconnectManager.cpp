@@ -304,6 +304,7 @@ void FalconnectManager::Update() {
         m_local_racer_ai_enabled = false;
         m_last_lap_counts.fill(0);
         m_completed_lap_frames.fill(0);
+        m_last_written_current_lap_frames.fill(0);
         m_human_racers_finished.fill(false);
         m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
         m_human_finish_tracking_started_at = {};
@@ -415,19 +416,6 @@ void FalconnectManager::Update() {
         for (const u8 cpuRacer : cpu_racer_indices)
             patcher->EnableAIControlFor(cpuRacer, 1);
 
-        std::vector<RacerMemoryBlock> frames;
-        const auto sample_racer = [&](u8 racer) {
-            patcher->ClearCompletedLapFraction(racer);
-            const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
-            block->timingData[1] = 0;
-            block->interpolationFrameCount = interpolation_frame;
-            frames.push_back(*block);
-        };
-        sample_racer(0);
-        for (const u8 racer : cpu_racer_indices)
-            sample_racer(racer);
-        FalconnectSocketManager::instance->PublishRaceData(frames, cpu_racer_indices);
-
         const u16 ping = FalconnectSocketManager::instance->ping.load();
         const u16 packetRate = FalconnectSocketManager::instance->packetRate.load();
         const std::string ping_display = FalconnectSocketManager::instance->hasPingSample.load() ?
@@ -457,20 +445,22 @@ void FalconnectManager::Update() {
             return server_slot;
         };
 
-        // Apply new owner totals before calculating the current lap from this same snapshot.
+        // Remote racers receive both timer frame counts from their owner. The server clock
+        // is applied only to racers simulated locally.
         if (received_snapshot) {
             for (u8 server_slot = 0; server_slot < received_race_data.racers.size(); ++server_slot) {
                 const u8 racer_num = local_racer_for_server_slot(server_slot);
                 const auto& racer = received_race_data.racers[server_slot];
                 if (server_slot != local_human_server_slot &&
                     !FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) &&
-                    racer.valid && racer.pending)
+                    racer.valid && racer.pending) {
                     patcher->SetCompletedLapTime(racer_num, racer.block.timingData[0]);
+                    patcher->SetCurrentLapTime(racer_num, racer.block.currentLapFrameCount);
+                }
             }
         }
 
-        // The server clock advances only the current-lap timer. Completed-lap frames come
-        // from each racer's owner through the normal race-data relay.
+        // The server clock advances the current-lap timer for locally controlled racers.
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
@@ -486,21 +476,30 @@ void FalconnectManager::Update() {
                     (static_cast<u64>(received_race_data.server_race_time_millis) * 60) / 1000;
                 const u64 lap_frames = server_frames >= m_completed_lap_frames[racer_num] ?
                     server_frames - m_completed_lap_frames[racer_num] : 0;
-                patcher->SetCurrentLapTime(
-                    racer_num, static_cast<u32>(std::min<u64>(lap_frames, std::numeric_limits<u32>::max())));
+                const u32 written_frames =
+                    static_cast<u32>(std::min<u64>(lap_frames, std::numeric_limits<u32>::max()));
+                if (patcher->SetCurrentLapTime(racer_num, written_frames))
+                    m_last_written_current_lap_frames[racer_num] = written_frames;
             };
 
-            // Our player and locally controlled CPUs are not present in received_race_data.
             apply_server_time(0);
             for (const u8 racer_num : cpu_racer_indices)
                 apply_server_time(racer_num);
-            // Remote racers are present in server slot order; translate each one into this
-            // client's local GX slot before writing the same authoritative clock.
-            for (u8 server_slot = 0; server_slot < received_race_data.racers.size(); ++server_slot) {
-                if (received_race_data.racers[server_slot].valid)
-                    apply_server_time(local_racer_for_server_slot(server_slot));
-            }
         }
+
+        std::vector<RacerMemoryBlock> frames;
+        const auto sample_racer = [&](u8 racer) {
+            patcher->ClearCompletedLapFraction(racer);
+            const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
+            block->timingData[1] = 0;
+            block->currentLapFrameCount = m_last_written_current_lap_frames[racer];
+            block->interpolationFrameCount = interpolation_frame;
+            frames.push_back(*block);
+        };
+        sample_racer(0);
+        for (const u8 racer : cpu_racer_indices)
+            sample_racer(racer);
+        FalconnectSocketManager::instance->PublishRaceData(frames, cpu_racer_indices);
 
         for (int i = 0; i < 30; i++) {
             //INFO_LOG_FMT(FALCONNECT, "SET_RACER_BLOCK");

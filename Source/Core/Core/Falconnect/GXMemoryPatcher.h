@@ -36,7 +36,7 @@ public:
     // snapshots still update state and inputs, but leave position and rotation untouched.
     void SetRacerData(u8 racerNum, const RacerMemoryBlock& patchData, bool full,
                       const std::array<u32, 3>& received_center_position);
-    void SetCurrentLapTime(u8 racerNum, u32 frames) const;
+    bool SetCurrentLapTime(u8 racerNum, u32 frames) const;
     // Preserve the game's completed-lap frame count while clearing its fractional word.
     void ClearCompletedLapFraction(u8 racerNum) const;
     void SetCompletedLapTime(u8 racerNum, u32 frames) const;

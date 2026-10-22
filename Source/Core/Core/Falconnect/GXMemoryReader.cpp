@@ -67,6 +67,7 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
 
     if (secondaryAddress != 0) {
+        block->currentLapFrameCount = manager.Read_U32(secondaryAddress + CURRENT_LAP_TIME_OFFSET);
         for (u32 i = 0; i < block->timingData.size(); i++)
             block->timingData[i] =
                 manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));

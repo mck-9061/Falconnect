@@ -67,8 +67,6 @@ RacerMemoryBlock* GXMemoryReader::ReadRacerData(const u8 racerNum) const {
     const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
 
     if (secondaryAddress != 0) {
-        block->currentLapCount = manager.Read_U32(secondaryAddress + LAP_COUNT_OFFSET);
-        block->currentLapFrameCount = manager.Read_U32(secondaryAddress + CURRENT_LAP_TIME_OFFSET);
         for (u32 i = 0; i < block->timingData.size(); i++)
             block->timingData[i] =
                 manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET + i * sizeof(u32));
@@ -124,11 +122,6 @@ u32 GXMemoryReader::ReadLapCount(const u8 racerNum) const {
 u32 GXMemoryReader::ReadCompletedLapFrames(const u8 racerNum) const {
     const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
     return secondaryAddress == 0 ? 0 : manager.Read_U32(secondaryAddress + TIMING_DATA_OFFSET);
-}
-
-u32 GXMemoryReader::ReadCurrentLapFrames(const u8 racerNum) const {
-    const u32 secondaryAddress = ReadSecondaryRacerAddress(racerNum);
-    return secondaryAddress == 0 ? 0 : manager.Read_U32(secondaryAddress + CURRENT_LAP_TIME_OFFSET);
 }
 
 std::vector<u32> GXMemoryReader::ReadRawRacerData(const u8 racerNum) const

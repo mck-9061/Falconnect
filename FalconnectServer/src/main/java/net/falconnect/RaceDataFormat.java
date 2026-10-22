@@ -26,8 +26,6 @@ public final class RaceDataFormat {
       4 +  // speed/acceleration values
       1 +  // restore flag
       3 +  // timing data (12 bytes at secondary offset 0x738, used for final order)
-      1 +  // current lap count (secondary offset 0x6b4)
-      1 +  // current-lap frame count (written at secondary offset 0x6c0)
       1 +  // race-time frame count (first word of total time at secondary offset 0x744)
       1;   // sender-local interpolation frame count
   public static final int RACER_DATA_BYTES = RACER_FIELD_COUNT * Integer.BYTES;

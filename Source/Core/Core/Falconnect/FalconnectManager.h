@@ -71,13 +71,7 @@ private:
     bool m_local_racer_ai_enabled = false;
     std::array<u32, 30> m_last_lap_counts{};
     std::array<u32, 30> m_completed_lap_frames{};
-    std::array<u32, 30> m_last_written_current_lap_frames{};
-    std::array<u32, 30> m_last_sent_lap_counts{};
-    std::array<u32, 30> m_last_sent_completed_frames{};
-    std::array<u32, 30> m_last_received_lap_counts{};
-    std::array<u32, 30> m_last_received_completed_frames{};
-    std::array<u32, 30> m_last_received_current_frames{};
-    u64 m_last_server_frames = 0;
+    std::array<u32, 30> m_final_display_frames{};
     std::array<bool, 30> m_human_racers_finished{};
     // Server slots which disappear after sending race data belong to departed players, not
     // racers which still need to cross the finish line.

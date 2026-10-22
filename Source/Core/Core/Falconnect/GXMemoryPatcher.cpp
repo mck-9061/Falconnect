@@ -453,22 +453,22 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
 
     manager.Write_U32(patchData.restoreFlag, baseAddress + (12 * 4));
 
-    // Timing is applied separately from the owner's race record by FalconnectManager.
+    // Timing is intentionally not copied from another client here.  Both the current-lap
+    // timer and the final-order timer are written from the server clock by FalconnectManager.
 
     ScheduleInvalidateCacheRange(baseAddress, 388);
 }
 
-bool GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u32 frames) const
+void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u32 frames) const
 {
     const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
     if (secondaryAddress == 0)
-        return false;
+        return;
 
     // GX updates the display fields from the frame count itself.
     const u32 timer = secondaryAddress + GXMemoryReader::CURRENT_LAP_TIME_OFFSET;
     manager.Write_U32(frames, timer);
     manager.Write_U32(0, timer + 4);
-    return true;
 }
 
 void GXMemoryPatcher::ClearCompletedLapFraction(const u8 racerNum) const
@@ -487,6 +487,31 @@ void GXMemoryPatcher::SetCompletedLapTime(const u8 racerNum, const u32 frames) c
     const u32 timer = secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET;
     manager.Write_U32(frames, timer);
     manager.Write_U32(0, timer + 4);
+}
+
+bool GXMemoryPatcher::SetFinalRaceTime(const u8 racerNum, const u32 frames) const
+{
+    if (racerNum >= 30 || referencePointer == 0)
+        return false;
+
+    constexpr u64 time_offset = 0xa7a460;
+    constexpr u64 racer_stride = 0xa0;
+    const u64 address = static_cast<u64>(referencePointer) + time_offset +
+                        static_cast<u64>(racerNum) * racer_stride;
+    const u64 ram_end = 0x80000000ULL + manager.GetRamSizeReal();
+    if (address < 0x80000000ULL || address + sizeof(u32) > ram_end)
+        return false;
+
+    // The results word stores minutes in bits 20-27, seconds in 12-19, and
+    // milliseconds in 0-11. Saturate at the largest representable valid time.
+    constexpr u64 max_millis = 255ULL * 60000 + 59 * 1000 + 999;
+    const u64 elapsed_millis = std::min<u64>(static_cast<u64>(frames) * 1000 / 60, max_millis);
+    const u32 minutes = static_cast<u32>(elapsed_millis / 60000);
+    const u32 seconds = static_cast<u32>((elapsed_millis / 1000) % 60);
+    const u32 milliseconds = static_cast<u32>(elapsed_millis % 1000);
+    manager.Write_U32((minutes << 20) | (seconds << 12) | milliseconds,
+                      static_cast<u32>(address));
+    return true;
 }
 
 void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {

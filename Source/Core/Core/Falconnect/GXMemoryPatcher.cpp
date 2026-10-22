@@ -459,42 +459,34 @@ void GXMemoryPatcher::SetRacerData(const u8 racerNum, const RacerMemoryBlock& pa
     ScheduleInvalidateCacheRange(baseAddress, 388);
 }
 
-void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u64 elapsed_millis) const
+void GXMemoryPatcher::SetCurrentLapTime(const u8 racerNum, const u32 frames) const
 {
     const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
     if (secondaryAddress == 0)
         return;
 
-    // F-Zero GX stores both a frame clock and display components in the current-lap timer.
-    // The server clock is millisecond based; a zero fractional-frame field is sufficient here.
-    const u64 frames = std::min<u64>((elapsed_millis * 60) / 1000, std::numeric_limits<u32>::max());
-    const u8 minutes = static_cast<u8>(std::min<u64>(elapsed_millis / 60000, 255));
-    const u8 seconds = static_cast<u8>((elapsed_millis / 1000) % 60);
-    const u16 milliseconds = static_cast<u16>(elapsed_millis % 1000);
+    // GX updates the display fields from the frame count itself.
     const u32 timer = secondaryAddress + GXMemoryReader::CURRENT_LAP_TIME_OFFSET;
-    manager.Write_U32(static_cast<u32>(frames), timer);
-    manager.Write_U32(0, timer + 4);  // float fraction of a frame
-    manager.Write_U8(minutes, timer + 8);
-    manager.Write_U8(seconds, timer + 9);
-    manager.Write_U16(milliseconds, timer + 10);
+    manager.Write_U32(frames, timer);
+    manager.Write_U32(0, timer + 4);
 }
 
-void GXMemoryPatcher::SetCompletedLapTime(const u8 racerNum, const u64 elapsed_millis) const
+void GXMemoryPatcher::ClearCompletedLapFraction(const u8 racerNum) const
 {
     const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
     if (secondaryAddress == 0)
         return;
+    manager.Write_U32(0, secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET + 4);
+}
 
-    const u64 frames = std::min<u64>((elapsed_millis * 60) / 1000, std::numeric_limits<u32>::max());
-    const u8 minutes = static_cast<u8>(std::min<u64>(elapsed_millis / 60000, 255));
-    const u8 seconds = static_cast<u8>((elapsed_millis / 1000) % 60);
-    const u16 milliseconds = static_cast<u16>(elapsed_millis % 1000);
+void GXMemoryPatcher::SetCompletedLapTime(const u8 racerNum, const u32 frames) const
+{
+    const u32 secondaryAddress = memoryReader->ReadSecondaryRacerAddress(racerNum);
+    if (secondaryAddress == 0)
+        return;
     const u32 timer = secondaryAddress + GXMemoryReader::TIMING_DATA_OFFSET;
-    manager.Write_U32(static_cast<u32>(frames), timer);
-    manager.Write_U32(0, timer + 4);  // float fraction of a frame
-    manager.Write_U8(minutes, timer + 8);
-    manager.Write_U8(seconds, timer + 9);
-    manager.Write_U16(milliseconds, timer + 10);
+    manager.Write_U32(frames, timer);
+    manager.Write_U32(0, timer + 4);
 }
 
 void GXMemoryPatcher::SetRacerMachineName(const u8 racerNum, const std::vector<u8> &name) const {

@@ -6,6 +6,7 @@
 #include <bit>
 #include <chrono>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <thread>
 
@@ -302,7 +303,7 @@ void FalconnectManager::Update() {
         m_interpolation_frame_clock = 0;
         m_local_racer_ai_enabled = false;
         m_last_lap_counts.fill(0);
-        m_completed_lap_millis.fill(0);
+        m_completed_lap_frames.fill(0);
         m_human_racers_finished.fill(false);
         m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
         m_human_finish_tracking_started_at = {};
@@ -416,7 +417,9 @@ void FalconnectManager::Update() {
 
         std::vector<RacerMemoryBlock> frames;
         const auto sample_racer = [&](u8 racer) {
+            patcher->ClearCompletedLapFraction(racer);
             const std::unique_ptr<RacerMemoryBlock> block(patcher->memoryReader->ReadRacerData(racer));
+            block->timingData[1] = 0;
             block->interpolationFrameCount = interpolation_frame;
             frames.push_back(*block);
         };
@@ -454,31 +457,37 @@ void FalconnectManager::Update() {
             return server_slot;
         };
 
-        // The server clock owns every timing block.  GX derives its total/final-order time by
-        // adding completed laps at +0x738 to the current lap at +0x6c0; never copy either from
-        // a remote client's packet.
+        // Apply new owner totals before calculating the current lap from this same snapshot.
+        if (received_snapshot) {
+            for (u8 server_slot = 0; server_slot < received_race_data.racers.size(); ++server_slot) {
+                const u8 racer_num = local_racer_for_server_slot(server_slot);
+                const auto& racer = received_race_data.racers[server_slot];
+                if (server_slot != local_human_server_slot &&
+                    !FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) &&
+                    racer.valid && racer.pending)
+                    patcher->SetCompletedLapTime(racer_num, racer.block.timingData[0]);
+            }
+        }
+
+        // The server clock advances only the current-lap timer. Completed-lap frames come
+        // from each racer's owner through the normal race-data relay.
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
-                const u64 server_time = received_race_data.server_race_time_millis;
-                if (lap_count < m_last_lap_counts[racer_num]) {
-                    m_completed_lap_millis[racer_num] = 0;
-                } else if (lap_count > m_last_lap_counts[racer_num]) {
-                    // At the first observed sample of a new lap, all elapsed server time up to
-                    // that boundary is the completed-lap sum.  This is shared by every client.
-                    m_completed_lap_millis[racer_num] = server_time;
-                }
+                const u32 completed_frames =
+                    patcher->memoryReader->ReadCompletedLapFrames(racer_num);
+                // The lap counter identifies resets and transitions. A relayed completed-lap
+                // sum can arrive after the counter changes, so also follow later sum updates.
+                if (lap_count != m_last_lap_counts[racer_num] ||
+                    completed_frames != m_completed_lap_frames[racer_num])
+                    m_completed_lap_frames[racer_num] = completed_frames;
                 m_last_lap_counts[racer_num] = lap_count;
-                // A restarted/reordered server timestamp must never unsigned-underflow into a
-                // multi-minute display.  Re-anchor the lap clock instead.
-                if (m_completed_lap_millis[racer_num] > server_time)
-                    m_completed_lap_millis[racer_num] = 0;
-                const u64 current_lap_time =
-                    server_time >= m_completed_lap_millis[racer_num] ?
-                        server_time - m_completed_lap_millis[racer_num] : 0;
-                patcher->SetCurrentLapTime(racer_num,
-                                           current_lap_time);
-                patcher->SetCompletedLapTime(racer_num, m_completed_lap_millis[racer_num]);
+                const u64 server_frames =
+                    (static_cast<u64>(received_race_data.server_race_time_millis) * 60) / 1000;
+                const u64 lap_frames = server_frames >= m_completed_lap_frames[racer_num] ?
+                    server_frames - m_completed_lap_frames[racer_num] : 0;
+                patcher->SetCurrentLapTime(
+                    racer_num, static_cast<u32>(std::min<u64>(lap_frames, std::numeric_limits<u32>::max())));
             };
 
             // Our player and locally controlled CPUs are not present in received_race_data.

@@ -70,7 +70,7 @@ private:
     u32 m_interpolation_frame_clock = 0;
     bool m_local_racer_ai_enabled = false;
     std::array<u32, 30> m_last_lap_counts{};
-    std::array<u64, 30> m_completed_lap_millis{};
+    std::array<u32, 30> m_completed_lap_frames{};
     std::array<bool, 30> m_human_racers_finished{};
     // Server slots which disappear after sending race data belong to departed players, not
     // racers which still need to cross the finish line.

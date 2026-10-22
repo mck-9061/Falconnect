@@ -35,6 +35,7 @@ public:
     static constexpr u32 LAP_COUNT_OFFSET = 0x6b4;
     static constexpr u32 CURRENT_LAP_TIME_OFFSET = 0x6c0;
     u32 ReadLapCount(u8 racerNum) const;
+    u32 ReadCompletedLapFrames(u8 racerNum) const;
 
     u32 referencePointer{};
 

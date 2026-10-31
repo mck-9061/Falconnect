@@ -46,12 +46,10 @@ void FalconnectManager::RequestResetWithError(std::string message)
 
 void FalconnectManager::Update() {
     const auto cpu_state = Core::System::GetInstance().GetCPU().GetState();
-    // Pausing (including Pause on Focus Loss) puts the CPU into Stepping. A frame-end callback
-    // can still reach here during that transition; it does not mean the game has stopped.
     if (cpu_state == CPU::State::Stepping)
         return;
 
-    if (cpu_state == CPU::State::PowerDown) {
+    if (cpu_state != CPU::State::Running) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
         m_force_start_pending = false;

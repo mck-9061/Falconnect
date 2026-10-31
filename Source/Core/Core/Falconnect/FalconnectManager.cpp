@@ -440,6 +440,7 @@ void FalconnectManager::Update() {
             FalconnectSocketManager::instance->ConsumeReceivedRaceData(&received_race_data);
 
         const auto received_snapshot_time = std::chrono::steady_clock::now();
+        const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
 
         const u8 local_human_server_slot = FalconnectSocketManager::instance->playerNumber - 1;
         const u8 human_racer_count = std::min<u8>(
@@ -471,6 +472,13 @@ void FalconnectManager::Update() {
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
+                // Once the final lap is complete, the completed total already contains the
+                // whole race. Adding elapsed server time here keeps changing the underlying
+                // result even though SetFinalRaceTime holds the displayed time steady.
+                if (lap_count >= total_laps || m_final_display_frames[racer_num] != 0) {
+                    patcher->SetCurrentLapTime(racer_num, 0);
+                    return;
+                }
                 const u32 completed_frames =
                     patcher->memoryReader->ReadCompletedLapFrames(racer_num);
                 // The lap counter identifies resets and transitions. A relayed completed-lap
@@ -542,7 +550,6 @@ void FalconnectManager::Update() {
             }
         }
 
-        const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
         for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
             const u8 local_racer_num = local_racer_for_server_slot(racer_num);
             if (patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps) {
@@ -599,9 +606,16 @@ void FalconnectManager::Update() {
                 m_final_display_frames[local_racer_num] =
                     std::max(m_final_display_frames[local_racer_num], completed_frames);
             }
-            if (m_final_display_frames[local_racer_num] != 0)
+            if (m_final_display_frames[local_racer_num] != 0) {
+                // Keep the timing behind the result consistent with its display, even when
+                // the owner leaves and this racer disappears from received_race_data, or
+                // changes from a remote racer to a locally controlled CPU.
+                patcher->SetCompletedLapTime(local_racer_num,
+                                             m_final_display_frames[local_racer_num]);
+                patcher->SetCurrentLapTime(local_racer_num, 0);
                 patcher->SetFinalRaceTime(local_racer_num,
                                          m_final_display_frames[local_racer_num]);
+            }
         }
 
         if (!m_all_human_racers_finished && human_racer_count != 0) {

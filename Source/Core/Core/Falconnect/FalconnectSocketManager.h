@@ -153,6 +153,7 @@ private:
     int serverSocket = -1;
     int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
+    in_addr m_server_ipv4_address{};
     bool hasStarted = false;
 
     mutable std::mutex m_course_settings_mutex;

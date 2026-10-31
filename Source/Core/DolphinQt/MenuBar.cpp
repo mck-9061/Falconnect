@@ -284,7 +284,7 @@ void MenuBar::AddFalconnectMenu()
     bool accepted = false;
     const QString name = QInputDialog::getText(
         this, tr("Falconnect Player Name"),
-        tr("Name sent on your next server connection (1–32 ASCII characters).\n"
+        tr("Enter display name to show to other players. (1–32 ASCII characters).\n"
            "Leave blank to use your GX license name:"), QLineEdit::Normal,
         QString::fromStdString(Config::Get(Config::MAIN_FALCONNECT_NAME)), &accepted);
     if (!accepted)
@@ -302,6 +302,47 @@ void MenuBar::AddFalconnectMenu()
     Config::Save();
   });
 
+  menu->addAction(tr("Custom Server IP…"), this, [this] {
+    bool accepted = false;
+    const QString address = QInputDialog::getText(
+        this, tr("Falconnect Server IP Address"),
+        tr("Enter IPv4 address of server:"), QLineEdit::Normal,
+        QString::fromStdString(Config::Get(Config::MAIN_FALCONNECT_SERVER_IP)), &accepted);
+    if (!accepted)
+      return;
+
+    const QString trimmed = address.trimmed();
+    const QStringList octets = trimmed.split(QLatin1Char('.'));
+    bool valid = octets.size() == 4;
+    for (const QString& octet : octets)
+    {
+      if (octet.isEmpty() || octet.size() > 3 ||
+          (octet.size() > 1 && octet.front() == QLatin1Char('0')) ||
+          std::any_of(octet.begin(), octet.end(), [](QChar c) {
+            return c.unicode() < '0' || c.unicode() > '9';
+          }) ||
+          octet.toInt() > 255)
+      {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid)
+    {
+      ModalMessageBox::warning(this, tr("Invalid Server IP Address"),
+                               tr("Enter an IPv4 address such as 192.168.1.10."));
+      return;
+    }
+    Config::SetBase(Config::MAIN_FALCONNECT_SERVER_IP, trimmed.toStdString());
+    Config::Save();
+  });
+  const QString restore_ip_label = tr("Use falconnect.net server: US Alpha")
+                                       .arg(QString::fromLatin1(Config::FALCONNECT_DEFAULT_SERVER_IP));
+  menu->addAction(restore_ip_label, this, [] {
+    Config::SetBase(Config::MAIN_FALCONNECT_SERVER_IP,
+                    std::string(Config::FALCONNECT_DEFAULT_SERVER_IP));
+    Config::Save();
+  });
 
   const auto import_profile = [this](UICommon::ProfileImportKind kind) {
     if (Core::IsRunningOrStarting(Core::System::GetInstance()))

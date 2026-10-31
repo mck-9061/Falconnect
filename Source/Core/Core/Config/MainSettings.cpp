@@ -67,6 +67,8 @@ const Info<bool> MAIN_LOAD_GAME_INTO_MEMORY{{System::Main, "Core", "LoadGameInto
 const Info<bool> MAIN_SYNC_ON_SKIP_IDLE{{System::Main, "Core", "SyncOnSkipIdle"}, true};
 const Info<std::string> MAIN_DEFAULT_ISO{{System::Main, "Core", "DefaultISO"}, ""};
 const Info<std::string> MAIN_FALCONNECT_NAME{{System::Main, "Falconnect", "Name"}, ""};
+const Info<std::string> MAIN_FALCONNECT_SERVER_IP{{System::Main, "Falconnect", "ServerIP"},
+                                                  FALCONNECT_DEFAULT_SERVER_IP};
 const Info<bool> MAIN_ENABLE_CHEATS{{System::Main, "Core", "EnableCheats"}, false};
 const Info<int> MAIN_GC_LANGUAGE{{System::Main, "Core", "SelectedLanguage"}, 0};
 const Info<bool> MAIN_OVERRIDE_REGION_SETTINGS{{System::Main, "Core", "OverrideRegionSettings"},

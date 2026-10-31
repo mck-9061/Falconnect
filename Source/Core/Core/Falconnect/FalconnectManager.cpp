@@ -45,7 +45,13 @@ void FalconnectManager::RequestResetWithError(std::string message)
 }
 
 void FalconnectManager::Update() {
-    if (const auto& system = Core::System::GetInstance(); system.GetCPU().GetState() != CPU::State::Running) {
+    const auto cpu_state = Core::System::GetInstance().GetCPU().GetState();
+    // Pausing (including Pause on Focus Loss) puts the CPU into Stepping. A frame-end callback
+    // can still reach here during that transition; it does not mean the game has stopped.
+    if (cpu_state == CPU::State::Stepping)
+        return;
+
+    if (cpu_state == CPU::State::PowerDown) {
         log("Not running!");
         currentState = GameState::NOT_RUNNING;
         m_force_start_pending = false;
@@ -216,9 +222,6 @@ void FalconnectManager::Update() {
                   std::this_thread::sleep_for(std::chrono::seconds(1));
               }
 
-              //patcher->ReEnableMenuControl();
-              patcher->DisableB();
-
               if (FalconnectSocketManager::instance->isError || !FalconnectSocketManager::instance->hasProperlyConnected) {
                   patcher->SetPracticeModeText("Failed to connect!");
                   currentState = GameState::FAILED_TO_CONNECT;
@@ -229,13 +232,14 @@ void FalconnectManager::Update() {
                   }
 
                   const auto& connection_error = FalconnectSocketManager::instance->connectionError;
-                  SuccessAlertFmt("Failed to connect to Falconnect server!{}{}",
-                                  connection_error.empty() ? "" : "\n", connection_error);
-                  shouldReset.store(true);
+                  RequestResetWithError("Failed to connect to Falconnect server!" +
+                                        (connection_error.empty() ? std::string{} :
+                                         "\n" + connection_error));
 
                   return;
               }
 
+              patcher->DisableB();
               patcher->SetPracticeModeText("Vote for a track");
           }
 
@@ -398,17 +402,11 @@ void FalconnectManager::Update() {
     }
 
     if (currentState == GameState::RACING) {
-        // This is packet metadata, not the game's race timer.  Every locally controlled racer
-        // in this update gets the same sender-local timestamp before it is relayed by the server.
-        const u32 interpolation_frame = ++m_interpolation_frame_clock;
+        // update frame count for position interpolation
+        const u32 interpolation_frame = m_interpolation_frame_clock++;
+
         if (FalconnectSocketManager::instance->ConsumeNamesChanged())
             patcher->InitialiseNameLabels();
-        // Do not leave a pause/results menu over the race. Record that it was actually opened so
-        // only those clients receive the course-select menu after the post-finish grace period.
-        if (!m_menu_opened_after_finish && patcher->IsMenuOpen()) {
-            patcher->CloseMenu();
-            m_menu_should_reopen_after_finish = true;
-        }
 
         //INFO_LOG_FMT(FALCONNECT, "Sending frame");
         // Update frames to send

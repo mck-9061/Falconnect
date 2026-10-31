@@ -6,6 +6,7 @@
 #include <utility>
 #include "ClientState.h"
 #include "Common/Assert.h"
+#include "Core/Config/MainSettings.h"
 #include "SFML/System/String.hpp"
 
 #ifdef _WIN32
@@ -34,28 +35,52 @@ FalconnectSocketManager* FalconnectSocketManager::instance = nullptr;
 void FalconnectSocketManager::Start() {
     // Connect to the server
     INFO_LOG_FMT(FALCONNECT, "Connecting...");
+    const std::string server_ip = Config::Get(Config::MAIN_FALCONNECT_SERVER_IP);
+    if (inet_pton(AF_INET, server_ip.c_str(), &m_server_ipv4_address) != 1) {
+        connectionError = "Invalid Falconnect server IPv4 address: " + server_ip;
+        ERROR_LOG_FMT(FALCONNECT, "{}", connectionError);
+        isError = true;
+        return;
+    }
     int code = -1;
 
     for (u8 attempt = 1; attempt <= 10; attempt++) {
         INFO_LOG_FMT(FALCONNECT, "Attempt {}", attempt);
         serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+        if (serverSocket == -1) {
+            connectionError = "Unable to create a Falconnect TCP socket.";
+            break;
+        }
+
+#ifdef SO_NOSIGPIPE
+        // The server can close between a successful connection and any later send.
+        const int no_sigpipe = 1;
+        setsockopt(serverSocket, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe));
+#endif
 
         sockaddr_in serverAddress{};
         serverAddress.sin_family = AF_INET;
         serverAddress.sin_port = htons(8000);
 
-        //inet_pton(AF_INET, "162.19.231.212", &serverAddress.sin_addr); // Remote IP address
-        inet_pton(AF_INET, "34.138.247.28", &serverAddress.sin_addr);
-        //inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr); // Remote IP address
+        serverAddress.sin_addr = m_server_ipv4_address;
 
         code = connect(serverSocket, reinterpret_cast<struct sockaddr *>(&serverAddress), sizeof(serverAddress));
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
         if (code != -1) break;
+
+#ifdef _WIN32
+        closesocket(serverSocket);
+#else
+        close(serverSocket);
+#endif
+        serverSocket = -1;
+        if (attempt < 10)
+            std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     INFO_LOG_FMT(FALCONNECT, "Code: {}", code);
 
     if (code < 0) {
+        if (connectionError.empty())
+            connectionError = "Could not reach the Falconnect server after 10 attempts.";
         isError = true;
     } else {
         connectionError = Falconnect::ExchangeProtocolVersion(serverSocket);
@@ -66,6 +91,7 @@ void FalconnectSocketManager::Start() {
 #else
             close(serverSocket);
 #endif
+            serverSocket = -1;
             shouldRun = false;
             shouldDisconnect = true;
             isError = true;
@@ -283,7 +309,7 @@ void FalconnectSocketManager::RequestDisconnect()
     // instead of waiting for a transport timeout.
     const bool was_disconnecting = shouldDisconnect.exchange(true);
 
-    if (!was_disconnecting && serverSocket != -1) {
+    if (!was_disconnecting && hasConnected && serverSocket != -1) {
         char data[FULL_RACE_PACKET_SIZE] = {0};
         data[0] = static_cast<char>(ToServerPacketType::DISCONNECT);
         send(serverSocket, data, FULL_RACE_PACKET_SIZE, 0);
@@ -475,9 +501,7 @@ void FalconnectSocketManager::SocketThread() {
                 serverUdpAddress.sin_family = AF_INET;
                 serverUdpAddress.sin_port = htons(serverUdpPort);
 
-                //inet_pton(AF_INET, "127.0.0.1", &serverUdpAddress.sin_addr); // Remote IP address
-                //inet_pton(AF_INET, "162.19.231.212", &serverUdpAddress.sin_addr); // Remote IP address
-                inet_pton(AF_INET, "34.138.247.28", &serverUdpAddress.sin_addr);
+                serverUdpAddress.sin_addr = m_server_ipv4_address;
 
                 // Send our name
                 char data1[FULL_RACE_PACKET_SIZE] = { 0 };

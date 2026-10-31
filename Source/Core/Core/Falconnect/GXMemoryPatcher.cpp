@@ -493,8 +493,13 @@ bool GXMemoryPatcher::SetFinalRaceTime(const u8 racerNum, const u32 frames) cons
     constexpr u64 racer_stride = 0xa0;
     const u64 address = static_cast<u64>(referencePointer) + time_offset +
                         static_cast<u64>(racerNum) * racer_stride;
+    // The timing page before results reads the local player's final time here.
+    constexpr u64 timing_page_offset = 0x1e0534;
+    const u64 timing_page_address = static_cast<u64>(referencePointer) + timing_page_offset;
     const u64 ram_end = 0x80000000ULL + manager.GetRamSizeReal();
-    if (address < 0x80000000ULL || address + sizeof(u32) > ram_end)
+    if (address < 0x80000000ULL || address + sizeof(u32) > ram_end ||
+        (racerNum == 0 && (timing_page_address < 0x80000000ULL ||
+                           timing_page_address + sizeof(u32) > ram_end)))
         return false;
 
     // The results word stores minutes in bits 20-27, seconds in 12-19, and
@@ -506,6 +511,13 @@ bool GXMemoryPatcher::SetFinalRaceTime(const u8 racerNum, const u32 frames) cons
     const u32 milliseconds = static_cast<u32>(elapsed_millis % 1000);
     manager.Write_U32((minutes << 20) | (seconds << 12) | milliseconds,
                       static_cast<u32>(address));
+    if (racerNum == 0)
+    {
+        // Unlike the results word, this is minutes, seconds, then a big-endian u16
+        // for milliseconds. Write it every frame after finishing because GX may refresh it.
+        manager.Write_U32((minutes << 24) | (seconds << 16) | milliseconds,
+                          static_cast<u32>(timing_page_address));
+    }
     return true;
 }
 

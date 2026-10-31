@@ -273,11 +273,23 @@ public class FalconnectServer {
     for (FalconnectClientConnection client : clients) {
       client.CloseUdpSocket();
       if (client.disconnected) continue;
-      AllocateClient(client);
+      AllocateClientAfterRace(client);
     }
   }
 
   public synchronized void AllocateClient(FalconnectClientConnection client) throws IOException, InterruptedException {
+    allocateClient(client, false);
+  }
+
+  // A player already in a race may need a new waiting game while that race and other active
+  // games still occupy all configured slots. Fresh connections still obey the admission limit.
+  public synchronized void AllocateClientAfterRace(FalconnectClientConnection client)
+      throws IOException, InterruptedException {
+    allocateClient(client, true);
+  }
+
+  private void allocateClient(FalconnectClientConnection client, boolean returningFromRace)
+      throws IOException, InterruptedException {
     if (client.disconnected) return;
     System.out.println("Allocating " + client.socket.getRemoteSocketAddress() + "...");
 
@@ -312,7 +324,7 @@ public class FalconnectServer {
       }
     }
 
-    if (currentRaces.size() < maxConcurrentRaces) {
+    if (returningFromRace || currentRaces.size() < maxConcurrentRaces) {
       // Start a new race
       FalconnectRace race = CreateRace();
       currentRaces.add(race);

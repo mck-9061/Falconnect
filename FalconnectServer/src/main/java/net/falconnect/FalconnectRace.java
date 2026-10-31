@@ -394,12 +394,14 @@ public class FalconnectRace extends Thread {
       throws IOException, InterruptedException {
     if (client.disconnected) return;
 
+    final boolean returningFromRace = gameState == GameState.RACING;
     client.state = ClientState.IN_MENUS;
     client.resetRaceDataTracking();
     TransferCpuAssignments(client, false);
     TransferPlayerRacerToCpu(client);
     RemoveClient(client);
-    server.AllocateClient(client);
+    if (returningFromRace) server.AllocateClientAfterRace(client);
+    else server.AllocateClient(client);
   }
 
   public void run() {

@@ -61,12 +61,12 @@ public class MessageHandlerThread extends Thread {
       } catch (EOFException e) {
         System.out.println("Client disconnected ungracefully: " + clientConnection.playerNum);
         clientConnection.disconnected = true;
-        clientConnection.CloseUdpSocket();
+        clientConnection.CloseUdpSession();
         return;
       } catch (IOException e) {
         System.out.println("Client connection error: " + clientConnection.playerNum + ": " + e.getMessage());
         clientConnection.disconnected = true;
-        clientConnection.CloseUdpSocket();
+        clientConnection.CloseUdpSession();
         return;
       } catch (InvocationTargetException | InstantiationException |
                IllegalAccessException | NoSuchMethodException e) {

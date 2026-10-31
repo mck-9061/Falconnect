@@ -2,18 +2,17 @@ package net.falconnect;
 
 import net.falconnect.messages.MessageHandlerThread;
 import net.falconnect.messages.MessageSenderThread;
-import net.falconnect.messages.UDPHandlerThread;
 import net.falconnect.messages.toclient.ToClientMessage;
 import net.falconnect.messages.toclient.DisconnectMessage;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class FalconnectClientConnection {
   // The client restarts its race-data counter at one for every START_RACE. Permit a small loss
@@ -21,7 +20,9 @@ public class FalconnectClientConnection {
   // race establish the new race's sequence high-water mark.
   private static final int MAX_INITIAL_RACE_PACKET_SEQUENCE = 128;
   public Socket socket;
-  public volatile DatagramSocket udpSocket;
+  private volatile UdpTransport udpTransport;
+  private volatile UUID udpSessionToken;
+  private volatile InetSocketAddress udpEndpoint;
   public DataInputStream fromClientStream;
   private final DataOutputStream toClientStream;
   public volatile ClientState state;
@@ -36,9 +37,6 @@ public class FalconnectClientConnection {
   public byte[] name;
   public byte numCpus;
   public byte cpuStartIndex;
-  public int udpPort;
-
-  public volatile int lastReceivedUdpPort;
   private int lastReceivedCount;
   private boolean awaitingInitialRacePacket;
   public volatile long lastUdpPacketReceivedAt;
@@ -65,7 +63,6 @@ public class FalconnectClientConnection {
 
   private final MessageHandlerThread receiveMessageThread;
   private final MessageSenderThread sendMessageThread;
-  private final UDPHandlerThread udpHandlerThread;
 
   private ReceivedRaceData latestReceivedRaceData = ReceivedRaceData.empty();
   public byte[] dataToSend;
@@ -101,11 +98,9 @@ public class FalconnectClientConnection {
 
     receiveMessageThread = new MessageHandlerThread(this);
     sendMessageThread = new MessageSenderThread(this);
-    udpHandlerThread = new UDPHandlerThread(this);
     if (startThreads) {
       receiveMessageThread.start();
       sendMessageThread.start();
-      udpHandlerThread.start();
       System.out.println("Message receiver thread started");
     }
   }
@@ -124,12 +119,10 @@ public class FalconnectClientConnection {
   }
 
   public void SendUdpPacket(byte[] packet) throws IOException {
-    DatagramSocket currentUdpSocket = udpSocket;
-    if (lastReceivedUdpPort != 0 && currentUdpSocket != null && !currentUdpSocket.isClosed()) {
-      DatagramPacket dPacket = new DatagramPacket(packet, packet.length, socket.getInetAddress(),
-          lastReceivedUdpPort);
-      currentUdpSocket.send(dPacket);
-    }
+    UdpTransport transport = udpTransport;
+    InetSocketAddress destination = udpEndpoint;
+    if (!disconnected && transport != null && destination != null)
+      transport.send(packet, destination);
   }
 
   public void SendMessage(ToClientMessage message) throws InterruptedException {
@@ -153,7 +146,7 @@ public class FalconnectClientConnection {
         disconnected = true;
       }
     }
-    CloseUdpSocket();
+    CloseUdpSession();
     try {
       socket.close();
     } catch (IOException e) {
@@ -161,19 +154,37 @@ public class FalconnectClientConnection {
     }
   }
 
-  public synchronized void RebindUdpSocket() throws IOException {
-    CloseUdpSocket();
-    if (disconnected) return;
-    udpSocket = new DatagramSocket(udpPort);
-    System.out.println("Bound UDP for player " + playerNum + " on port " + udpPort);
+  public synchronized void SetUdpTransport(UdpTransport transport) {
+    if (udpTransport == transport) return;
+    if (udpTransport != null && udpSessionToken != null)
+      udpTransport.unregister(udpSessionToken, this);
+    udpTransport = transport;
+    if (udpTransport != null && udpSessionToken != null)
+      udpTransport.register(udpSessionToken, this);
   }
 
-  public synchronized void CloseUdpSocket() {
-    DatagramSocket currentUdpSocket = udpSocket;
-    udpSocket = null;
-    lastReceivedUdpPort = 0;
+  public synchronized void RotateUdpSession() {
+    if (udpTransport != null && udpSessionToken != null)
+      udpTransport.unregister(udpSessionToken, this);
+    udpEndpoint = null;
+    udpSessionToken = disconnected ? null : UUID.randomUUID();
+    if (udpTransport != null && udpSessionToken != null)
+      udpTransport.register(udpSessionToken, this);
+  }
 
-    if (currentUdpSocket != null) currentUdpSocket.close();
+  public synchronized void CloseUdpSession() {
+    if (udpTransport != null && udpSessionToken != null)
+      udpTransport.unregister(udpSessionToken, this);
+    udpSessionToken = null;
+    udpEndpoint = null;
+  }
+
+  public UUID getUdpSessionToken() { return udpSessionToken; }
+
+  public synchronized boolean noteUdpEndpoint(InetSocketAddress endpoint, UUID token) {
+    if (!token.equals(udpSessionToken) || disconnected) return false;
+    udpEndpoint = endpoint;
+    return true;
   }
 
   public static final class ReceivedRaceData {
@@ -220,6 +231,16 @@ public class FalconnectClientConnection {
                                                       List<Byte> cpuRacerIndices,
                                                       int sourceSequence,
                                                       long duplicateTimeoutMillis) {
+    return acceptReceivedRaceData(racerData, cpuRacerIndices, sourceSequence,
+        duplicateTimeoutMillis, null);
+  }
+
+  public synchronized boolean acceptReceivedRaceData(List<byte[]> racerData,
+                                                      List<Byte> cpuRacerIndices,
+                                                      int sourceSequence,
+                                                      long duplicateTimeoutMillis,
+                                                      UUID token) {
+    if (token != null && !token.equals(udpSessionToken)) return false;
     if (awaitingInitialRacePacket) {
       if (sourceSequence > MAX_INITIAL_RACE_PACKET_SEQUENCE) return false;
       awaitingInitialRacePacket = false;
@@ -234,7 +255,7 @@ public class FalconnectClientConnection {
     lastUdpPacketReceivedAt = System.currentTimeMillis();
     if (!hasReceivedRaceData) {
       System.out.println("Accepted first race packet from player " + playerNum +
-          " sequence=" + sourceSequence + " UDP=" + udpPort);
+          " sequence=" + sourceSequence);
     }
     hasReceivedRaceData = true;
     if (cpuHandoffActive) cpuRestorationNeeded = true;
@@ -244,6 +265,12 @@ public class FalconnectClientConnection {
   public synchronized void noteUdpHeartbeat() {
     lastUdpHeartbeatAt = System.currentTimeMillis();
     if (hasReceivedRaceData && cpuHandoffActive) cpuRestorationNeeded = true;
+  }
+
+  public synchronized boolean noteUdpHeartbeat(UUID token) {
+    if (!token.equals(udpSessionToken)) return false;
+    noteUdpHeartbeat();
+    return true;
   }
 
   public long getLastUdpActivityAt() {
@@ -256,6 +283,12 @@ public class FalconnectClientConnection {
 
   public void noteRacePacketObserved() {
     lastUdpRacePacketObservedAt = System.currentTimeMillis();
+  }
+
+  public synchronized boolean noteRacePacketObserved(UUID token) {
+    if (!token.equals(udpSessionToken)) return false;
+    noteRacePacketObserved();
+    return true;
   }
 
   public synchronized void logRacePacketRejection(String reason) {

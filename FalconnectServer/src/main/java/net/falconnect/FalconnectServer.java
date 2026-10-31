@@ -13,10 +13,8 @@ import java.util.List;
 import java.util.Properties;
 
 public class FalconnectServer {
-  public static final int UDP_PORT_BASE = 9000;
-  // Reserve a full grid per game, independent of the configurable admission limit.
-  public static final int UDP_PORTS_PER_RACE = RaceDataFormat.MAX_RACERS;
-  public static final int MAX_SUPPORTED_RACES = (UDP_PORT_BASE - 1024) / UDP_PORTS_PER_RACE;
+  public static final int UDP_PORT = 8999;
+  public static final int MAX_SUPPORTED_RACES = 265;
   public static final Path DEFAULT_CONFIGURATION_PATH = Path.of("falconnect-server.properties");
 
   private volatile int maxClientsPerRace = 6;
@@ -26,6 +24,7 @@ public class FalconnectServer {
   private volatile int trackVoteCountdownSeconds = 20;
 
   public ServerSocket socket;
+  private UdpTransport udpTransport;
   private final List<FalconnectRace> currentRaces = new ArrayList<>();
   private final Path configurationPath;
   private AcceptClientConnectionThread acceptClientConnectionThread;
@@ -33,7 +32,13 @@ public class FalconnectServer {
 
   public FalconnectServer() throws IOException {
     this(null, DEFAULT_CONFIGURATION_PATH);
-    socket = new ServerSocket(8000);
+    udpTransport = new UdpTransport(UDP_PORT);
+    try {
+      socket = new ServerSocket(8000);
+    } catch (IOException e) {
+      udpTransport.close();
+      throw e;
+    }
     System.out.println("Server socket created");
 
     acceptClientConnectionThread = new AcceptClientConnectionThread(this);
@@ -244,6 +249,7 @@ public class FalconnectServer {
   // client's EOF handling.
   public synchronized void shutdown() {
     closeAllGames();
+    if (udpTransport != null) udpTransport.close();
     if (socket != null && !socket.isClosed()) {
       try {
         socket.close();
@@ -271,7 +277,7 @@ public class FalconnectServer {
     List<FalconnectClientConnection> clients = new ArrayList<>(race.getClients());
 
     for (FalconnectClientConnection client : clients) {
-      client.CloseUdpSocket();
+      if (client.getRace() == race) client.CloseUdpSession();
       if (client.disconnected) continue;
       AllocateClientAfterRace(client);
     }
@@ -291,6 +297,7 @@ public class FalconnectServer {
   private void allocateClient(FalconnectClientConnection client, boolean returningFromRace)
       throws IOException, InterruptedException {
     if (client.disconnected) return;
+    client.SetUdpTransport(udpTransport);
     System.out.println("Allocating " + client.socket.getRemoteSocketAddress() + "...");
 
     // Reset and EndRace can both attempt to allocate the same live connection. The race that
@@ -358,6 +365,7 @@ public class FalconnectServer {
   }
 
   private void SendConnectedMessage(FalconnectClientConnection client) throws InterruptedException {
+    client.RotateUdpSession();
     new ConnectedMessage(client).Send();
   }
 }

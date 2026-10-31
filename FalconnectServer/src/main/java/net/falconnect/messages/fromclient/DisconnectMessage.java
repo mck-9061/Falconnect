@@ -10,6 +10,6 @@ public class DisconnectMessage extends FromClientMessage {
   @Override
   public void ProcessMessage() {
     origin.disconnected = true;
-    origin.CloseUdpSocket();
+    origin.CloseUdpSession();
   }
 }

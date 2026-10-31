@@ -32,7 +32,7 @@ class FalconnectSocketManager {
 public:
     static FalconnectSocketManager* instance;
 
-    static constexpr std::size_t CLIENT_RACE_PACKET_HEADER_SIZE = 5;
+    static constexpr std::size_t CLIENT_RACE_PACKET_HEADER_SIZE = 21;
     static constexpr std::size_t SERVER_RACE_PACKET_HEADER_SIZE = 9;
     static constexpr std::size_t MAX_RACERS = 30;
     static constexpr std::size_t SERVER_RACER_RECORD_SIZE =
@@ -153,6 +153,8 @@ private:
     int serverSocket = -1;
     int serverUdpSocket = -1;
     sockaddr_in serverUdpAddress{};
+    std::array<u8, 16> m_udp_session_token{};
+    std::mutex m_udp_session_token_mutex;
     in_addr m_server_ipv4_address{};
     bool hasStarted = false;
 

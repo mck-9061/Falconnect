@@ -7,6 +7,10 @@ public final class RaceDataFormat {
   // Client packets contain a type and sequence. Server packets additionally carry the
   // authoritative race clock, in milliseconds, immediately after that sequence.
   public static final int CLIENT_PACKET_HEADER_BYTES = 5;
+  // Client-to-server UDP adds a UUID after the type and sequence. The receive dispatcher
+  // removes it before passing packets to the existing race-data parser.
+  public static final int UDP_SESSION_TOKEN_BYTES = 16;
+  public static final int CLIENT_UDP_HEADER_BYTES = CLIENT_PACKET_HEADER_BYTES + UDP_SESSION_TOKEN_BYTES;
   public static final int SERVER_PACKET_HEADER_BYTES = 9;
   public static final int SERVER_RACE_TIME_OFFSET = CLIENT_PACKET_HEADER_BYTES;
   public static final int MAX_RACERS = 30;
@@ -32,14 +36,14 @@ public final class RaceDataFormat {
   public static final int RACER_SEQUENCE_BYTES = Integer.BYTES;
   public static final int SERVER_RACER_RECORD_BYTES = RACER_DATA_BYTES + RACER_SEQUENCE_BYTES;
   public static final int CLIENT_FULL_RACE_PACKET_BYTES =
-      CLIENT_PACKET_HEADER_BYTES + (MAX_RACERS * RACER_DATA_BYTES);
+      CLIENT_UDP_HEADER_BYTES + (MAX_RACERS * RACER_DATA_BYTES);
   public static final int FULL_RACE_PACKET_BYTES =
       SERVER_PACKET_HEADER_BYTES + (MAX_RACERS * SERVER_RACER_RECORD_BYTES);
 
   private RaceDataFormat() {}
 
   public static int packetBytesForRacers(int racerCount) {
-    return CLIENT_PACKET_HEADER_BYTES + (racerCount * RACER_DATA_BYTES);
+    return CLIENT_UDP_HEADER_BYTES + (racerCount * RACER_DATA_BYTES);
   }
 
   public static int serverRecordOffset(int racerIndex) {

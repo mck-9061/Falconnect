@@ -5,13 +5,20 @@ import net.falconnect.RaceDataFormat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class FullDataMessage extends FromClientMessage {
+  private final UUID udpSessionToken;
   // A stopped emulator can keep its networking worker alive, repeatedly sending the last frame.
   // Use elapsed time rather than a packet count: the latter depends on the client's send rate.
   private static final long DUPLICATE_RACE_DATA_TIMEOUT_MILLIS = 5_000;
   public FullDataMessage(FalconnectClientConnection origin, byte[] data) {
+    this(origin, data, null);
+  }
+
+  public FullDataMessage(FalconnectClientConnection origin, byte[] data, UUID token) {
     super(origin, data);
+    udpSessionToken = token;
   }
 
   @Override
@@ -22,7 +29,8 @@ public class FullDataMessage extends FromClientMessage {
       origin.logRacePacketRejection("invalid length " + data.length);
       return;
     }
-    origin.noteRacePacketObserved();
+    if (udpSessionToken == null) origin.noteRacePacketObserved();
+    else if (!origin.noteRacePacketObserved(udpSessionToken)) return;
     int cpuCount = (data.length - RaceDataFormat.CLIENT_PACKET_HEADER_BYTES) / RaceDataFormat.RACER_DATA_BYTES - 1;
     List<Byte> cpuIndices = clientCpuIndicesForPacket(cpuCount);
     final boolean cpuLayoutIsStale = cpuIndices == null;
@@ -56,7 +64,7 @@ public class FullDataMessage extends FromClientMessage {
     // START_RACE reset. This prevents an in-flight packet from the prior race reintroducing its
     // sequence after that reset.
     if (!origin.acceptReceivedRaceData(allData, cpuIndices, count,
-        DUPLICATE_RACE_DATA_TIMEOUT_MILLIS)) {
+        DUPLICATE_RACE_DATA_TIMEOUT_MILLIS, udpSessionToken)) {
       origin.logRacePacketRejection("sequence=" + count + ", latest=" +
           origin.getLastReceivedCount());
     }

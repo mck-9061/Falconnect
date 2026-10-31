@@ -68,12 +68,6 @@ public class FalconnectRace extends Thread {
     return portBlockIndex;
   }
 
-  public int getUdpPort(byte playerNum) {
-    return FalconnectServer.UDP_PORT_BASE
-        - (portBlockIndex * FalconnectServer.UDP_PORTS_PER_RACE)
-        - playerNum;
-  }
-
   public synchronized boolean IsClientsEmpty() {
     return clients.isEmpty();
   }
@@ -278,7 +272,6 @@ public class FalconnectRace extends Thread {
       for (int i = 0; i < cpuCount; i++) cpuIndices.add((byte) nextCpuIndex++);
       client.setHomeCpuRacerIndices(cpuIndices);
       client.cpuStartIndex = cpuIndices.isEmpty() ? 0 : cpuIndices.get(0);
-      client.udpPort = getUdpPort(client.playerNum);
     }
     GenerateCpuRacerIds();
     for (FalconnectClientConnection client : clients)
@@ -358,7 +351,6 @@ public class FalconnectRace extends Thread {
     }
     // Connections survive race reallocation. Votes belong to the lobby, never the connection.
     client.hasVotedTrack = false;
-    client.udpPort = getUdpPort(client.playerNum);
     clients.add(client);
     client.setRace(this);
   }
@@ -371,7 +363,7 @@ public class FalconnectRace extends Thread {
   }
 
   public synchronized void RemoveClient(FalconnectClientConnection client) {
-    client.CloseUdpSocket();
+    if (client.getRace() == this) client.CloseUdpSession();
 
     // Recreate list without dead client
     List<FalconnectClientConnection> newList = new ArrayList<>();
@@ -433,7 +425,7 @@ public class FalconnectRace extends Thread {
                   + " laps, boost on lap " + selectedTrackSettings.boostLap());
               int totalCpus = getClients().stream().mapToInt(client -> client.numCpus).sum();
               for (FalconnectClientConnection client : getClients()) {
-                client.RebindUdpSocket();
+                client.RotateUdpSession();
                 new ConnectedMessage(client).Send();
               }
 

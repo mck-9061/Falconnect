@@ -467,9 +467,14 @@ void FalconnectSocketManager::SocketThread() {
                 const u16 serverUdpPort =
                     (static_cast<u16>(static_cast<u8>(buffer[4])) << 8) |
                     static_cast<u8>(buffer[5]);
+                {
+                    const std::lock_guard<std::mutex> lock(m_udp_session_token_mutex);
+                    std::copy_n(reinterpret_cast<const u8*>(buffer + 6),
+                                m_udp_session_token.size(), m_udp_session_token.begin());
+                }
 
-                // A CONNECTED packet can move this client to a new race and therefore a new
-                // UDP port block. Retire every old worker before replacing the descriptor: an
+                // A CONNECTED packet starts a new UDP session. Retire every old worker before
+                // replacing the descriptor: an
                 // old recvfrom() must never wake up and start consuming packets from this race.
                 m_race_data_generation.fetch_add(1);
                 shouldRunDataThread = false;
@@ -713,6 +718,8 @@ void FalconnectSocketManager::SendUdpPingIfDue()
         data[2] = static_cast<char>((sequence >> 16) & 0xff);
         data[3] = static_cast<char>((sequence >> 8) & 0xff);
         data[4] = static_cast<char>(sequence & 0xff);
+        const std::lock_guard<std::mutex> token_lock(m_udp_session_token_mutex);
+        std::copy(m_udp_session_token.begin(), m_udp_session_token.end(), data.begin() + 5);
         m_last_ping_sent_at = now;
         m_pending_ping_sent_at = now;
         m_pending_ping_sequence = sequence;
@@ -747,6 +754,10 @@ void FalconnectSocketManager::SendDataThread(const u32 race_generation) {
         data[2] = static_cast<u8>(sent_count >> 16);
         data[3] = static_cast<u8>(sent_count >> 8);
         data[4] = static_cast<u8>(sent_count);
+        {
+            const std::lock_guard<std::mutex> token_lock(m_udp_session_token_mutex);
+            std::copy(m_udp_session_token.begin(), m_udp_session_token.end(), data.begin() + 5);
+        }
         std::copy(payload.begin(), payload.end(), data.begin() + CLIENT_RACE_PACKET_HEADER_SIZE);
         const auto sent_bytes = sendto(serverUdpSocket, reinterpret_cast<const char*>(data.data()),
             static_cast<int>(data.size()), 0, reinterpret_cast<sockaddr*>(&serverUdpAddress),

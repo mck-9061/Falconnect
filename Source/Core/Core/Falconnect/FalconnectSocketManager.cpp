@@ -801,7 +801,8 @@ void FalconnectSocketManager::DataThread(const u32 race_generation) {
         if (m_race_data_generation.load() != race_generation)
             break;
 
-        if (received == CLIENT_RACE_PACKET_HEADER_SIZE &&
+        // The UUID is only on client-to-server UDP; the server echoes a five-byte pong.
+        if (received == SERVER_UDP_PONG_SIZE &&
             buffer[0] == static_cast<char>(FromServerPacketType::UDP_PONG)) {
             const u32 sequence =
                 (static_cast<u32>(static_cast<u8>(buffer[1])) << 24) |

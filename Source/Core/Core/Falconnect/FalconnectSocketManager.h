@@ -33,6 +33,7 @@ public:
     static FalconnectSocketManager* instance;
 
     static constexpr std::size_t CLIENT_RACE_PACKET_HEADER_SIZE = 21;
+    static constexpr std::size_t SERVER_UDP_PONG_SIZE = 5;
     static constexpr std::size_t SERVER_RACE_PACKET_HEADER_SIZE = 9;
     static constexpr std::size_t MAX_RACERS = 30;
     static constexpr std::size_t SERVER_RACER_RECORD_SIZE =

@@ -306,6 +306,7 @@ void FalconnectManager::Update() {
         m_local_racer_ai_enabled = false;
         m_last_lap_counts.fill(0);
         m_completed_lap_frames.fill(0);
+        m_finished_order_frames.fill(0);
         m_final_display_frames.fill(0);
         m_human_racers_finished.fill(false);
         m_human_racer_last_received.fill(std::chrono::steady_clock::time_point{});
@@ -412,6 +413,21 @@ void FalconnectManager::Update() {
         for (const u8 cpuRacer : cpu_racer_indices)
             patcher->EnableAIControlFor(cpuRacer, 1);
 
+        const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
+        // Keep the completed time of every finished GX slot when simulation ownership changes.
+        // A newly assigned CPU otherwise starts sending its recipient's evolving timing state.
+        for (u8 racer_num = 0; racer_num < 30; ++racer_num) {
+            if (patcher->memoryReader->ReadLapCount(racer_num) < total_laps)
+                continue;
+            if (m_finished_order_frames[racer_num] == 0)
+                m_finished_order_frames[racer_num] =
+                    patcher->memoryReader->ReadCompletedLapFrames(racer_num);
+            if (m_finished_order_frames[racer_num] != 0) {
+                patcher->SetCompletedLapTime(racer_num, m_finished_order_frames[racer_num]);
+                patcher->SetCurrentLapTime(racer_num, 0);
+            }
+        }
+
         std::vector<RacerMemoryBlock> frames;
         const auto sample_racer = [&](u8 racer) {
             patcher->ClearCompletedLapFraction(racer);
@@ -461,7 +477,7 @@ void FalconnectManager::Update() {
                 const auto& racer = received_race_data.racers[server_slot];
                 if (server_slot != local_human_server_slot &&
                     !FalconnectSocketManager::instance->OwnsCpuRacer(racer_num) &&
-                    racer.valid && racer.pending)
+                    racer.valid && racer.pending && m_finished_order_frames[racer_num] == 0)
                     patcher->SetCompletedLapTime(racer_num, racer.block.timingData[0]);
             }
         }
@@ -471,6 +487,11 @@ void FalconnectManager::Update() {
         if (received_snapshot) {
             const auto apply_server_time = [&](const u8 racer_num) {
                 const u32 lap_count = patcher->memoryReader->ReadLapCount(racer_num);
+                if (lap_count >= total_laps && m_finished_order_frames[racer_num] != 0) {
+                    patcher->SetCompletedLapTime(racer_num, m_finished_order_frames[racer_num]);
+                    patcher->SetCurrentLapTime(racer_num, 0);
+                    return;
+                }
                 const u32 completed_frames =
                     patcher->memoryReader->ReadCompletedLapFrames(racer_num);
                 // The lap counter identifies resets and transitions. A relayed completed-lap
@@ -542,7 +563,6 @@ void FalconnectManager::Update() {
             }
         }
 
-        const u8 total_laps = FalconnectSocketManager::instance->GetCourseSettings().lap_count;
         for (u8 racer_num = 0; racer_num < human_racer_count; racer_num++) {
             const u8 local_racer_num = local_racer_for_server_slot(racer_num);
             if (patcher->memoryReader->ReadLapCount(local_racer_num) >= total_laps) {

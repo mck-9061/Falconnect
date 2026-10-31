@@ -782,13 +782,14 @@ public class FalconnectRace extends Thread {
   }
 
   private static byte[] withCpuSuffix(byte[] name) {
-    byte[] labelled = new byte[32];
-    int length = 0;
-    while (length < name.length && name[length] != 0) length++;
-    byte[] suffix = " (CPU)".getBytes(StandardCharsets.US_ASCII);
-    System.arraycopy(name, 0, labelled, 0, Math.min(length, labelled.length - suffix.length));
-    System.arraycopy(suffix, 0, labelled, Math.min(length, labelled.length - suffix.length), suffix.length);
-    return labelled;
+//     byte[] labelled = new byte[32];
+//     int length = 0;
+//     while (length < name.length && name[length] != 0) length++;
+//     byte[] suffix = " (CPU)".getBytes(StandardCharsets.US_ASCII);
+//     System.arraycopy(name, 0, labelled, 0, Math.min(length, labelled.length - suffix.length));
+//     System.arraycopy(suffix, 0, labelled, Math.min(length, labelled.length - suffix.length), suffix.length);
+//     return labelled;
+    return name;
   }
 
   private long packetNum = 0;

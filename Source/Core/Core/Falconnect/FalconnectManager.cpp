@@ -577,9 +577,9 @@ void FalconnectManager::Update() {
             }
         }
 
-        // The results display has its own packed time word for each local GX racer slot.
-        // Use the owner's completed-lap total once that racer has finished. Continue writing
-        // the captured value because GX may refresh the results structure on later frames.
+        // The results display has its own packed time word for each local GX racer slot;
+        // the local player's timing page has another. Use the owner's completed-lap total
+        // once that racer has finished. GX may refresh either display on later frames.
         for (u8 local_racer_num = 0; local_racer_num < 30; ++local_racer_num) {
             const bool locally_controlled = local_racer_num == 0 ||
                 std::find(cpu_racer_indices.begin(), cpu_racer_indices.end(), local_racer_num) !=

@@ -1,27 +1,23 @@
 # Falconnect
 
-A work-in-progress fork of the Dolphin emulator, exclusively for use with F-Zero GX, that adds online
-multiplayer functionality.
+Thank you to those who have helped and supported this project.
 
-## Status
-Alpha testing is underway! Join the Falconnect Discord to join in: https://discord.gg/pfSRRxr4ZR
+A certain other GX netplay solution has been made available, the first version of which was vibecoded in a matter of days, using nothing
+but AI to reverse engineer the game. 
 
-## Planned features
-- Full 30 player online multiplayer races
-- Human and CPU players in multiplayer
-- Many more race options than vanilla
-  - Unlocked lap count
-  - Choose lap on which boost power is granted
-  - Story mode tracks
-  - Restrict usable machines (e.g. only mid-tier machines, Space Angler only, randomised)
-  - Restrict machine settings (e.g. snaking only or max speed only)
-  - Choose stats (e.g. vanilla, Unleashed, GXtreme, custom)
-- Online Grands Prix
+In my efforts in creating Falconnect, AI was never used to reverse engineer, write PowerPC code, or design netcode. The project was driven by 
+my own love for the game and interest in learning reverse engineering and the internals of GameCube games. Yet it has been lumped in
+with the other project as if the use of AI in both is comparable.
 
-## Ideas under consideration
-- Ranking system
-- Expanded offline practice mode
-- Custom track support
+It's fairly clear I can't keep up with the slopcoding doing this, and my motivation to spend my limited free time on this project
+is very low when the community has taken to the other tool so much. So, I have decided to stop future development of Falconnect. 
+
+I've really enjoyed working on this. Having never done any reverse engineering before, working on Falconnect has taught me so much,
+not just about GX but about low-level programming and modding as a whole. It started with just wanting to see if I could get machines to show
+up in another instance of the game using documentation of memory addresses put together by members of the community, and ended
+with some fairly successful alpha tests with all sorts of heavily modded parts of the game that I had manually reverse engineered.
+
+The server and client programs will remain available should you want to host private games.
 
 ## System Requirements
 
@@ -41,7 +37,6 @@ Falconnect is being tested on Windows 11 (x86) and macOS Golden Gate (Apple Sili
 and CPU architectures will likely work but haven't been tested.
 
 ## Notes
-Work in progress docs for the reverse engineering involved can be found at https://falconnect.net/.
 
 Falconnect, this repository, reverse engineering efforts, and developers, are not affiliated with Nintendo, Sega, 
 Amusement Vision, or the original development staff of F-Zero GX. F-Zero is a trademark of Nintendo. Falconnect
